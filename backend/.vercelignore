@@ -1,0 +1,7 @@
+# Keep serverless bundles small; avoid shipping local junk.
+venv/
+.venv/
+**/__pycache__/
+.pytest_cache/
+tests/
+*.pyc

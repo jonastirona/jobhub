@@ -1,4 +1,5 @@
+# If you add pyproject.toml, list deps there too — Vercel may prefer it over this file.
 fastapi>=0.115.0
 python-dotenv>=1.0.0
 supabase>=2.0.0
-uvicorn[standard]>=0.24.0
+uvicorn>=0.24.0
