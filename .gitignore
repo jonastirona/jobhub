@@ -1,0 +1,52 @@
+# os/editors
+.DS_Store
+.vscode/
+.idea/
+
+# env
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# python
+backend/venv/
+backend/.venv/
+backend/__pycache__/
+backend/**/*.pyc
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/.coverage
+backend/htmlcov/
+backend/dist/
+backend/build/
+backend/*.egg-info/
+
+# node/react
+frontend/node_modules/
+shared/node_modules/
+frontend/build/
+frontend/dist/
+shared/build/
+shared/dist/
+frontend/.cache/
+shared/.cache/
+frontend/.eslintcache
+shared/.eslintcache
+
+# testing outputs
+coverage/
+frontend/coverage/
+shared/coverage/
+
+# misc
+*.sqlite3
+*.db
