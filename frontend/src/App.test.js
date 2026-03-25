@@ -1,6 +1,24 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 
+const mockAuthValue = {
+  session: {
+    user: { id: '1', email: 'test@example.com' },
+    access_token: 'test-token',
+  },
+  user: { id: '1', email: 'test@example.com' },
+  loading: false,
+  signIn: jest.fn(),
+  signUp: jest.fn(),
+  signOut: jest.fn(() => Promise.resolve()),
+  supabaseConfigured: true,
+};
+
+jest.mock('./context/AuthContext', () => ({
+  AuthProvider: ({ children }) => children,
+  useAuth: () => mockAuthValue,
+}));
+
 const savedBackendUrl = process.env.REACT_APP_BACKEND_URL;
 
 beforeEach(() => {
@@ -16,12 +34,13 @@ beforeEach(() => {
 
 afterEach(() => {
   process.env.REACT_APP_BACKEND_URL = savedBackendUrl;
-  jest.restoreAllMocks();
 });
 
-test('renders learn react link', () => {
+test('renders learn react link when authenticated', async () => {
   render(<App />);
-  expect(screen.getByText(/learn react/i)).toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.getByText(/learn react/i)).toBeInTheDocument();
+  });
 });
 
 test('backend panel reaches health endpoint when env is set', async () => {

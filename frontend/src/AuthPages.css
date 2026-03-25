@@ -1,0 +1,144 @@
+.AuthScreen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #282c34;
+  color: #fff;
+  padding: 1.5rem;
+}
+
+.AuthCard {
+  width: 100%;
+  max-width: 22rem;
+  padding: 1.75rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-sizing: border-box;
+}
+
+.AuthCard h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.AuthCard .AuthSubtitle {
+  margin: 0 0 1.25rem;
+  font-size: 0.85rem;
+  color: #aeb4c0;
+}
+
+.AuthCard label {
+  display: block;
+  font-size: 0.8rem;
+  margin-bottom: 0.35rem;
+  color: #cfd4dc;
+}
+
+.AuthCard input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 1rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #1a1d24;
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.AuthCard input:focus {
+  outline: 2px solid #61dafb;
+  outline-offset: 1px;
+}
+
+.AuthCard .AuthPrimary {
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.55rem;
+  border-radius: 6px;
+  border: none;
+  background: #61dafb;
+  color: #1a1d24;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.AuthCard .AuthPrimary:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.AuthCard .AuthPrimary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.AuthCard .AuthFooter {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  text-align: center;
+  color: #aeb4c0;
+}
+
+.AuthCard .AuthFooter a {
+  color: #61dafb;
+}
+
+.AuthMessage {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.AuthMessage--error {
+  background: rgba(255, 100, 100, 0.15);
+  border: 1px solid rgba(255, 120, 120, 0.35);
+  color: #ffb4b4;
+}
+
+.AuthMessage--info {
+  background: rgba(97, 218, 251, 0.12);
+  border: 1px solid rgba(97, 218, 251, 0.35);
+  color: #b8e7ff;
+}
+
+.HomeToolbar {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.HomeToolbar span {
+  color: #aeb4c0;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.HomeToolbar button {
+  cursor: pointer;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: transparent;
+  color: #fff;
+  font-size: 0.8rem;
+}
+
+.HomeToolbar button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.App-main {
+  position: relative;
+}
