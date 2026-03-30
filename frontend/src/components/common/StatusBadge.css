@@ -1,0 +1,48 @@
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 50px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.status-badge.interested {
+  background: #f3f4f6;
+  color: var(--text-secondary);
+}
+
+.status-badge.applied {
+  background: var(--blue-bg);
+  color: var(--blue);
+}
+
+.status-badge.interview {
+  background: var(--orange-100);
+  color: var(--orange-700);
+}
+
+.status-badge.offer {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.status-badge.rejected {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.status-badge.archived {
+  background: #f3f4f6;
+  color: var(--text-muted);
+}
