@@ -48,7 +48,7 @@ jobs:
       - run: |
           source venv/bin/activate
           pip install -r requirements.txt
-          pip install pytest
+          pip install pytest httpx
       - run: |
           source venv/bin/activate
           pytest
