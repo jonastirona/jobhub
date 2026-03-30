@@ -1,0 +1,85 @@
+.JobCard {
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.JobCard:hover {
+  border-color: rgba(97, 218, 251, 0.35);
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.JobCard-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.JobCard-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.3;
+}
+
+.JobCard-company {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #aeb4c0;
+}
+
+.JobCard-date {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+/* Status badges */
+
+.JobCard-badge {
+  flex-shrink: 0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.JobCard-badge--applied {
+  background: rgba(97, 218, 251, 0.15);
+  color: #61dafb;
+  border: 1px solid rgba(97, 218, 251, 0.3);
+}
+
+.JobCard-badge--interviewing {
+  background: rgba(255, 215, 0, 0.12);
+  color: #ffd700;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+}
+
+.JobCard-badge--offered {
+  background: rgba(125, 255, 179, 0.12);
+  color: #7dffb3;
+  border: 1px solid rgba(125, 255, 179, 0.3);
+}
+
+.JobCard-badge--rejected {
+  background: rgba(255, 155, 155, 0.12);
+  color: #ff9b9b;
+  border: 1px solid rgba(255, 155, 155, 0.3);
+}
+
+.JobCard-badge--unknown {
+  background: rgba(174, 180, 192, 0.12);
+  color: #aeb4c0;
+  border: 1px solid rgba(174, 180, 192, 0.3);
+}
