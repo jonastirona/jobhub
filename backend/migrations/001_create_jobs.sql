@@ -15,9 +15,14 @@ create table if not exists jobs (
   updated_at   timestamptz not null default now()
 );
 
+-- Indexes for common query patterns (list by user, ordered by date)
+create index if not exists jobs_user_id_idx on jobs (user_id);
+create index if not exists jobs_user_created_idx on jobs (user_id, created_at desc);
+
 -- Row-level security: users can only read/write their own jobs
 alter table jobs enable row level security;
 
+drop policy if exists "Users can manage their own jobs" on jobs;
 create policy "Users can manage their own jobs"
   on jobs
   for all
@@ -33,6 +38,7 @@ begin
 end;
 $$;
 
+drop trigger if exists jobs_updated_at on jobs;
 create trigger jobs_updated_at
   before update on jobs
   for each row execute function update_updated_at();

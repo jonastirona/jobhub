@@ -6,7 +6,6 @@ Supabase is fully mocked — no live database or credentials required.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from main import app, JobCreate, JobUpdate

@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import date
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -134,7 +134,7 @@ def update_job(job_id: str, job: JobUpdate, authorization: Optional[str] = Heade
     return response.data[0]
 
 
-@app.delete("/jobs/{job_id}", status_code=204)
+@app.delete("/jobs/{job_id}")
 def delete_job(job_id: str, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
     sb = get_supabase()
@@ -147,4 +147,4 @@ def delete_job(job_id: str, authorization: Optional[str] = Header(default=None))
     )
     if not response.data:
         raise HTTPException(status_code=404, detail="Job not found")
-    return None
+    return Response(status_code=204)
