@@ -20,7 +20,7 @@ export default function Login() {
   }
 
   if (session) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   async function handleSubmit(e) {
@@ -33,7 +33,7 @@ export default function Login() {
       setError(err.message);
       return;
     }
-    navigate('/', { replace: true });
+    navigate('/dashboard', { replace: true });
   }
 
   return (

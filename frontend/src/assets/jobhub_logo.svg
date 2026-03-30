@@ -1,0 +1,29 @@
+<svg width="100%" viewBox="0 0 180 42" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Top-left square: orange, document lines -->
+  <rect x="1" y="6" width="14" height="14" rx="3" fill="#f97316"/>
+  <rect x="4" y="9.5" width="8" height="1.5" rx="0.75" fill="#1a1a2e" opacity="0.85"/>
+  <rect x="4" y="12.5" width="6" height="1.5" rx="0.75" fill="#1a1a2e" opacity="0.65"/>
+  <rect x="4" y="15.5" width="7" height="1.5" rx="0.75" fill="#1a1a2e" opacity="0.45"/>
+
+  <!-- Top-right square: orange, document lines -->
+  <rect x="18" y="6" width="14" height="14" rx="3" fill="#f97316"/>
+  <rect x="21" y="9.5" width="8" height="1.5" rx="0.75" fill="#1a1a2e" opacity="0.85"/>
+  <rect x="21" y="12.5" width="5" height="1.5" rx="0.75" fill="#1a1a2e" opacity="0.65"/>
+  <rect x="21" y="15.5" width="7" height="1.5" rx="0.75" fill="#1a1a2e" opacity="0.45"/>
+
+  <!-- Bottom-left square: orange, checkmark -->
+  <rect x="1" y="23" width="14" height="14" rx="3" fill="#f97316"/>
+  <circle cx="8" cy="30" r="4" fill="#1a1a2e" opacity="0.85"/>
+  <path d="M5.5 30 L7.5 32 L10.5 28" stroke="#f97316" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Bottom-right square: dark, trend arrow -->
+  <rect x="18" y="23" width="14" height="14" rx="3" fill="#1a1a2e"/>
+  <path d="M21 34 L25 27 L29 34" stroke="#f97316" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Wordmark -->
+  <text x="40" y="29" font-family="'Outfit', Arial, Helvetica, sans-serif" font-size="21" font-weight="700" letter-spacing="-0.3">
+    <tspan fill="#1a1a2e">Job</tspan><tspan fill="#f97316">Hub</tspan>
+  </text>
+
+</svg>

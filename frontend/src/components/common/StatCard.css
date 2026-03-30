@@ -1,0 +1,121 @@
+.stat-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 22px 24px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  transition: box-shadow 0.2s, transform 0.2s;
+  cursor: default;
+  animation: fadeInUp 0.4s ease both;
+}
+
+.stat-card:nth-child(2) {
+  animation-delay: 0.08s;
+}
+
+.stat-card:nth-child(3) {
+  animation-delay: 0.16s;
+}
+
+.stat-card:hover {
+  box-shadow: var(--shadow-elevated);
+  transform: translateY(-1px);
+}
+
+.stat-icon-wrap {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.stat-icon-wrap.orange {
+  background: var(--orange-50);
+  color: var(--orange-500);
+  border: 1px solid var(--border-orange);
+}
+
+.stat-icon-wrap.blue {
+  background: var(--blue-bg);
+  color: var(--blue);
+  border: 1px solid rgba(37, 99, 235, 0.12);
+}
+
+.stat-icon-wrap.green {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid rgba(22, 163, 74, 0.12);
+}
+
+.stat-text {
+  flex: 1;
+}
+
+.stat-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+.stat-trend {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.stat-trend.up {
+  color: var(--green);
+}
+
+.stat-trend.down {
+  color: var(--red);
+}
+
+.mini-chart {
+  margin-left: auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.mini-bar {
+  width: 6px;
+  border-radius: 3px;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-card {
+    animation: none;
+  }
+}
