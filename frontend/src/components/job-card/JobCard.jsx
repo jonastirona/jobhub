@@ -34,14 +34,10 @@ export default function JobCard({ job }) {
     <article className="JobCard">
       <div className="JobCard-header">
         <h3 className="JobCard-title">{title}</h3>
-        <span className={`JobCard-badge JobCard-badge--${badgeModifier}`}>
-          {statusLabel}
-        </span>
+        <span className={`JobCard-badge JobCard-badge--${badgeModifier}`}>{statusLabel}</span>
       </div>
       <p className="JobCard-company">{company}</p>
-      {formattedDate && (
-        <p className="JobCard-date">{formattedDate}</p>
-      )}
+      {formattedDate && <p className="JobCard-date">{formattedDate}</p>}
     </article>
   );
 }

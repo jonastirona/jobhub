@@ -28,10 +28,7 @@ export default function Sidebar() {
       <ul className="sidebar-nav">
         {NAV_ITEMS.map((item) => (
           <li key={item.path}>
-            <NavLink
-              to={item.path}
-              className={({ isActive }) => (isActive ? 'active' : '')}
-            >
+            <NavLink to={item.path} className={({ isActive }) => (isActive ? 'active' : '')}>
               <span className="nav-icon">{item.icon}</span>
               {item.label}
             </NavLink>

@@ -7,7 +7,9 @@
   flex-direction: column;
   gap: 0.4rem;
   text-align: left;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
 .JobCard:hover {

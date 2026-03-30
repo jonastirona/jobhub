@@ -72,9 +72,7 @@ export default function Dashboard() {
   const interviews = jobs.filter(
     (j) => j.status === 'interviewing' || j.status === 'interview'
   ).length;
-  const offers = jobs.filter(
-    (j) => j.status === 'offered' || j.status === 'offer'
-  ).length;
+  const offers = jobs.filter((j) => j.status === 'offered' || j.status === 'offer').length;
 
   const statCards = [
     {
@@ -171,9 +169,7 @@ export default function Dashboard() {
                           </div>
                         </td>
                         <td>
-                          <span className="date-text">
-                            {formatDate(job.applied_date)}
-                          </span>
+                          <span className="date-text">{formatDate(job.applied_date)}</span>
                         </td>
                         <td>
                           <StatusBadge status={job.status} />

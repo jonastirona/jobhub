@@ -1,14 +1,6 @@
 import './StatCard.css';
 
-export default function StatCard({
-  icon,
-  label,
-  value,
-  trend,
-  trendDirection,
-  accentClass,
-  bars,
-}) {
+export default function StatCard({ icon, label, value, trend, trendDirection, accentClass, bars }) {
   return (
     <div className="stat-card">
       <div className={`stat-icon-wrap ${accentClass}`}>{icon}</div>

@@ -24,15 +24,9 @@ export default function TopBar({ title, notificationCount }) {
           <input type="text" placeholder="Search jobs, companies..." />
         </div>
 
-        <button
-          type="button"
-          className="notif-btn"
-          aria-label="Notifications"
-        >
+        <button type="button" className="notif-btn" aria-label="Notifications">
           🔔
-          {notificationCount > 0 && (
-            <span className="notif-badge">{notificationCount}</span>
-          )}
+          {notificationCount > 0 && <span className="notif-badge">{notificationCount}</span>}
         </button>
 
         <div className="user-pill">

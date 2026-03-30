@@ -6,7 +6,9 @@
   display: flex;
   align-items: center;
   gap: 18px;
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition:
+    box-shadow 0.2s,
+    transform 0.2s;
   cursor: default;
   animation: fadeInUp 0.4s ease both;
 }
