@@ -46,6 +46,8 @@ def get_user_id(authorization: Optional[str]) -> str:
         if not response or not response.user:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
         return response.user.id
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 

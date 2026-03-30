@@ -52,6 +52,31 @@ uvicorn main:app --reload
 
 this will start the api server (usually at `http://localhost:8000`)
 
+## database setup
+
+Run the migration in the **Supabase SQL editor** for your project (one-time setup):
+
+```bash
+# paste the contents of backend/migrations/001_create_jobs.sql into the Supabase SQL editor
+```
+
+The migration creates the `jobs` table with row-level security enabled so each user can only access their own records.
+
+## backend api
+
+All job routes require an `Authorization: Bearer <supabase_access_token>` header.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/` | Health check |
+| `GET` | `/jobs` | List all jobs for the authenticated user |
+| `POST` | `/jobs` | Create a new job |
+| `GET` | `/jobs/{id}` | Get a single job by ID |
+| `PUT` | `/jobs/{id}` | Partially update a job |
+| `DELETE` | `/jobs/{id}` | Delete a job |
+
+**Job fields:** `title` (required), `company` (required), `location`, `status` (default: `applied`), `applied_date`, `description`, `notes`
+
 ## running tests
 
 ### frontend
@@ -68,6 +93,8 @@ npm test
 cd backend
 source venv/bin/activate
 pip install -r requirements.txt
-pip install pytest
+pip install pytest httpx
 pytest
 ```
+
+Backend tests mock the Supabase client — no live database or credentials are needed to run them.
