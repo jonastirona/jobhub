@@ -39,7 +39,7 @@ jobs:
         working-directory: ./frontend
 
       - name: Run ESLint
-        run: npx eslint . --ext .ts,.tsx --no-error-on-unmatched-pattern
+        run: npx eslint . --ext .ts,.tsx, .jsx --no-error-on-unmatched-pattern
         working-directory: ./frontend
 
       - name: Run Prettier
