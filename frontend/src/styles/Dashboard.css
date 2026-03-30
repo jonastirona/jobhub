@@ -69,6 +69,25 @@
   transform: translateY(-1px);
 }
 
+/* Table states */
+.table-state {
+  padding: 32px 24px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.table-state--error {
+  color: var(--red);
+}
+
+.table-empty {
+  padding: 32px 24px;
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 /* Table */
 .jobs-table {
   width: 100%;

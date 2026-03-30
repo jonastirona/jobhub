@@ -1,7 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Dashboard from './pages/Dashboard';
-import Home from './pages/Home';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 
@@ -45,15 +44,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Home />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+<Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }

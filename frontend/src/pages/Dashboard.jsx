@@ -1,3 +1,5 @@
+import { useAuth } from '../context/AuthContext';
+import { useJobs } from '../hooks/useJobs';
 import Sidebar from '../components/layout/Sidebar';
 import TopBar from '../components/layout/TopBar';
 import StatCard from '../components/common/StatCard';
@@ -22,138 +24,88 @@ function getCompanyGradient(companyName) {
   );
 }
 
-const MOCK_APPLICATIONS = [
-  {
-    id: '001',
-    jobTitle: 'Frontend Developer',
-    location: 'Remote · Full-time',
-    company: 'Stripe',
-    stage: 'Interview',
-    appliedDate: '03/15/2026',
-    status: 'interview',
-  },
-  {
-    id: '002',
-    jobTitle: 'Software Engineer',
-    location: 'New York, NY · Hybrid',
-    company: 'Amazon',
-    stage: 'Applied',
-    appliedDate: '03/12/2026',
-    status: 'applied',
-  },
-  {
-    id: '003',
-    jobTitle: 'Full Stack Developer',
-    location: 'San Francisco, CA · On-site',
-    company: 'Google',
-    stage: 'Offer',
-    appliedDate: '03/01/2026',
-    status: 'offer',
-  },
-  {
-    id: '004',
-    jobTitle: 'Backend Engineer',
-    location: 'Austin, TX · Remote',
-    company: 'Meta',
-    stage: 'Rejected',
-    appliedDate: '02/28/2026',
-    status: 'rejected',
-  },
-  {
-    id: '005',
-    jobTitle: 'React Developer',
-    location: 'Remote · Contract',
-    company: 'Netflix',
-    stage: 'Applied',
-    appliedDate: '03/20/2026',
-    status: 'applied',
-  },
-  {
-    id: '006',
-    jobTitle: 'DevOps Engineer',
-    location: 'Seattle, WA · Hybrid',
-    company: 'Datadog',
-    stage: 'Interested',
-    appliedDate: '03/22/2026',
-    status: 'interested',
-  },
-  {
-    id: '007',
-    jobTitle: 'UI/UX Engineer',
-    location: 'Chicago, IL · On-site',
-    company: 'Figma',
-    stage: 'Interview',
-    appliedDate: '03/10/2026',
-    status: 'interview',
-  },
-  {
-    id: '008',
-    jobTitle: 'Platform Engineer',
-    location: 'Remote · Full-time',
-    company: 'Vercel',
-    stage: 'Applied',
-    appliedDate: '03/18/2026',
-    status: 'applied',
-  },
-];
+function formatDate(dateStr) {
+  if (!dateStr) return '—';
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+  const d = isDateOnly ? new Date(`${dateStr}T00:00:00`) : new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
-const STAT_CARDS = [
-  {
-    icon: '📁',
-    label: 'Total Applications',
-    value: '24',
-    trend: '12% this month',
-    trendDirection: 'up',
-    accentClass: 'orange',
-    bars: [
-      { height: 14, color: 'var(--orange-200)' },
-      { height: 20, color: 'var(--orange-200)' },
-      { height: 16, color: 'var(--orange-200)' },
-      { height: 28, color: 'var(--orange-300)' },
-      { height: 22, color: 'var(--orange-300)' },
-      { height: 32, color: 'var(--orange-400)' },
-      { height: 36, color: 'var(--orange-500)' },
-    ],
-  },
-  {
-    icon: '💬',
-    label: 'Interviews',
-    value: '7',
-    trend: '3 this week',
-    trendDirection: 'up',
-    accentClass: 'blue',
-    bars: [
-      { height: 10, color: 'var(--blue-bg)' },
-      { height: 18, color: 'var(--blue-bg)' },
-      { height: 24, color: '#93c5fd' },
-      { height: 14, color: '#93c5fd' },
-      { height: 30, color: '#60a5fa' },
-      { height: 20, color: '#60a5fa' },
-      { height: 36, color: 'var(--blue)' },
-    ],
-  },
-  {
-    icon: '🎯',
-    label: 'Offers',
-    value: '2',
-    trend: '1 new',
-    trendDirection: 'up',
-    accentClass: 'green',
-    bars: [
-      { height: 8, color: 'var(--green-bg)' },
-      { height: 12, color: 'var(--green-bg)' },
-      { height: 8, color: '#86efac' },
-      { height: 16, color: '#86efac' },
-      { height: 10, color: '#4ade80' },
-      { height: 24, color: '#22c55e' },
-      { height: 36, color: 'var(--green)' },
-    ],
-  },
-];
+const STAT_BARS = {
+  orange: [
+    { height: 14, color: 'var(--orange-200)' },
+    { height: 20, color: 'var(--orange-200)' },
+    { height: 16, color: 'var(--orange-200)' },
+    { height: 28, color: 'var(--orange-300)' },
+    { height: 22, color: 'var(--orange-300)' },
+    { height: 32, color: 'var(--orange-400)' },
+    { height: 36, color: 'var(--orange-500)' },
+  ],
+  blue: [
+    { height: 10, color: 'var(--blue-bg)' },
+    { height: 18, color: 'var(--blue-bg)' },
+    { height: 24, color: '#93c5fd' },
+    { height: 14, color: '#93c5fd' },
+    { height: 30, color: '#60a5fa' },
+    { height: 20, color: '#60a5fa' },
+    { height: 36, color: 'var(--blue)' },
+  ],
+  green: [
+    { height: 8, color: 'var(--green-bg)' },
+    { height: 12, color: 'var(--green-bg)' },
+    { height: 8, color: '#86efac' },
+    { height: 16, color: '#86efac' },
+    { height: 10, color: '#4ade80' },
+    { height: 24, color: '#22c55e' },
+    { height: 36, color: 'var(--green)' },
+  ],
+};
 
 const PAGE_NUMBERS = [1, 2, 3, 4, 5];
 
 export default function Dashboard() {
+  const { session } = useAuth();
+  const { jobs, loading, error } = useJobs(session?.access_token);
+
+  const totalApplications = jobs.length;
+  const interviews = jobs.filter(
+    (j) => j.status === 'interviewing' || j.status === 'interview'
+  ).length;
+  const offers = jobs.filter(
+    (j) => j.status === 'offered' || j.status === 'offer'
+  ).length;
+
+  const statCards = [
+    {
+      icon: '📁',
+      label: 'Total Applications',
+      value: String(totalApplications),
+      trend: 'all time',
+      trendDirection: 'up',
+      accentClass: 'orange',
+      bars: STAT_BARS.orange,
+    },
+    {
+      icon: '💬',
+      label: 'Interviews',
+      value: String(interviews),
+      trend: 'in progress',
+      trendDirection: 'up',
+      accentClass: 'blue',
+      bars: STAT_BARS.blue,
+    },
+    {
+      icon: '🎯',
+      label: 'Offers',
+      value: String(offers),
+      trend: 'received',
+      trendDirection: 'up',
+      accentClass: 'green',
+      bars: STAT_BARS.green,
+    },
+  ];
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -163,7 +115,7 @@ export default function Dashboard() {
 
         <div className="dashboard-content">
           <div className="stats-row">
-            {STAT_CARDS.map((card) => (
+            {statCards.map((card) => (
               <StatCard key={card.label} {...card} />
             ))}
           </div>
@@ -176,81 +128,87 @@ export default function Dashboard() {
               </button>
             </div>
 
-            <table className="jobs-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Job Title</th>
-                  <th>Company</th>
-                  <th>Stage</th>
-                  <th>Applied</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {MOCK_APPLICATIONS.map((application) => (
-                  <tr key={application.id}>
-                    <td className="row-number">{application.id}</td>
-                    <td>
-                      <div className="job-title-cell">
-                        <span className="job-title-text">
-                          {application.jobTitle}
-                        </span>
-                        <span className="job-title-sub">
-                          {application.location}
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="company-cell">
-                        <div
-                          className="company-logo"
-                          style={{
-                            background: getCompanyGradient(application.company),
-                          }}
-                        >
-                          {application.company[0]}
-                        </div>
-                        {application.company}
-                      </div>
-                    </td>
-                    <td>{application.stage}</td>
-                    <td>
-                      <span className="date-text">{application.appliedDate}</span>
-                    </td>
-                    <td>
-                      <StatusBadge status={application.status} />
-                    </td>
-                    <td>
-                      <div className="actions-cell">
-                        <button
-                          type="button"
-                          className="action-btn"
-                          aria-label="View application"
-                        >
-                          👁
-                        </button>
-                        <button
-                          type="button"
-                          className="action-btn"
-                          aria-label="Edit application"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          type="button"
-                          className="action-btn"
-                          aria-label="Archive application"
-                        >
-                          🗂
-                        </button>
-                      </div>
-                    </td>
+            {loading && <p className="table-state">Loading jobs...</p>}
+            {error && <p className="table-state table-state--error">{error}</p>}
+
+            {!loading && !error && (
+              <table className="jobs-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Job Title</th>
+                    <th>Company</th>
+                    <th>Applied</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {jobs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="table-empty">
+                        No applications yet. Add your first job!
+                      </td>
+                    </tr>
+                  ) : (
+                    jobs.map((job, index) => (
+                      <tr key={job.id}>
+                        <td className="row-number">{index + 1}</td>
+                        <td>
+                          <div className="job-title-cell">
+                            <span className="job-title-text">{job.title}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="company-cell">
+                            <div
+                              className="company-logo"
+                              style={{ background: getCompanyGradient(job.company) }}
+                            >
+                              {job.company?.[0]}
+                            </div>
+                            {job.company}
+                          </div>
+                        </td>
+                        <td>
+                          <span className="date-text">
+                            {formatDate(job.applied_date)}
+                          </span>
+                        </td>
+                        <td>
+                          <StatusBadge status={job.status} />
+                        </td>
+                        <td>
+                          <div className="actions-cell">
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label="View application"
+                            >
+                              👁
+                            </button>
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label="Edit application"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label="Archive application"
+                            >
+                              🗂
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            )}
 
             <div className="table-footer">
               <div className="rows-select">
