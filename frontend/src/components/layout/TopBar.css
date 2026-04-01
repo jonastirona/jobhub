@@ -126,6 +126,17 @@
   font-weight: 700;
   font-size: 13px;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.user-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-avatar--photo {
+  background: var(--bg-input);
 }
 
 .user-info {

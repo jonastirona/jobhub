@@ -1,7 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ProfileAvatarProvider } from './context/ProfileAvatarContext';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
+import Settings from './pages/Settings';
 import Signup from './pages/Signup';
 
 function ProtectedRoute({ children }) {
@@ -44,6 +46,14 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <Settings />
+          </ProtectedRoute>
+        }
+      />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
@@ -53,7 +63,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <ProfileAvatarProvider>
+          <AppRoutes />
+        </ProfileAvatarProvider>
       </AuthProvider>
     </BrowserRouter>
   );
