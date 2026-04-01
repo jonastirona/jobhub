@@ -655,6 +655,34 @@ describe('saving state', () => {
     await waitFor(() => expect(baseProps.onClose).toHaveBeenCalled());
   });
 
+  test('X close button is disabled while saving', async () => {
+    const settle = makePendingFetch();
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /close form/i })).toBeDisabled();
+    });
+    settle();
+    await waitFor(() => expect(baseProps.onClose).toHaveBeenCalled());
+  });
+
+  test('double-submit is ignored while saving', async () => {
+    const settle = makePendingFetch();
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => screen.getByRole('button', { name: /saving/i }));
+    // Attempt a second submit while already saving
+    fireEvent.submit(screen.getByRole('button', { name: /saving/i }).closest('form'));
+    settle();
+    await waitFor(() => expect(baseProps.onClose).toHaveBeenCalled());
+    // Only one fetch call despite two submit attempts
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
   test('cancel button is disabled while saving', async () => {
     const settle = makePendingFetch();
     render(<JobForm {...baseProps} />);

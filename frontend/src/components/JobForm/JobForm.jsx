@@ -68,6 +68,7 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (saving) return;
     setApiError(null);
     const fieldErrors = validate();
     if (Object.keys(fieldErrors).length > 0) {
@@ -146,7 +147,13 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
           <h2 className="jf-title" id="jf-title">
             {isEdit ? 'Edit Application' : 'Add Job Application'}
           </h2>
-          <button type="button" className="jf-close" onClick={onClose} aria-label="Close form">
+          <button
+            type="button"
+            className="jf-close"
+            onClick={onClose}
+            aria-label="Close form"
+            disabled={saving}
+          >
             ✕
           </button>
         </div>
