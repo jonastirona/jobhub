@@ -47,11 +47,11 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
 
   useEffect(() => {
     function handleKey(e) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !saving) onClose();
     }
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [onClose]);
+  }, [onClose, saving]);
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -68,6 +68,7 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    setApiError(null);
     const fieldErrors = validate();
     if (Object.keys(fieldErrors).length > 0) {
       setErrors(fieldErrors);
@@ -75,6 +76,19 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
     }
 
     const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '');
+    if (!backendBase) {
+      setApiError('Backend URL is not configured.');
+      return;
+    }
+    if (!accessToken) {
+      setApiError('You are not authenticated. Please sign in again.');
+      return;
+    }
+    if (isEdit && !job?.id) {
+      setApiError('Job data is missing. Please close and try again.');
+      return;
+    }
+
     const url = isEdit ? `${backendBase}/jobs/${job.id}` : `${backendBase}/jobs`;
     const method = isEdit ? 'PUT' : 'POST';
 
@@ -89,7 +103,6 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
     };
 
     setSaving(true);
-    setApiError(null);
 
     try {
       const res = await fetch(url, {
@@ -116,7 +129,7 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
   }
 
   function handleOverlayClick(e) {
-    if (e.target === overlayRef.current) onClose();
+    if (e.target === overlayRef.current && !saving) onClose();
   }
 
   return (

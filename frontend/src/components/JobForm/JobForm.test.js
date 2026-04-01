@@ -38,6 +38,15 @@ function mockFetchNetworkFailure(message = 'Network error') {
   global.fetch = jest.fn(() => Promise.reject(new Error(message)));
 }
 
+function makePendingFetch() {
+  let resolve;
+  const promise = new Promise((res) => {
+    resolve = res;
+  });
+  global.fetch = jest.fn(() => promise);
+  return () => resolve({ ok: true, json: () => Promise.resolve({}) });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockFetchOk();
@@ -561,6 +570,46 @@ describe('API error handling', () => {
     expect(screen.getByLabelText(/company/i)).toHaveValue('Corp');
   });
 
+  test('shows error when backend URL is not configured', async () => {
+    delete process.env.REACT_APP_BACKEND_URL;
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/backend url is not configured/i);
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test('shows error when access token is missing', async () => {
+    render(<JobForm {...baseProps} accessToken={null} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/not authenticated/i);
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test('API error is cleared when validation fails on next submit', async () => {
+    mockFetchError(500, 'Server error');
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Server error'));
+
+    // Clear required fields then submit — validation should fire and API error should clear
+    await userEvent.clear(screen.getByLabelText(/job title/i));
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/job title is required/i)).toBeInTheDocument();
+      expect(screen.queryByText('Server error')).not.toBeInTheDocument();
+    });
+  });
+
   test('error clears when subsequent request succeeds', async () => {
     mockFetchError(500, 'Server error');
     render(<JobForm {...baseProps} />);
@@ -580,15 +629,6 @@ describe('API error handling', () => {
 // ─── Saving state (loading) ───────────────────────────────────────────────────
 
 describe('saving state', () => {
-  function makePendingFetch() {
-    let resolve;
-    const promise = new Promise((res) => {
-      resolve = res;
-    });
-    global.fetch = jest.fn(() => promise);
-    return () => resolve({ ok: true, json: () => Promise.resolve({}) });
-  }
-
   test('submit button shows "Saving..." while request is in flight', async () => {
     const settle = makePendingFetch();
     render(<JobForm {...baseProps} />);
@@ -662,6 +702,32 @@ describe('close behavior', () => {
     expect(baseProps.onClose).not.toHaveBeenCalled();
   });
 
+  test('Escape key does not close while saving', async () => {
+    const settle = makePendingFetch();
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => screen.getByRole('button', { name: /saving/i }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(baseProps.onClose).not.toHaveBeenCalled();
+    settle();
+    await waitFor(() => expect(baseProps.onClose).toHaveBeenCalled());
+  });
+
+  test('backdrop click does not close while saving', async () => {
+    const settle = makePendingFetch();
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => screen.getByRole('button', { name: /saving/i }));
+    fireEvent.click(screen.getByRole('dialog'));
+    expect(baseProps.onClose).not.toHaveBeenCalled();
+    settle();
+    await waitFor(() => expect(baseProps.onClose).toHaveBeenCalled());
+  });
+
   test('does NOT close when clicking a button inside the modal', () => {
     render(<JobForm {...baseProps} />);
     // Clicking the submit button should not directly call onClose
@@ -670,7 +736,7 @@ describe('close behavior', () => {
     expect(baseProps.onClose).not.toHaveBeenCalled();
   });
 
-  test('Escape key does not trigger multiple closes', () => {
+  test('Escape key closes once per press', () => {
     render(<JobForm {...baseProps} />);
     fireEvent.keyDown(document, { key: 'Escape' });
     fireEvent.keyDown(document, { key: 'Escape' });
