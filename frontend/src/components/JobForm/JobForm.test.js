@@ -25,9 +25,7 @@ const sampleJob = {
 };
 
 function mockFetchOk(body = { id: 'new-job' }) {
-  global.fetch = jest.fn(() =>
-    Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
-  );
+  global.fetch = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(body) }));
 }
 
 function mockFetchError(status = 500, text = 'Internal Server Error') {
@@ -176,7 +174,14 @@ describe('status dropdown options', () => {
     const select = screen.getByLabelText(/status/i);
     const values = Array.from(select.options).map((o) => o.value);
     expect(values).toEqual(
-      expect.arrayContaining(['interested', 'applied', 'interview', 'offer', 'rejected', 'archived'])
+      expect.arrayContaining([
+        'interested',
+        'applied',
+        'interview',
+        'offer',
+        'rejected',
+        'archived',
+      ])
     );
   });
 
@@ -185,7 +190,14 @@ describe('status dropdown options', () => {
     const select = screen.getByLabelText(/status/i);
     const labels = Array.from(select.options).map((o) => o.text);
     expect(labels).toEqual(
-      expect.arrayContaining(['Interested', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived'])
+      expect.arrayContaining([
+        'Interested',
+        'Applied',
+        'Interview',
+        'Offer',
+        'Rejected',
+        'Archived',
+      ])
     );
   });
 
