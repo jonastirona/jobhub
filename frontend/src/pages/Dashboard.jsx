@@ -120,8 +120,7 @@ export default function Dashboard() {
   }
 
   function handleSaved() {
-    const controller = new AbortController();
-    refetch(controller.signal);
+    refetch();
   }
 
   return (

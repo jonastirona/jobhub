@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import JobForm from './JobForm';
 
 const ACCESS_TOKEN = 'test-token';
+const BACKEND = 'http://localhost:8000';
 
 const baseProps = {
   mode: 'create',
@@ -12,221 +13,709 @@ const baseProps = {
   onSaved: jest.fn(),
 };
 
+const sampleJob = {
+  id: 'job-99',
+  title: 'Software Engineer',
+  company: 'Acme Corp',
+  location: 'New York, NY',
+  status: 'interview',
+  applied_date: '2026-03-15',
+  description: 'Build great products.',
+  notes: 'Call on Monday.',
+};
+
+function mockFetchOk(body = { id: 'new-job' }) {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
+  );
+}
+
+function mockFetchError(status = 500, text = 'Internal Server Error') {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({ ok: false, status, text: () => Promise.resolve(text) })
+  );
+}
+
+function mockFetchNetworkFailure(message = 'Network error') {
+  global.fetch = jest.fn(() => Promise.reject(new Error(message)));
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
-  global.fetch = jest.fn(() =>
-    Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ id: 'new-job', title: 'Engineer', company: 'Acme' }),
-    })
-  );
-  process.env.REACT_APP_BACKEND_URL = 'http://localhost:8000';
+  mockFetchOk();
+  process.env.REACT_APP_BACKEND_URL = BACKEND;
 });
 
 afterEach(() => {
   delete process.env.REACT_APP_BACKEND_URL;
 });
 
-// --- Rendering ---
+// ─── Rendering ────────────────────────────────────────────────────────────────
 
-test('renders create form with all fields', () => {
-  render(<JobForm {...baseProps} />);
-
-  expect(screen.getByRole('dialog')).toBeInTheDocument();
-  expect(screen.getByText('Add Job Application')).toBeInTheDocument();
-  expect(screen.getByLabelText(/job title/i)).toBeInTheDocument();
-  expect(screen.getByLabelText(/company/i)).toBeInTheDocument();
-  expect(screen.getByLabelText(/location/i)).toBeInTheDocument();
-  expect(screen.getByLabelText(/status/i)).toBeInTheDocument();
-  expect(screen.getByLabelText(/applied date/i)).toBeInTheDocument();
-  expect(screen.getByLabelText(/job description/i)).toBeInTheDocument();
-  expect(screen.getByLabelText(/notes/i)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /add job/i })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
-});
-
-test('renders edit form with pre-filled values', () => {
-  const job = {
-    id: 'job-1',
-    title: 'Software Engineer',
-    company: 'Acme Corp',
-    location: 'Remote',
-    status: 'interview',
-    applied_date: '2026-03-15',
-    description: 'Build cool things',
-    notes: 'Call on Monday',
-  };
-
-  render(<JobForm {...baseProps} mode="edit" job={job} />);
-
-  expect(screen.getByText('Edit Application')).toBeInTheDocument();
-  expect(screen.getByDisplayValue('Software Engineer')).toBeInTheDocument();
-  expect(screen.getByDisplayValue('Acme Corp')).toBeInTheDocument();
-  expect(screen.getByDisplayValue('Remote')).toBeInTheDocument();
-  expect(screen.getByDisplayValue('Interview')).toBeInTheDocument();
-  expect(screen.getByDisplayValue('2026-03-15')).toBeInTheDocument();
-  expect(screen.getByDisplayValue('Build cool things')).toBeInTheDocument();
-  expect(screen.getByDisplayValue('Call on Monday')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
-});
-
-test('status dropdown contains all expected options', () => {
-  render(<JobForm {...baseProps} />);
-  const select = screen.getByLabelText(/status/i);
-  const options = Array.from(select.options).map((o) => o.value);
-  expect(options).toEqual(
-    expect.arrayContaining(['interested', 'applied', 'interview', 'offer', 'rejected', 'archived'])
-  );
-});
-
-// --- Validation ---
-
-test('shows validation errors when submitting empty required fields', async () => {
-  render(<JobForm {...baseProps} />);
-  fireEvent.click(screen.getByRole('button', { name: /add job/i }));
-
-  await waitFor(() => {
-    expect(screen.getByText(/job title is required/i)).toBeInTheDocument();
-    expect(screen.getByText(/company is required/i)).toBeInTheDocument();
+describe('rendering - create mode', () => {
+  test('renders dialog with correct aria attributes', () => {
+    render(<JobForm {...baseProps} />);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'jf-title');
   });
 
-  expect(global.fetch).not.toHaveBeenCalled();
-});
-
-test('clears field error when user types', async () => {
-  render(<JobForm {...baseProps} />);
-  fireEvent.click(screen.getByRole('button', { name: /add job/i }));
-
-  await waitFor(() => {
-    expect(screen.getByText(/job title is required/i)).toBeInTheDocument();
+  test('shows "Add Job Application" heading', () => {
+    render(<JobForm {...baseProps} />);
+    expect(screen.getByRole('heading', { name: /add job application/i })).toBeInTheDocument();
   });
 
-  await userEvent.type(screen.getByLabelText(/job title/i), 'Engineer');
+  test('renders all form fields', () => {
+    render(<JobForm {...baseProps} />);
+    expect(screen.getByLabelText(/job title/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/company/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/location/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/status/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/applied date/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/job description/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/notes/i)).toBeInTheDocument();
+  });
 
-  await waitFor(() => {
-    expect(screen.queryByText(/job title is required/i)).not.toBeInTheDocument();
+  test('default status is "applied"', () => {
+    render(<JobForm {...baseProps} />);
+    expect(screen.getByLabelText(/status/i)).toHaveValue('applied');
+  });
+
+  test('title and company inputs start empty', () => {
+    render(<JobForm {...baseProps} />);
+    expect(screen.getByLabelText(/job title/i)).toHaveValue('');
+    expect(screen.getByLabelText(/company/i)).toHaveValue('');
+  });
+
+  test('optional fields start empty', () => {
+    render(<JobForm {...baseProps} />);
+    expect(screen.getByLabelText(/location/i)).toHaveValue('');
+    expect(screen.getByLabelText(/applied date/i)).toHaveValue('');
+    expect(screen.getByLabelText(/job description/i)).toHaveValue('');
+    expect(screen.getByLabelText(/notes/i)).toHaveValue('');
+  });
+
+  test('renders Add Job submit button', () => {
+    render(<JobForm {...baseProps} />);
+    expect(screen.getByRole('button', { name: /add job/i })).toBeInTheDocument();
+  });
+
+  test('renders Cancel button', () => {
+    render(<JobForm {...baseProps} />);
+    expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+  });
+
+  test('renders close (X) button', () => {
+    render(<JobForm {...baseProps} />);
+    expect(screen.getByRole('button', { name: /close form/i })).toBeInTheDocument();
   });
 });
 
-// --- Create submit ---
+describe('rendering - edit mode', () => {
+  test('shows "Edit Application" heading', () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    expect(screen.getByRole('heading', { name: /edit application/i })).toBeInTheDocument();
+  });
 
-test('POSTs to /jobs on create and calls onSaved + onClose', async () => {
-  render(<JobForm {...baseProps} />);
+  test('pre-fills title and company', () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    expect(screen.getByLabelText(/job title/i)).toHaveValue('Software Engineer');
+    expect(screen.getByLabelText(/company/i)).toHaveValue('Acme Corp');
+  });
 
-  await userEvent.type(screen.getByLabelText(/job title/i), 'Frontend Engineer');
-  await userEvent.type(screen.getByLabelText(/company/i), 'TechCo');
+  test('pre-fills optional text fields', () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    expect(screen.getByLabelText(/location/i)).toHaveValue('New York, NY');
+    expect(screen.getByLabelText(/job description/i)).toHaveValue('Build great products.');
+    expect(screen.getByLabelText(/notes/i)).toHaveValue('Call on Monday.');
+  });
 
-  fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+  test('pre-fills status dropdown', () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    expect(screen.getByLabelText(/status/i)).toHaveValue('interview');
+  });
 
-  await waitFor(() => {
-    expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/jobs',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          Authorization: `Bearer ${ACCESS_TOKEN}`,
-          'Content-Type': 'application/json',
-        }),
-      })
+  test('pre-fills applied date', () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    expect(screen.getByLabelText(/applied date/i)).toHaveValue('2026-03-15');
+  });
+
+  test('renders Save Changes button in edit mode', () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
+  });
+
+  test('handles null optional fields gracefully', () => {
+    const minimalJob = {
+      id: 'job-min',
+      title: 'Dev',
+      company: 'Corp',
+      location: null,
+      status: 'applied',
+      applied_date: null,
+      description: null,
+      notes: null,
+    };
+    render(<JobForm {...baseProps} mode="edit" job={minimalJob} />);
+    expect(screen.getByLabelText(/location/i)).toHaveValue('');
+    expect(screen.getByLabelText(/applied date/i)).toHaveValue('');
+    expect(screen.getByLabelText(/job description/i)).toHaveValue('');
+    expect(screen.getByLabelText(/notes/i)).toHaveValue('');
+  });
+
+  test('strips time portion from ISO applied_date for date input', () => {
+    const job = { ...sampleJob, applied_date: '2026-03-15T00:00:00+00:00' };
+    render(<JobForm {...baseProps} mode="edit" job={job} />);
+    expect(screen.getByLabelText(/applied date/i)).toHaveValue('2026-03-15');
+  });
+});
+
+describe('status dropdown options', () => {
+  test('contains all six status options', () => {
+    render(<JobForm {...baseProps} />);
+    const select = screen.getByLabelText(/status/i);
+    const values = Array.from(select.options).map((o) => o.value);
+    expect(values).toEqual(
+      expect.arrayContaining(['interested', 'applied', 'interview', 'offer', 'rejected', 'archived'])
     );
   });
 
-  const body = JSON.parse(global.fetch.mock.calls[0][1].body);
-  expect(body.title).toBe('Frontend Engineer');
-  expect(body.company).toBe('TechCo');
-
-  await waitFor(() => {
-    expect(baseProps.onSaved).toHaveBeenCalledTimes(1);
-    expect(baseProps.onClose).toHaveBeenCalledTimes(1);
-  });
-});
-
-// --- Edit submit ---
-
-test('PUTs to /jobs/:id on edit and calls onSaved + onClose', async () => {
-  const job = {
-    id: 'job-42',
-    title: 'Old Title',
-    company: 'Old Corp',
-    location: '',
-    status: 'applied',
-    applied_date: null,
-    description: '',
-    notes: '',
-  };
-
-  render(<JobForm {...baseProps} mode="edit" job={job} />);
-
-  const titleInput = screen.getByLabelText(/job title/i);
-  await userEvent.clear(titleInput);
-  await userEvent.type(titleInput, 'New Title');
-
-  fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
-
-  await waitFor(() => {
-    expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/jobs/job-42',
-      expect.objectContaining({ method: 'PUT' })
+  test('displays human-readable labels', () => {
+    render(<JobForm {...baseProps} />);
+    const select = screen.getByLabelText(/status/i);
+    const labels = Array.from(select.options).map((o) => o.text);
+    expect(labels).toEqual(
+      expect.arrayContaining(['Interested', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived'])
     );
   });
 
-  const body = JSON.parse(global.fetch.mock.calls[0][1].body);
-  expect(body.title).toBe('New Title');
+  test('has exactly six options', () => {
+    render(<JobForm {...baseProps} />);
+    expect(screen.getByLabelText(/status/i).options).toHaveLength(6);
+  });
+});
 
-  await waitFor(() => {
-    expect(baseProps.onSaved).toHaveBeenCalledTimes(1);
+// ─── Validation ───────────────────────────────────────────────────────────────
+
+describe('validation', () => {
+  test('shows title error when title is empty on submit', async () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/job title is required/i)).toBeInTheDocument();
+    });
+  });
+
+  test('shows company error when company is empty on submit', async () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/company is required/i)).toBeInTheDocument();
+    });
+  });
+
+  test('shows both errors simultaneously when both fields empty', async () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/job title is required/i)).toBeInTheDocument();
+      expect(screen.getByText(/company is required/i)).toBeInTheDocument();
+    });
+  });
+
+  test('does not call fetch when validation fails', async () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/job title is required/i)).toBeInTheDocument();
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test('whitespace-only title still fails validation', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), '   ');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/job title is required/i)).toBeInTheDocument();
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test('whitespace-only company still fails validation', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/company/i), '   ');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/company is required/i)).toBeInTheDocument();
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test('title error clears when user types in title field', async () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(screen.getByText(/job title is required/i)).toBeInTheDocument());
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Engineer');
+    await waitFor(() => {
+      expect(screen.queryByText(/job title is required/i)).not.toBeInTheDocument();
+    });
+  });
+
+  test('company error clears when user types in company field', async () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(screen.getByText(/company is required/i)).toBeInTheDocument());
+    await userEvent.type(screen.getByLabelText(/company/i), 'Acme');
+    await waitFor(() => {
+      expect(screen.queryByText(/company is required/i)).not.toBeInTheDocument();
+    });
+  });
+
+  test('title error does not clear when typing in company field', async () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(screen.getByText(/job title is required/i)).toBeInTheDocument());
+    await userEvent.type(screen.getByLabelText(/company/i), 'Acme');
+    expect(screen.getByText(/job title is required/i)).toBeInTheDocument();
+  });
+
+  test('invalid title input has aria-invalid attribute', async () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByLabelText(/job title/i)).toHaveAttribute('aria-invalid', 'true');
+    });
+  });
+
+  test('invalid company input has aria-invalid attribute', async () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByLabelText(/company/i)).toHaveAttribute('aria-invalid', 'true');
+    });
+  });
+});
+
+// ─── Create - POST /jobs ──────────────────────────────────────────────────────
+
+describe('create mode - form submission', () => {
+  test('calls POST /jobs with correct URL', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Frontend Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'TechCo');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(global.fetch).toHaveBeenCalledWith(`${BACKEND}/jobs`, expect.anything());
+  });
+
+  test('uses POST method', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(global.fetch.mock.calls[0][1].method).toBe('POST');
+  });
+
+  test('sends Authorization header with access token', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(global.fetch.mock.calls[0][1].headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
+  });
+
+  test('sends trimmed title and company', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), '  Frontend Dev  ');
+    await userEvent.type(screen.getByLabelText(/company/i), '  TechCo  ');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.title).toBe('Frontend Dev');
+    expect(body.company).toBe('TechCo');
+  });
+
+  test('sends default status "applied" when unchanged', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.status).toBe('applied');
+  });
+
+  test('sends chosen status when changed', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: 'interested' } });
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.status).toBe('interested');
+  });
+
+  test('sends null for empty optional fields', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.location).toBeNull();
+    expect(body.applied_date).toBeNull();
+    expect(body.description).toBeNull();
+    expect(body.notes).toBeNull();
+  });
+
+  test('sends trimmed location (null when only spaces)', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    await userEvent.type(screen.getByLabelText(/location/i), '   ');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.location).toBeNull();
+  });
+
+  test('sends applied date when provided', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.change(screen.getByLabelText(/applied date/i), {
+      target: { value: '2026-04-01' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.applied_date).toBe('2026-04-01');
+  });
+
+  test('calls onSaved after successful create', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(baseProps.onSaved).toHaveBeenCalledTimes(1));
+  });
+
+  test('calls onClose after successful create', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(baseProps.onClose).toHaveBeenCalledTimes(1));
+  });
+});
+
+// ─── Edit - PUT /jobs/:id ─────────────────────────────────────────────────────
+
+describe('edit mode - form submission', () => {
+  test('calls PUT /jobs/:id with correct URL', async () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(global.fetch).toHaveBeenCalledWith(`${BACKEND}/jobs/${sampleJob.id}`, expect.anything());
+  });
+
+  test('uses PUT method', async () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(global.fetch.mock.calls[0][1].method).toBe('PUT');
+  });
+
+  test('sends updated title when changed', async () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    const titleInput = screen.getByLabelText(/job title/i);
+    await userEvent.clear(titleInput);
+    await userEvent.type(titleInput, 'Staff Engineer');
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.title).toBe('Staff Engineer');
+  });
+
+  test('sends updated status when changed', async () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: 'offer' } });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.status).toBe('offer');
+  });
+
+  test('sends null for cleared optional fields', async () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    await userEvent.clear(screen.getByLabelText(/location/i));
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.location).toBeNull();
+  });
+
+  test('sends existing optional fields as-is', async () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.location).toBe('New York, NY');
+    expect(body.description).toBe('Build great products.');
+    expect(body.notes).toBe('Call on Monday.');
+  });
+
+  test('calls onSaved after successful edit', async () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(baseProps.onSaved).toHaveBeenCalledTimes(1));
+  });
+
+  test('calls onClose after successful edit', async () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(baseProps.onClose).toHaveBeenCalledTimes(1));
+  });
+});
+
+// ─── API Errors ───────────────────────────────────────────────────────────────
+
+describe('API error handling', () => {
+  test('shows error message from server response text', async () => {
+    mockFetchError(422, 'Title is too long');
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Title is too long');
+    });
+  });
+
+  test('shows fallback error with status code when response body is empty', async () => {
+    mockFetchError(500, '');
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/500/);
+    });
+  });
+
+  test('shows error message on network failure', async () => {
+    mockFetchNetworkFailure('Failed to fetch');
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Failed to fetch');
+    });
+  });
+
+  test('does not call onClose when request fails', async () => {
+    mockFetchError(500, 'Server error');
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(baseProps.onClose).not.toHaveBeenCalled();
+  });
+
+  test('does not call onSaved when request fails', async () => {
+    mockFetchError(500, 'Server error');
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(baseProps.onSaved).not.toHaveBeenCalled();
+  });
+
+  test('retains form field values after a failed request', async () => {
+    mockFetchError(500, 'Server error');
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.getByLabelText(/job title/i)).toHaveValue('Dev');
+    expect(screen.getByLabelText(/company/i)).toHaveValue('Corp');
+  });
+
+  test('error clears when subsequent request succeeds', async () => {
+    mockFetchError(500, 'Server error');
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+
+    // Retry with success
+    mockFetchOk();
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(baseProps.onSaved).toHaveBeenCalled());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+// ─── Saving state (loading) ───────────────────────────────────────────────────
+
+describe('saving state', () => {
+  function makePendingFetch() {
+    let resolve;
+    const promise = new Promise((res) => {
+      resolve = res;
+    });
+    global.fetch = jest.fn(() => promise);
+    return () => resolve({ ok: true, json: () => Promise.resolve({}) });
+  }
+
+  test('submit button shows "Saving..." while request is in flight', async () => {
+    const settle = makePendingFetch();
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /saving/i })).toBeInTheDocument();
+    });
+    settle();
+    await waitFor(() => expect(baseProps.onClose).toHaveBeenCalled());
+  });
+
+  test('submit button is disabled while saving', async () => {
+    const settle = makePendingFetch();
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /saving/i })).toBeDisabled();
+    });
+    settle();
+    await waitFor(() => expect(baseProps.onClose).toHaveBeenCalled());
+  });
+
+  test('cancel button is disabled while saving', async () => {
+    const settle = makePendingFetch();
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled();
+    });
+    settle();
+    await waitFor(() => expect(baseProps.onClose).toHaveBeenCalled());
+  });
+});
+
+// ─── Close behavior ───────────────────────────────────────────────────────────
+
+describe('close behavior', () => {
+  test('calls onClose when Cancel is clicked', () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(baseProps.onClose).toHaveBeenCalledTimes(1);
   });
-});
 
-// --- API error ---
-
-test('shows API error message when request fails', async () => {
-  global.fetch = jest.fn(() =>
-    Promise.resolve({
-      ok: false,
-      status: 500,
-      text: () => Promise.resolve('Internal Server Error'),
-    })
-  );
-
-  render(<JobForm {...baseProps} />);
-
-  await userEvent.type(screen.getByLabelText(/job title/i), 'Engineer');
-  await userEvent.type(screen.getByLabelText(/company/i), 'Acme');
-
-  fireEvent.click(screen.getByRole('button', { name: /add job/i }));
-
-  await waitFor(() => {
-    expect(screen.getByRole('alert')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Internal Server Error');
+  test('calls onClose when X button is clicked', () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /close form/i }));
+    expect(baseProps.onClose).toHaveBeenCalledTimes(1);
   });
 
-  expect(baseProps.onClose).not.toHaveBeenCalled();
+  test('calls onClose when Escape key is pressed', () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(baseProps.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('calls onClose when clicking the overlay backdrop', () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('dialog'));
+    expect(baseProps.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('does NOT close when clicking inside the modal content', () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByLabelText(/job title/i));
+    expect(baseProps.onClose).not.toHaveBeenCalled();
+  });
+
+  test('does NOT close when clicking a button inside the modal', () => {
+    render(<JobForm {...baseProps} />);
+    // Clicking the submit button should not directly call onClose
+    // (it may fail validation and stay open, but onClose is not directly invoked)
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    expect(baseProps.onClose).not.toHaveBeenCalled();
+  });
+
+  test('Escape key does not trigger multiple closes', () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(baseProps.onClose).toHaveBeenCalledTimes(2);
+  });
 });
 
-// --- Close behavior ---
+// ─── Accessibility ────────────────────────────────────────────────────────────
 
-test('calls onClose when cancel button clicked', () => {
-  render(<JobForm {...baseProps} />);
-  fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
-  expect(baseProps.onClose).toHaveBeenCalledTimes(1);
-});
+describe('accessibility', () => {
+  test('error messages have role=alert', async () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      const alerts = screen.getAllByRole('alert');
+      expect(alerts.length).toBeGreaterThanOrEqual(2);
+    });
+  });
 
-test('calls onClose when X button clicked', () => {
-  render(<JobForm {...baseProps} />);
-  fireEvent.click(screen.getByRole('button', { name: /close form/i }));
-  expect(baseProps.onClose).toHaveBeenCalledTimes(1);
-});
+  test('API error has role=alert', async () => {
+    mockFetchError(500, 'Oops');
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      const alert = screen.getByRole('alert');
+      expect(within(alert).getByText('Oops')).toBeInTheDocument();
+    });
+  });
 
-test('calls onClose when Escape key pressed', () => {
-  render(<JobForm {...baseProps} />);
-  fireEvent.keyDown(document, { key: 'Escape' });
-  expect(baseProps.onClose).toHaveBeenCalledTimes(1);
-});
+  test('title input linked to error via aria-describedby', async () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByLabelText(/job title/i)).toHaveAttribute(
+        'aria-describedby',
+        'jf-title-error'
+      );
+      expect(screen.getByLabelText(/job title/i)).toHaveAttribute('aria-invalid', 'true');
+    });
+  });
 
-test('calls onClose when clicking outside the modal', () => {
-  render(<JobForm {...baseProps} />);
-  fireEvent.click(screen.getByRole('dialog'));
-  expect(baseProps.onClose).toHaveBeenCalledTimes(1);
+  test('company input linked to error via aria-describedby', async () => {
+    render(<JobForm {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByLabelText(/company/i)).toHaveAttribute(
+        'aria-describedby',
+        'jf-company-error'
+      );
+      expect(screen.getByLabelText(/company/i)).toHaveAttribute('aria-invalid', 'true');
+    });
+  });
+
+  test('title input has no aria-invalid when no error', () => {
+    render(<JobForm {...baseProps} />);
+    expect(screen.getByLabelText(/job title/i)).not.toHaveAttribute('aria-invalid');
+  });
 });

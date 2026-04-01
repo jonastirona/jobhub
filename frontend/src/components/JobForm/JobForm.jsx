@@ -159,8 +159,14 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
                 onChange={handleChange}
                 placeholder="e.g. Software Engineer"
                 autoComplete="off"
+                aria-describedby={errors.title ? 'jf-title-error' : undefined}
+                aria-invalid={errors.title ? true : undefined}
               />
-              {errors.title && <span className="jf-error-msg">{errors.title}</span>}
+              {errors.title && (
+                <span id="jf-title-error" className="jf-error-msg" role="alert">
+                  {errors.title}
+                </span>
+              )}
             </div>
 
             <div className="jf-field">
@@ -176,8 +182,14 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
                 onChange={handleChange}
                 placeholder="e.g. Acme Corp"
                 autoComplete="off"
+                aria-describedby={errors.company ? 'jf-company-error' : undefined}
+                aria-invalid={errors.company ? true : undefined}
               />
-              {errors.company && <span className="jf-error-msg">{errors.company}</span>}
+              {errors.company && (
+                <span id="jf-company-error" className="jf-error-msg" role="alert">
+                  {errors.company}
+                </span>
+              )}
             </div>
           </div>
 
