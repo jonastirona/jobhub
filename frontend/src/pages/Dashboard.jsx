@@ -128,7 +128,7 @@ export default function Dashboard() {
       <Sidebar />
 
       <main className="dashboard-main">
-        <TopBar title="My Dashboard" notificationCount={3} />
+        <TopBar title="My Dashboard" notificationCount={0} />
 
         <div className="dashboard-content">
           <div className="stats-row">

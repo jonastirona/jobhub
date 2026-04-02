@@ -21,7 +21,7 @@ export default function Signup() {
   }
 
   if (session) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   async function handleSubmit(e) {
@@ -38,7 +38,7 @@ export default function Signup() {
     }
 
     if (data?.session) {
-      navigate('/', { replace: true });
+      navigate('/dashboard', { replace: true });
       return;
     }
 

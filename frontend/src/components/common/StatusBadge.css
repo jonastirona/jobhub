@@ -46,3 +46,8 @@
   background: #f3f4f6;
   color: var(--text-muted);
 }
+
+.status-badge.unknown {
+  background: #f3f4f6;
+  color: var(--text-muted);
+}
