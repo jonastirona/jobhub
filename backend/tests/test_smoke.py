@@ -469,25 +469,26 @@ def test_upsert_profile_uses_on_conflict_user_id():
 
 
 def test_upsert_profile_sends_all_fields():
-    """All ProfileUpsert fields are included in the payload (even None) for upsert."""
+    """All provided ProfileUpsert fields are included in the upsert payload."""
+    all_fields = {
+        "full_name": "Jane Smith",
+        "headline": "Software Engineer",
+        "location": "New York, NY",
+        "phone": "555-123-4567",
+        "website": "https://janesmith.dev",
+        "linkedin_url": "https://linkedin.com/in/janesmith",
+        "github_url": "https://github.com/janesmith",
+        "summary": "Experienced engineer.",
+    }
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
     with patch("main.get_supabase", return_value=mock_sb):
         client.put(
             "/profile",
-            json={"full_name": "Jane"},
+            json=all_fields,
             headers={"authorization": AUTH_HEADER},
         )
     upserted = mock_query.upsert.call_args[0][0]
-    for field in (
-        "full_name",
-        "headline",
-        "location",
-        "phone",
-        "website",
-        "linkedin_url",
-        "github_url",
-        "summary",
-    ):
+    for field in all_fields:
         assert field in upserted
 
 
@@ -504,7 +505,7 @@ def test_upsert_profile_db_failure_returns_500():
 
 
 def test_upsert_profile_partial_fields():
-    """Only provided fields are set; unprovided fields are None in payload."""
+    """Only provided fields are sent; unprovided fields are excluded from payload."""
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
     with patch("main.get_supabase", return_value=mock_sb):
         client.put(
@@ -514,7 +515,7 @@ def test_upsert_profile_partial_fields():
         )
     upserted = mock_query.upsert.call_args[0][0]
     assert upserted["summary"] == "Updated summary"
-    assert upserted["full_name"] is None
+    assert "full_name" not in upserted
 
 
 def test_upsert_profile_can_clear_field():

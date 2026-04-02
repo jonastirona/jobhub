@@ -17,10 +17,9 @@ CREATE TABLE IF NOT EXISTS profiles (
   updated_at   TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS profiles_user_id_idx ON profiles (user_id);
-
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can manage their own profile" ON profiles;
 CREATE POLICY "Users can manage their own profile"
   ON profiles FOR ALL
   USING (auth.uid() = user_id)
@@ -34,6 +33,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS profiles_updated_at ON profiles;
 CREATE TRIGGER profiles_updated_at
   BEFORE UPDATE ON profiles
   FOR EACH ROW EXECUTE FUNCTION set_profiles_updated_at();

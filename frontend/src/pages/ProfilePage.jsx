@@ -64,6 +64,7 @@ export default function ProfilePage() {
   async function handleSubmit(e) {
     e.preventDefault();
     if (saving) return;
+    setSaved(false);
     const payload = {
       full_name: values.full_name.trim() || null,
       headline: values.headline.trim() || null,

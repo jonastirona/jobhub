@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export function useProfile(accessToken) {
   const [profile, setProfile] = useState(null);
@@ -6,6 +6,7 @@ export function useProfile(accessToken) {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const pendingSaveRef = useRef(null);
 
   const fetchProfile = useCallback(
     async (signal) => {
@@ -47,6 +48,11 @@ export function useProfile(accessToken) {
     return () => controller.abort();
   }, [fetchProfile]);
 
+  const refetch = useCallback(() => {
+    const controller = new AbortController();
+    fetchProfile(controller.signal);
+  }, [fetchProfile]);
+
   const saveProfile = useCallback(
     async (values) => {
       const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
@@ -58,6 +64,9 @@ export function useProfile(accessToken) {
         setSaveError('You are not authenticated. Please sign in again.');
         return false;
       }
+      pendingSaveRef.current?.abort();
+      const controller = new AbortController();
+      pendingSaveRef.current = controller;
       setSaving(true);
       setSaveError(null);
       try {
@@ -68,23 +77,26 @@ export function useProfile(accessToken) {
             Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify(values),
+          signal: controller.signal,
         });
         if (!res.ok) {
           const text = await res.text().catch(() => '');
           throw new Error(text || `Save failed (${res.status})`);
         }
         const saved = await res.json();
+        if (controller.signal.aborted) return false;
         setProfile(saved);
         return true;
       } catch (err) {
+        if (controller.signal.aborted) return false;
         setSaveError(err instanceof Error ? err.message : String(err));
         return false;
       } finally {
-        setSaving(false);
+        if (!controller.signal.aborted) setSaving(false);
       }
     },
     [accessToken]
   );
 
-  return { profile, loading, error, saving, saveError, saveProfile, refetch: fetchProfile };
+  return { profile, loading, error, saving, saveError, saveProfile, refetch };
 }

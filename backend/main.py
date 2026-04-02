@@ -170,7 +170,7 @@ def get_profile(authorization: Optional[str] = Header(default=None)):
 def upsert_profile(profile: ProfileUpsert, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
     sb = get_supabase()
-    payload = profile.model_dump()
+    payload = profile.model_dump(exclude_unset=True)
     payload["user_id"] = user_id
     response = sb.table("profiles").upsert(payload, on_conflict="user_id").execute()
     if not response.data:
