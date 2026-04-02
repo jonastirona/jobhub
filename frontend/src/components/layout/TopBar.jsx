@@ -20,7 +20,9 @@ export default function TopBar({ title, notificationCount }) {
       <div className="topbar-title">{title}</div>
       <div className="topbar-right">
         <div className="search-box">
-          <span className="search-icon">🔍</span>
+          <span className="search-icon" aria-hidden="true">
+            🔍
+          </span>
           <input
             type="text"
             placeholder="Search jobs, companies..."

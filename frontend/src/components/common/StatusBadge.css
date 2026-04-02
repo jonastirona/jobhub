@@ -42,11 +42,7 @@
   color: var(--red);
 }
 
-.status-badge.archived {
-  background: #f3f4f6;
-  color: var(--text-muted);
-}
-
+.status-badge.archived,
 .status-badge.unknown {
   background: #f3f4f6;
   color: var(--text-muted);
