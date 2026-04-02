@@ -69,6 +69,12 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .profile-card {
+    animation: none;
+  }
+}
+
 .profile-card-header {
   padding: 18px 24px;
   border-bottom: 1px solid var(--border);

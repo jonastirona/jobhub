@@ -99,7 +99,7 @@ export default function ProfilePage() {
                 </p>
               )}
 
-              <form className="profile-form" onSubmit={handleSubmit} noValidate>
+              <form className="profile-form" onSubmit={handleSubmit}>
                 {/* Identity card */}
                 <section className="profile-card" aria-labelledby="identity-heading">
                   <div className="profile-card-header">
@@ -114,10 +114,10 @@ export default function ProfilePage() {
                     </div>
                     <div className="profile-avatar-meta">
                       <span className="profile-avatar-name">
-                        {values.full_name || user?.email || 'Your Name'}
+                        {values.full_name.trim() || user?.email || 'Your Name'}
                       </span>
                       <span className="profile-avatar-headline">
-                        {values.headline || 'Add a headline'}
+                        {values.headline.trim() || 'Add a headline'}
                       </span>
                     </div>
                   </div>
