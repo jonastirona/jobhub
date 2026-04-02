@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useJobs } from '../hooks/useJobs';
 import Sidebar from '../components/layout/Sidebar';
 import TopBar from '../components/layout/TopBar';
 import StatCard from '../components/common/StatCard';
 import StatusBadge from '../components/common/StatusBadge';
+import JobForm from '../components/JobForm/JobForm';
 import '../styles/Dashboard.css';
 
 const COMPANY_GRADIENTS = {
@@ -66,7 +68,8 @@ const PAGE_NUMBERS = [1, 2, 3, 4, 5];
 
 export default function Dashboard() {
   const { session } = useAuth();
-  const { jobs, loading, error } = useJobs(session?.access_token);
+  const { jobs, loading, error, refetch } = useJobs(session?.access_token);
+  const [formState, setFormState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', job }
 
   const totalApplications = jobs.length;
   const interviews = jobs.filter(
@@ -104,6 +107,22 @@ export default function Dashboard() {
     },
   ];
 
+  function openCreate() {
+    setFormState({ mode: 'create' });
+  }
+
+  function openEdit(job) {
+    setFormState({ mode: 'edit', job });
+  }
+
+  function closeForm() {
+    setFormState(null);
+  }
+
+  function handleSaved() {
+    refetch();
+  }
+
   return (
     <div className="dashboard-layout">
       <Sidebar />
@@ -121,7 +140,7 @@ export default function Dashboard() {
           <div className="table-section">
             <div className="table-header">
               <div className="table-title">Job Applications</div>
-              <button type="button" className="btn-add">
+              <button type="button" className="btn-add" onClick={openCreate}>
                 + Add Job
               </button>
             </div>
@@ -187,6 +206,7 @@ export default function Dashboard() {
                               type="button"
                               className="action-btn"
                               aria-label="Edit application"
+                              onClick={() => openEdit(job)}
                             >
                               ✏️
                             </button>
@@ -240,6 +260,17 @@ export default function Dashboard() {
           </div>
         </div>
       </main>
+
+      {formState && (
+        <JobForm
+          key={formState.mode === 'edit' ? formState.job?.id : 'create'}
+          mode={formState.mode}
+          job={formState.job}
+          accessToken={session?.access_token}
+          onClose={closeForm}
+          onSaved={handleSaved}
+        />
+      )}
     </div>
   );
 }

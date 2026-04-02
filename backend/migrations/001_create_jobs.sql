@@ -1,5 +1,5 @@
--- Migration: 001_create_jobs
--- Run this once in the Supabase SQL editor for your project.
+-- 001_create_jobs
+-- Run once in the Supabase SQL editor.
 
 create table if not exists jobs (
   id           uuid        primary key default gen_random_uuid(),
@@ -15,11 +15,9 @@ create table if not exists jobs (
   updated_at   timestamptz not null default now()
 );
 
--- Indexes for common query patterns (list by user, ordered by date)
 create index if not exists jobs_user_id_idx on jobs (user_id);
 create index if not exists jobs_user_created_idx on jobs (user_id, created_at desc);
 
--- Row-level security: users can only read/write their own jobs
 alter table jobs enable row level security;
 
 drop policy if exists "Users can manage their own jobs" on jobs;
@@ -29,7 +27,6 @@ create policy "Users can manage their own jobs"
   using  (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- Keep updated_at current on every write
 create or replace function update_updated_at()
 returns trigger language plpgsql as $$
 begin

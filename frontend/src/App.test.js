@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 
 const mockAuthValue = {
@@ -99,5 +99,94 @@ test('renders log out button in sidebar', async () => {
   render(<App />);
   await waitFor(() => {
     expect(screen.getByRole('button', { name: /logout/i })).toBeInTheDocument();
+  });
+});
+
+test('renders Add Job button on dashboard', async () => {
+  render(<App />);
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: /add job/i })).toBeInTheDocument();
+  });
+});
+
+test('clicking Add Job opens the job form modal', async () => {
+  render(<App />);
+  await waitFor(() => screen.getByRole('button', { name: /add job/i }));
+  fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+  await waitFor(() => {
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /add job application/i })).toBeInTheDocument();
+  });
+});
+
+test('job form modal closes when Cancel is clicked', async () => {
+  render(<App />);
+  await waitFor(() => screen.getByRole('button', { name: /add job/i }));
+  fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+  await waitFor(() => screen.getByRole('dialog'));
+  fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+test('clicking Edit opens form pre-filled with that job', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Backend Engineer',
+            company: 'DataCorp',
+            status: 'applied',
+            applied_date: '2026-03-01',
+            location: 'Remote',
+            description: null,
+            notes: null,
+            updated_at: '2026-03-29T00:00:00+00:00',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => screen.getByText('Backend Engineer'));
+  fireEvent.click(screen.getByRole('button', { name: /edit application/i }));
+  await waitFor(() => {
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /edit application/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Backend Engineer')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('DataCorp')).toBeInTheDocument();
+  });
+});
+
+test('edit form modal closes when Cancel is clicked', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Backend Engineer',
+            company: 'DataCorp',
+            status: 'applied',
+            applied_date: null,
+            location: null,
+            description: null,
+            notes: null,
+            updated_at: '2026-03-29T00:00:00+00:00',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => screen.getByText('Backend Engineer'));
+  fireEvent.click(screen.getByRole('button', { name: /edit application/i }));
+  await waitFor(() => screen.getByRole('dialog'));
+  fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
