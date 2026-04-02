@@ -4,7 +4,7 @@
 
 CREATE TABLE IF NOT EXISTS profiles (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id      UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL UNIQUE,
+  user_id      UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
   full_name    TEXT,
   headline     TEXT,
   location     TEXT,
@@ -25,15 +25,7 @@ CREATE POLICY "Users can manage their own profile"
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
-CREATE OR REPLACE FUNCTION set_profiles_updated_at()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$;
-
 DROP TRIGGER IF EXISTS profiles_updated_at ON profiles;
 CREATE TRIGGER profiles_updated_at
   BEFORE UPDATE ON profiles
-  FOR EACH ROW EXECUTE FUNCTION set_profiles_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();

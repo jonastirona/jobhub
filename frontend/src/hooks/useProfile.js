@@ -6,6 +6,7 @@ export function useProfile(accessToken) {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const pendingFetchRef = useRef(null);
   const pendingSaveRef = useRef(null);
 
   const fetchProfile = useCallback(
@@ -44,12 +45,25 @@ export function useProfile(accessToken) {
 
   useEffect(() => {
     const controller = new AbortController();
+    pendingFetchRef.current = controller;
     fetchProfile(controller.signal);
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      pendingFetchRef.current = null;
+    };
   }, [fetchProfile]);
 
+  useEffect(() => {
+    return () => {
+      pendingSaveRef.current?.abort();
+      pendingSaveRef.current = null;
+    };
+  }, []);
+
   const refetch = useCallback(() => {
+    pendingFetchRef.current?.abort();
     const controller = new AbortController();
+    pendingFetchRef.current = controller;
     fetchProfile(controller.signal);
   }, [fetchProfile]);
 
