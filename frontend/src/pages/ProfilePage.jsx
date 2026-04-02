@@ -75,8 +75,8 @@ export default function ProfilePage() {
       github_url: values.github_url.trim() || null,
       summary: values.summary.trim() || null,
     };
-    const ok = await saveProfile(payload);
-    if (ok) setSaved(true);
+    const success = await saveProfile(payload);
+    if (success) setSaved(true);
   }
 
   const initials = getInitials(values.full_name, user?.email);
