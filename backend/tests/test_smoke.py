@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from main import JobCreate, JobUpdate, app
+from main import JobCreate, JobUpdate, ProfileUpsert, app
 
 client = TestClient(app)
 
@@ -40,7 +40,7 @@ def make_mock_sb(data=None):
     Return a fully mocked Supabase client.
 
     - auth.get_user() resolves to MOCK_USER_ID
-    - table() chains (select/insert/update/delete/eq/order) all return self
+    - table() chains (select/insert/update/delete/upsert/eq/order) all return self
     - execute() returns a response whose .data equals the provided list
     """
     mock_sb = MagicMock()
@@ -55,7 +55,7 @@ def make_mock_sb(data=None):
     mock_result.data = data if data is not None else []
 
     mock_query = MagicMock()
-    for method in ("select", "insert", "update", "delete", "eq", "order"):
+    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order"):
         getattr(mock_query, method).return_value = mock_query
     mock_query.execute.return_value = mock_result
 
@@ -352,3 +352,213 @@ def test_job_update_all_optional():
     assert job.company is None
     assert job.status is None
     assert job.location is None
+
+
+# ---------------------------------------------------------------------------
+# Profile fixtures
+# ---------------------------------------------------------------------------
+
+SAMPLE_PROFILE = {
+    "id": "profile-uuid-9999",
+    "user_id": MOCK_USER_ID,
+    "full_name": "Jane Smith",
+    "headline": "Software Engineer",
+    "location": "New York, NY",
+    "phone": "555-123-4567",
+    "website": "https://janesmith.dev",
+    "linkedin_url": "https://linkedin.com/in/janesmith",
+    "github_url": "https://github.com/janesmith",
+    "summary": "Experienced engineer with 5 years in backend development.",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-01T00:00:00+00:00",
+}
+
+
+# ---------------------------------------------------------------------------
+# Auth guard — profile routes must reject requests with no token
+# ---------------------------------------------------------------------------
+
+
+def test_get_profile_requires_auth():
+    response = client.get("/profile")
+    assert response.status_code == 401
+
+
+def test_put_profile_requires_auth():
+    response = client.put("/profile", json={"full_name": "Jane"})
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# GET /profile
+# ---------------------------------------------------------------------------
+
+
+def test_get_profile_returns_existing_profile():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_PROFILE])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/profile", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["full_name"] == "Jane Smith"
+    assert body["headline"] == "Software Engineer"
+    assert body["user_id"] == MOCK_USER_ID
+
+
+def test_get_profile_returns_empty_when_no_profile():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/profile", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    assert response.json() == {}
+
+
+def test_get_profile_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get("/profile", headers={"authorization": AUTH_HEADER})
+    mock_query.eq.assert_any_call("user_id", MOCK_USER_ID)
+
+
+def test_get_profile_selects_all_fields():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get("/profile", headers={"authorization": AUTH_HEADER})
+    mock_query.select.assert_called_with("*")
+
+
+# ---------------------------------------------------------------------------
+# PUT /profile
+# ---------------------------------------------------------------------------
+
+
+def test_upsert_profile_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_PROFILE])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/profile",
+            json={"full_name": "Jane Smith", "headline": "Software Engineer"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["full_name"] == "Jane Smith"
+
+
+def test_upsert_profile_injects_user_id():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            "/profile",
+            json={"full_name": "Jane"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    upserted = mock_query.upsert.call_args[0][0]
+    assert upserted["user_id"] == MOCK_USER_ID
+
+
+def test_upsert_profile_uses_on_conflict_user_id():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            "/profile",
+            json={"full_name": "Jane"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    kwargs = mock_query.upsert.call_args[1]
+    assert kwargs.get("on_conflict") == "user_id"
+
+
+def test_upsert_profile_sends_all_fields():
+    """All provided ProfileUpsert fields are included in the upsert payload."""
+    all_fields = {
+        "full_name": "Jane Smith",
+        "headline": "Software Engineer",
+        "location": "New York, NY",
+        "phone": "555-123-4567",
+        "website": "https://janesmith.dev",
+        "linkedin_url": "https://linkedin.com/in/janesmith",
+        "github_url": "https://github.com/janesmith",
+        "summary": "Experienced engineer.",
+    }
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            "/profile",
+            json=all_fields,
+            headers={"authorization": AUTH_HEADER},
+        )
+    upserted = mock_query.upsert.call_args[0][0]
+    for field in all_fields:
+        assert field in upserted
+
+
+def test_upsert_profile_db_failure_returns_500():
+    mock_sb, _, mock_result = make_mock_sb(data=[])
+    mock_result.data = []
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/profile",
+            json={"full_name": "Jane"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 500
+
+
+def test_upsert_profile_partial_fields():
+    """Only provided fields are sent; unprovided fields are excluded from payload."""
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            "/profile",
+            json={"summary": "Updated summary"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    upserted = mock_query.upsert.call_args[0][0]
+    assert upserted["summary"] == "Updated summary"
+    assert "full_name" not in upserted
+
+
+def test_upsert_profile_can_clear_field():
+    """Sending null for a field explicitly sets it to None in the payload."""
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            "/profile",
+            json={"full_name": None},
+            headers={"authorization": AUTH_HEADER},
+        )
+    upserted = mock_query.upsert.call_args[0][0]
+    assert upserted["full_name"] is None
+
+
+# ---------------------------------------------------------------------------
+# ProfileUpsert schema validation
+# ---------------------------------------------------------------------------
+
+
+def test_profile_upsert_all_optional():
+    profile = ProfileUpsert()
+    assert profile.full_name is None
+    assert profile.headline is None
+    assert profile.location is None
+    assert profile.phone is None
+    assert profile.website is None
+    assert profile.linkedin_url is None
+    assert profile.github_url is None
+    assert profile.summary is None
+
+
+def test_profile_upsert_all_fields():
+    profile = ProfileUpsert(
+        full_name="Jane Smith",
+        headline="Software Engineer",
+        location="New York, NY",
+        phone="555-123-4567",
+        website="https://janesmith.dev",
+        linkedin_url="https://linkedin.com/in/janesmith",
+        github_url="https://github.com/janesmith",
+        summary="Experienced engineer.",
+    )
+    assert profile.full_name == "Jane Smith"
+    assert profile.headline == "Software Engineer"
+    assert profile.summary == "Experienced engineer."

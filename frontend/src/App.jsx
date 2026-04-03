@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProfileAvatarProvider } from './context/ProfileAvatarContext';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
+import ProfilePage from './pages/ProfilePage';
 import Settings from './pages/Settings';
 import Signup from './pages/Signup';
 
@@ -43,6 +44,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
           </ProtectedRoute>
         }
       />

@@ -78,6 +78,17 @@ class JobUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+class ProfileUpsert(BaseModel):
+    full_name: Optional[str] = None
+    headline: Optional[str] = None
+    location: Optional[str] = None
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    github_url: Optional[str] = None
+    summary: Optional[str] = None
+
+
 # --- Routes ---
 
 
@@ -142,3 +153,26 @@ def delete_job(job_id: str, authorization: Optional[str] = Header(default=None))
     if not response.data:
         raise HTTPException(status_code=404, detail="Job not found")
     return Response(status_code=204)
+
+
+# --- Profile routes ---
+
+
+@app.get("/profile")
+def get_profile(authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = sb.table("profiles").select("*").eq("user_id", user_id).execute()
+    return response.data[0] if response.data else {}
+
+
+@app.put("/profile")
+def upsert_profile(profile: ProfileUpsert, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    payload = profile.model_dump(exclude_unset=True)
+    payload["user_id"] = user_id
+    response = sb.table("profiles").upsert(payload, on_conflict="user_id").execute()
+    if not response.data:
+        raise HTTPException(status_code=500, detail="Failed to save profile")
+    return response.data[0]

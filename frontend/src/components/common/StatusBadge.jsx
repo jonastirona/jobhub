@@ -12,7 +12,7 @@ const STATUS_CONFIG = {
 };
 
 export default function StatusBadge({ status }) {
-  const config = STATUS_CONFIG[status] ?? STATUS_CONFIG['interested'];
+  const config = STATUS_CONFIG[status] ?? { label: status, className: 'unknown' };
 
   return (
     <span className={`status-badge ${config.className}`}>
