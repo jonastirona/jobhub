@@ -100,9 +100,16 @@ pytest
 Backend tests mock the Supabase client — no live database or credentials are needed to run them.
 
 ### Linting Checks
-```frontend:
-local checking for prettier formatting: npx prettier --check . --no-error-on-unmatched-pattern
-local fixing for prettier formatting: npx prettier --check . --no-error-on-unmatched-pattern --write
 
-local checking for linting: 
-npx eslint . --ext .ts,.tsx, .jsx --no-error-on-unmatched-pattern
+From `frontend/`:
+
+```bash
+# Prettier — verify formatting
+npx prettier --check . --no-error-on-unmatched-pattern
+
+# Prettier — apply formatting
+npx prettier --write . --no-error-on-unmatched-pattern
+
+# ESLint (same extensions as npm run lint)
+npx eslint . --ext .ts,.tsx,.js,.jsx --no-error-on-unmatched-pattern
+```
