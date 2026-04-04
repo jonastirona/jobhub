@@ -1,4 +1,5 @@
 import { useAuth } from '../../context/AuthContext';
+import { useProfileAvatar } from '../../context/ProfileAvatarContext';
 import './TopBar.css';
 
 function getInitials(email) {
@@ -12,6 +13,7 @@ function getInitials(email) {
 
 export default function TopBar({ title, notificationCount }) {
   const { user } = useAuth();
+  const { avatarPreviewUrl } = useProfileAvatar();
   const initials = getInitials(user?.email);
   const displayName = user?.email?.split('@')[0] ?? 'User';
 
@@ -36,7 +38,13 @@ export default function TopBar({ title, notificationCount }) {
         </button>
 
         <div className="user-pill">
-          <div className="user-avatar">{initials}</div>
+          <div className={`user-avatar${avatarPreviewUrl ? ' user-avatar--photo' : ''}`}>
+            {avatarPreviewUrl ? (
+              <img src={avatarPreviewUrl} alt="" className="user-avatar-img" />
+            ) : (
+              initials
+            )}
+          </div>
           <div className="user-info">
             <span className="user-name">{displayName}</span>
             <span className="user-role">Job Seeker</span>

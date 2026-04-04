@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { ProfileAvatarProvider } from '../context/ProfileAvatarContext';
 import ProfilePage from './ProfilePage';
 
 const ACCESS_TOKEN = 'test-token';
@@ -77,7 +78,9 @@ function makePendingSave() {
 function renderPage() {
   return render(
     <MemoryRouter>
-      <ProfilePage />
+      <ProfileAvatarProvider>
+        <ProfilePage />
+      </ProfileAvatarProvider>
     </MemoryRouter>
   );
 }
