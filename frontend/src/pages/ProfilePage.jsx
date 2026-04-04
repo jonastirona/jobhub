@@ -1,27 +1,71 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../hooks/useProfile';
 import './ProfilePage.css';
 
+const EMPTY_FORM = {
+  full_name: '',
+  headline: '',
+  location: '',
+  phone: '',
+  website: '',
+  linkedin_url: '',
+  github_url: '',
+  summary: '',
+};
+
+function asText(value) {
+  return typeof value === 'string' ? value : '';
+}
+
+function toNullableString(value) {
+  const trimmed = asText(value).trim();
+  return trimmed === '' ? null : trimmed;
+}
+
+function getInitials(fullName, email) {
+  const normalizedName = asText(fullName).trim();
+  if (normalizedName) {
+    const parts = normalizedName.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
+  }
+  return asText(email).charAt(0).toUpperCase() || 'U';
+}
+
 export default function ProfilePage() {
   const { session, user } = useAuth();
   const accessToken = session?.access_token;
   const { profile, loading, error, saving, saveError, saveProfile } = useProfile(accessToken);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const [formData, setFormData] = useState({
-    full_name: profile?.full_name || '',
-    headline: profile?.headline || '',
-    location: profile?.location || '',
-    phone: profile?.phone || '',
-    website: profile?.website || '',
-    linkedin_url: profile?.linkedin_url || '',
-    github_url: profile?.github_url || '',
-    summary: profile?.summary || '',
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM);
+
+  useEffect(() => {
+    setFormData({
+      full_name: asText(profile?.full_name),
+      headline: asText(profile?.headline),
+      location: asText(profile?.location),
+      phone: asText(profile?.phone),
+      website: asText(profile?.website),
+      linkedin_url: asText(profile?.linkedin_url),
+      github_url: asText(profile?.github_url),
+      summary: asText(profile?.summary),
+    });
+  }, [profile]);
+
+  const avatarInitials = useMemo(
+    () => getInitials(formData.full_name, user?.email),
+    [formData.full_name, user?.email]
+  );
+  const displayName = asText(formData.full_name).trim() || user?.email || 'User';
+  const displayHeadline = asText(formData.headline).trim() || 'Add a headline';
+  const summaryCount = asText(formData.summary).length;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    setSaveSuccess(false);
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -30,7 +74,24 @@ export default function ProfilePage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await saveProfile(formData);
+    if (saving) return;
+    setSaveSuccess(false);
+
+    const payload = {
+      full_name: toNullableString(formData.full_name),
+      headline: toNullableString(formData.headline),
+      location: toNullableString(formData.location),
+      phone: toNullableString(formData.phone),
+      website: toNullableString(formData.website),
+      linkedin_url: toNullableString(formData.linkedin_url),
+      github_url: toNullableString(formData.github_url),
+      summary: toNullableString(formData.summary),
+    };
+
+    const saved = await saveProfile(payload);
+    if (saved) {
+      setSaveSuccess(true);
+    }
   };
 
   if (loading) {
@@ -46,18 +107,40 @@ export default function ProfilePage() {
   return (
     <AppShell title="My Profile">
       <div className="profile-content">
-        {error && <div className="profile-state profile-state--error">{error}</div>}
-        {saveError && <div className="profile-state profile-state--error">{saveError}</div>}
+        {error && (
+          <div className="profile-state profile-state--error" role="alert">
+            {error}
+          </div>
+        )}
+        {saveError && (
+          <div className="profile-state profile-state--error" role="alert">
+            {saveError}
+          </div>
+        )}
+        {saveSuccess && !saveError && (
+          <p className="profile-save-success" role="status">
+            Profile saved successfully.
+          </p>
+        )}
 
         <form className="profile-form" onSubmit={handleSubmit}>
-          {/* Identity Section */}
-          <div className="profile-card">
+          <section className="profile-card" role="region" aria-labelledby="profile-identity-title">
             <div className="profile-card-header">
-              <h2 className="profile-card-title">Identity</h2>
+              <h2 id="profile-identity-title" className="profile-card-title">
+                Identity
+              </h2>
             </div>
-            <div style={{ padding: '20px 24px' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <label htmlFor="full_name" style={{ display: 'block', marginBottom: '4px' }}>
+            <div className="profile-avatar-row">
+              <div className="profile-avatar">{avatarInitials}</div>
+              <div className="profile-avatar-meta">
+                <div className="profile-avatar-name">{displayName}</div>
+                <div className="profile-avatar-headline">{displayHeadline}</div>
+              </div>
+            </div>
+
+            <div className="profile-grid">
+              <div className="profile-field">
+                <label htmlFor="full_name" className="profile-label">
                   Full Name
                 </label>
                 <input
@@ -66,16 +149,12 @@ export default function ProfilePage() {
                   name="full_name"
                   value={formData.full_name}
                   onChange={handleChange}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                  }}
+                  className="profile-input"
                 />
               </div>
-              <div style={{ marginBottom: '16px' }}>
-                <label htmlFor="headline" style={{ display: 'block', marginBottom: '4px' }}>
+
+              <div className="profile-field">
+                <label htmlFor="headline" className="profile-label">
                   Headline
                 </label>
                 <input
@@ -84,16 +163,12 @@ export default function ProfilePage() {
                   name="headline"
                   value={formData.headline}
                   onChange={handleChange}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                  }}
+                  className="profile-input"
                 />
               </div>
-              <div style={{ marginBottom: '16px' }}>
-                <label htmlFor="location" style={{ display: 'block', marginBottom: '4px' }}>
+
+              <div className="profile-field">
+                <label htmlFor="location" className="profile-label">
                   Location
                 </label>
                 <input
@@ -102,16 +177,12 @@ export default function ProfilePage() {
                   name="location"
                   value={formData.location}
                   onChange={handleChange}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                  }}
+                  className="profile-input"
                 />
               </div>
-              <div style={{ marginBottom: '0' }}>
-                <label htmlFor="phone" style={{ display: 'block', marginBottom: '4px' }}>
+
+              <div className="profile-field">
+                <label htmlFor="phone" className="profile-label">
                   Phone
                 </label>
                 <input
@@ -120,25 +191,22 @@ export default function ProfilePage() {
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                  }}
+                  className="profile-input"
                 />
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* Professional Summary Section */}
-          <div className="profile-card">
+          <section className="profile-card" role="region" aria-labelledby="profile-summary-title">
             <div className="profile-card-header">
-              <h2 className="profile-card-title">Professional Summary</h2>
+              <h2 id="profile-summary-title" className="profile-card-title">
+                Professional Summary
+              </h2>
             </div>
-            <div style={{ padding: '20px 24px' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <label htmlFor="website" style={{ display: 'block', marginBottom: '4px' }}>
+
+            <div className="profile-grid">
+              <div className="profile-field">
+                <label htmlFor="website" className="profile-label">
                   Website
                 </label>
                 <input
@@ -147,16 +215,12 @@ export default function ProfilePage() {
                   name="website"
                   value={formData.website}
                   onChange={handleChange}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                  }}
+                  className="profile-input"
                 />
               </div>
-              <div style={{ marginBottom: '16px' }}>
-                <label htmlFor="linkedin_url" style={{ display: 'block', marginBottom: '4px' }}>
+
+              <div className="profile-field">
+                <label htmlFor="linkedin_url" className="profile-label">
                   LinkedIn URL
                 </label>
                 <input
@@ -165,16 +229,12 @@ export default function ProfilePage() {
                   name="linkedin_url"
                   value={formData.linkedin_url}
                   onChange={handleChange}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                  }}
+                  className="profile-input"
                 />
               </div>
-              <div style={{ marginBottom: '16px' }}>
-                <label htmlFor="github_url" style={{ display: 'block', marginBottom: '4px' }}>
+
+              <div className="profile-field profile-field--full">
+                <label htmlFor="github_url" className="profile-label">
                   GitHub URL
                 </label>
                 <input
@@ -183,16 +243,12 @@ export default function ProfilePage() {
                   name="github_url"
                   value={formData.github_url}
                   onChange={handleChange}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                  }}
+                  className="profile-input"
                 />
               </div>
-              <div style={{ marginBottom: '0' }}>
-                <label htmlFor="summary" style={{ display: 'block', marginBottom: '4px' }}>
+
+              <div className="profile-field profile-field--full">
+                <label htmlFor="summary" className="profile-label">
                   Summary
                 </label>
                 <textarea
@@ -201,37 +257,20 @@ export default function ProfilePage() {
                   value={formData.summary}
                   onChange={handleChange}
                   rows="6"
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                    fontFamily: 'inherit',
-                    resize: 'vertical',
-                  }}
+                  className="profile-textarea"
                 />
+                <div className="profile-char-count" aria-live="polite">
+                  {summaryCount} characters
+                </div>
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* Save Button */}
-          <button
-            type="submit"
-            disabled={saving}
-            style={{
-              padding: '10px 20px',
-              background: 'var(--orange-500)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: saving ? 'not-allowed' : 'pointer',
-              opacity: saving ? 0.6 : 1,
-              fontSize: '14px',
-              fontWeight: '600',
-            }}
-          >
-            {saving ? 'Saving...' : 'Save Profile'}
-          </button>
+          <div className="profile-actions">
+            <button type="submit" disabled={saving} className="profile-btn-save">
+              {saving ? 'Saving...' : 'Save Profile'}
+            </button>
+          </div>
         </form>
       </div>
     </AppShell>
