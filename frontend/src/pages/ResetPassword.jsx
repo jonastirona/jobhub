@@ -1,46 +1,42 @@
 import { useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import '../AuthPages.css';
 
-export default function Login() {
-  const { session, loading, signIn, supabaseConfigured } = useAuth();
+export default function ResetPassword() {
+  const { updatePassword, supabaseConfigured } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  if (loading) {
-    return (
-      <div className="AuthScreen">
-        <p>Loading…</p>
-      </div>
-    );
-  }
-
-  if (session) {
-    return <Navigate to="/dashboard" replace />;
-  }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+
+    if (password !== confirm) {
+      setError('Passwords do not match.');
+      return;
+    }
+
     setSubmitting(true);
-    const { error: err } = await signIn(email.trim(), password);
+    const { error: err } = await updatePassword(password);
     setSubmitting(false);
+
     if (err) {
       setError(err.message);
       return;
     }
+
     navigate('/dashboard', { replace: true });
   }
 
   return (
     <div className="AuthScreen">
       <div className="AuthCard">
-        <h1>Log in</h1>
-        <p className="AuthSubtitle">Sign in to continue</p>
+        <h1>New password</h1>
+        <p className="AuthSubtitle">Enter your new password below.</p>
 
         {!supabaseConfigured && (
           <p className="AuthMessage AuthMessage--error">
@@ -56,26 +52,26 @@ export default function Login() {
         )}
 
         <form onSubmit={handleSubmit}>
-          <label htmlFor="login-email">Email</label>
+          <label htmlFor="reset-password">New password</label>
           <input
-            id="login-email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            id="reset-password"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             required
             disabled={!supabaseConfigured || submitting}
           />
 
-          <label htmlFor="login-password">Password</label>
+          <label htmlFor="reset-confirm">Confirm password</label>
           <input
-            id="login-password"
-            name="password"
+            id="reset-confirm"
+            name="confirm"
             type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
             required
             disabled={!supabaseConfigured || submitting}
           />
@@ -85,16 +81,9 @@ export default function Login() {
             className="AuthPrimary"
             disabled={!supabaseConfigured || submitting}
           >
-            {submitting ? 'Signing in…' : 'Sign in'}
+            {submitting ? 'Updating…' : 'Update password'}
           </button>
         </form>
-
-        <p className="AuthFooter">
-          <Link to="/forgot-password">Forgot password?</Link>
-        </p>
-        <p className="AuthFooter">
-          No account? <Link to="/signup">Sign up</Link>
-        </p>
       </div>
     </div>
   );

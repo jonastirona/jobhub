@@ -59,6 +59,26 @@ export function AuthProvider({ children }) {
     return supabase.auth.signOut();
   }, []);
 
+  const resetPassword = useCallback((email) => {
+    if (!supabaseConfigured) {
+      return Promise.resolve({
+        error: new Error('Supabase is not configured (missing env vars).'),
+      });
+    }
+    return supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+  }, []);
+
+  const updatePassword = useCallback((newPassword) => {
+    if (!supabaseConfigured) {
+      return Promise.resolve({
+        error: new Error('Supabase is not configured (missing env vars).'),
+      });
+    }
+    return supabase.auth.updateUser({ password: newPassword });
+  }, []);
+
   const value = useMemo(
     () => ({
       session,
@@ -67,9 +87,11 @@ export function AuthProvider({ children }) {
       signIn,
       signUp,
       signOut,
+      resetPassword,
+      updatePassword,
       supabaseConfigured,
     }),
-    [session, loading, signIn, signUp, signOut]
+    [session, loading, signIn, signUp, signOut, resetPassword, updatePassword]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
