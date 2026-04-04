@@ -1,8 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Dashboard from './pages/Dashboard';
+import DocumentLibrary from './pages/DocumentLibrary';
 import Login from './pages/Login';
 import ProfilePage from './pages/ProfilePage';
+import Settings from './pages/Settings';
 import Signup from './pages/Signup';
 
 function ProtectedRoute({ children }) {
@@ -50,6 +52,22 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/documents"
+        element={
+          <ProtectedRoute>
+            <DocumentLibrary />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <Settings />
           </ProtectedRoute>
         }
       />

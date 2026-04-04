@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useJobs } from '../hooks/useJobs';
-import Sidebar from '../components/layout/Sidebar';
-import TopBar from '../components/layout/TopBar';
+import AppShell from '../components/layout/AppShell';
 import StatCard from '../components/common/StatCard';
 import StatusBadge from '../components/common/StatusBadge';
 import JobForm from '../components/JobForm/JobForm';
@@ -124,13 +123,8 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="dashboard-layout">
-      <Sidebar />
-
-      <main className="dashboard-main">
-        <TopBar title="My Dashboard" notificationCount={0} />
-
-        <div className="dashboard-content">
+    <AppShell title="My Dashboard" notificationCount={0}>
+      <div className="dashboard-content">
           <div className="stats-row">
             {statCards.map((card) => (
               <StatCard key={card.label} {...card} />
@@ -258,8 +252,7 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-        </div>
-      </main>
+      </div>
 
       {formState && (
         <JobForm
@@ -271,6 +264,6 @@ export default function Dashboard() {
           onSaved={handleSaved}
         />
       )}
-    </div>
+    </AppShell>
   );
 }

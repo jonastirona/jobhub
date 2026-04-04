@@ -6,7 +6,7 @@ import './Sidebar.css';
 const NAV_ITEMS = [
   { label: 'Dashboard', icon: '📊', path: '/dashboard' },
   { label: 'Profile', icon: '👤', path: '/profile' },
-  { label: 'Documents', icon: '📋', path: '/documents' },
+  { label: 'Document Library', icon: '📋', path: '/documents' },
   { label: 'Settings', icon: '⚙️', path: '/settings' },
 ];
 
