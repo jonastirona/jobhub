@@ -125,133 +125,133 @@ export default function Dashboard() {
   return (
     <AppShell title="My Dashboard" notificationCount={0}>
       <div className="dashboard-content">
-          <div className="stats-row">
-            {statCards.map((card) => (
-              <StatCard key={card.label} {...card} />
-            ))}
+        <div className="stats-row">
+          {statCards.map((card) => (
+            <StatCard key={card.label} {...card} />
+          ))}
+        </div>
+
+        <div className="table-section">
+          <div className="table-header">
+            <div className="table-title">Job Applications</div>
+            <button type="button" className="btn-add" onClick={openCreate}>
+              + Add Job
+            </button>
           </div>
 
-          <div className="table-section">
-            <div className="table-header">
-              <div className="table-title">Job Applications</div>
-              <button type="button" className="btn-add" onClick={openCreate}>
-                + Add Job
-              </button>
-            </div>
+          {loading && <p className="table-state">Loading jobs...</p>}
+          {error && <p className="table-state table-state--error">{error}</p>}
 
-            {loading && <p className="table-state">Loading jobs...</p>}
-            {error && <p className="table-state table-state--error">{error}</p>}
-
-            {!loading && !error && (
-              <table className="jobs-table">
-                <thead>
+          {!loading && !error && (
+            <table className="jobs-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Job Title</th>
+                  <th>Company</th>
+                  <th>Applied</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.length === 0 ? (
                   <tr>
-                    <th>#</th>
-                    <th>Job Title</th>
-                    <th>Company</th>
-                    <th>Applied</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <td colSpan={6} className="table-empty">
+                      No applications yet. Add your first job!
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {jobs.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="table-empty">
-                        No applications yet. Add your first job!
+                ) : (
+                  jobs.map((job, index) => (
+                    <tr key={job.id}>
+                      <td className="row-number">{index + 1}</td>
+                      <td>
+                        <div className="job-title-cell">
+                          <span className="job-title-text">{job.title}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="company-cell">
+                          <div
+                            className="company-logo"
+                            style={{ background: getCompanyGradient(job.company) }}
+                          >
+                            {job.company?.[0]}
+                          </div>
+                          {job.company}
+                        </div>
+                      </td>
+                      <td>
+                        <span className="date-text">{formatDate(job.applied_date)}</span>
+                      </td>
+                      <td>
+                        <StatusBadge status={job.status} />
+                      </td>
+                      <td>
+                        <div className="actions-cell">
+                          <button
+                            type="button"
+                            className="action-btn"
+                            aria-label="View application"
+                          >
+                            👁
+                          </button>
+                          <button
+                            type="button"
+                            className="action-btn"
+                            aria-label="Edit application"
+                            onClick={() => openEdit(job)}
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            type="button"
+                            className="action-btn"
+                            aria-label="Archive application"
+                          >
+                            🗂
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  ) : (
-                    jobs.map((job, index) => (
-                      <tr key={job.id}>
-                        <td className="row-number">{index + 1}</td>
-                        <td>
-                          <div className="job-title-cell">
-                            <span className="job-title-text">{job.title}</span>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="company-cell">
-                            <div
-                              className="company-logo"
-                              style={{ background: getCompanyGradient(job.company) }}
-                            >
-                              {job.company?.[0]}
-                            </div>
-                            {job.company}
-                          </div>
-                        </td>
-                        <td>
-                          <span className="date-text">{formatDate(job.applied_date)}</span>
-                        </td>
-                        <td>
-                          <StatusBadge status={job.status} />
-                        </td>
-                        <td>
-                          <div className="actions-cell">
-                            <button
-                              type="button"
-                              className="action-btn"
-                              aria-label="View application"
-                            >
-                              👁
-                            </button>
-                            <button
-                              type="button"
-                              className="action-btn"
-                              aria-label="Edit application"
-                              onClick={() => openEdit(job)}
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              type="button"
-                              className="action-btn"
-                              aria-label="Archive application"
-                            >
-                              🗂
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
 
-            <div className="table-footer">
-              <div className="rows-select">
-                Show
-                <select aria-label="Rows per page">
-                  <option>10</option>
-                  <option>25</option>
-                  <option>50</option>
-                </select>
-                entries
-              </div>
+          <div className="table-footer">
+            <div className="rows-select">
+              Show
+              <select aria-label="Rows per page">
+                <option>10</option>
+                <option>25</option>
+                <option>50</option>
+              </select>
+              entries
+            </div>
 
-              <div className="pagination" role="navigation" aria-label="Pagination">
-                <button type="button" className="page-btn nav-arrow" aria-label="Previous page">
-                  ‹
+            <div className="pagination" role="navigation" aria-label="Pagination">
+              <button type="button" className="page-btn nav-arrow" aria-label="Previous page">
+                ‹
+              </button>
+              {PAGE_NUMBERS.map((page) => (
+                <button
+                  key={page}
+                  type="button"
+                  className={`page-btn${page === 1 ? ' active' : ''}`}
+                  aria-label={`Page ${page}`}
+                  aria-current={page === 1 ? 'page' : undefined}
+                >
+                  {page}
                 </button>
-                {PAGE_NUMBERS.map((page) => (
-                  <button
-                    key={page}
-                    type="button"
-                    className={`page-btn${page === 1 ? ' active' : ''}`}
-                    aria-label={`Page ${page}`}
-                    aria-current={page === 1 ? 'page' : undefined}
-                  >
-                    {page}
-                  </button>
-                ))}
-                <button type="button" className="page-btn nav-arrow" aria-label="Next page">
-                  ›
-                </button>
-              </div>
+              ))}
+              <button type="button" className="page-btn nav-arrow" aria-label="Next page">
+                ›
+              </button>
             </div>
           </div>
+        </div>
       </div>
 
       {formState && (
