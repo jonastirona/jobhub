@@ -211,6 +211,17 @@ describe('rendering — empty profile (no existing data)', () => {
     expect(screen.getByLabelText('Summary')).toHaveValue('');
   });
 
+  test('shows profile completion at 0 percent for an empty profile', async () => {
+    mockFetch({ getProfile: {} });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/profile completion/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText('0%')).toBeInTheDocument();
+    expect(screen.getByText(/0\/6 required fields complete\./i)).toBeInTheDocument();
+    expect(screen.getByText(/missing: full name, headline, location, phone, website, linkedin url\./i)).toBeInTheDocument();
+  });
+
   test('avatar falls back to email initial when no full_name', async () => {
     mockFetch({ getProfile: {} });
     renderPage();
@@ -296,6 +307,15 @@ describe('rendering — existing profile', () => {
       const len = SAMPLE_PROFILE.summary.length;
       expect(screen.getByText(`${len} characters`)).toBeInTheDocument();
     });
+  });
+
+  test('hides profile completion panel when required fields are complete', async () => {
+    mockFetch({ getProfile: SAMPLE_PROFILE });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith');
+    });
+    expect(screen.queryByText(/profile completion/i)).not.toBeInTheDocument();
   });
 
   test('handles null optional fields gracefully', async () => {

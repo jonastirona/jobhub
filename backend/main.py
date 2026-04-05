@@ -21,6 +21,14 @@ app.add_middleware(
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 _supabase = None
+PROFILE_REQUIRED_FIELDS = (
+    "full_name",
+    "headline",
+    "location",
+    "phone",
+    "website",
+    "linkedin_url",
+)
 
 
 def get_supabase():
@@ -53,6 +61,33 @@ def get_user_id(authorization: Optional[str]) -> str:
         raise
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
+def _normalize_profile_value(value: Optional[str]) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def get_profile_completion(profile: dict) -> dict:
+    completed_fields = [
+        field
+        for field in PROFILE_REQUIRED_FIELDS
+        if _normalize_profile_value(profile.get(field))
+    ]
+    missing_fields = [
+        field for field in PROFILE_REQUIRED_FIELDS if field not in completed_fields
+    ]
+    total_fields = len(PROFILE_REQUIRED_FIELDS)
+    completion_percentage = round((len(completed_fields) / total_fields) * 100) if total_fields else 0
+
+    return {
+        "required_fields": list(PROFILE_REQUIRED_FIELDS),
+        "completed_fields": completed_fields,
+        "missing_fields": missing_fields,
+        "completed_count": len(completed_fields),
+        "required_count": total_fields,
+        "completion_percentage": completion_percentage,
+        "is_complete": len(missing_fields) == 0,
+    }
 
 
 # --- Pydantic models ---
@@ -163,7 +198,8 @@ def get_profile(authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
     sb = get_supabase()
     response = sb.table("profiles").select("*").eq("user_id", user_id).execute()
-    return response.data[0] if response.data else {}
+    profile = response.data[0] if response.data else {}
+    return {"profile": profile, "completion": get_profile_completion(profile)}
 
 
 @app.put("/profile")
@@ -175,4 +211,5 @@ def upsert_profile(profile: ProfileUpsert, authorization: Optional[str] = Header
     response = sb.table("profiles").upsert(payload, on_conflict="user_id").execute()
     if not response.data:
         raise HTTPException(status_code=500, detail="Failed to save profile")
-    return response.data[0]
+    saved_profile = response.data[0]
+    return {"profile": saved_profile, "completion": get_profile_completion(saved_profile)}

@@ -400,9 +400,11 @@ def test_get_profile_returns_existing_profile():
         response = client.get("/profile", headers={"authorization": AUTH_HEADER})
     assert response.status_code == 200
     body = response.json()
-    assert body["full_name"] == "Jane Smith"
-    assert body["headline"] == "Software Engineer"
-    assert body["user_id"] == MOCK_USER_ID
+    assert body["profile"]["full_name"] == "Jane Smith"
+    assert body["profile"]["headline"] == "Software Engineer"
+    assert body["profile"]["user_id"] == MOCK_USER_ID
+    assert body["completion"]["completion_percentage"] == 100
+    assert body["completion"]["is_complete"] is True
 
 
 def test_get_profile_returns_empty_when_no_profile():
@@ -410,7 +412,10 @@ def test_get_profile_returns_empty_when_no_profile():
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.get("/profile", headers={"authorization": AUTH_HEADER})
     assert response.status_code == 200
-    assert response.json() == {}
+    body = response.json()
+    assert body["profile"] == {}
+    assert body["completion"]["completion_percentage"] == 0
+    assert body["completion"]["is_complete"] is False
 
 
 def test_get_profile_scoped_to_user():
@@ -441,7 +446,9 @@ def test_upsert_profile_success():
             headers={"authorization": AUTH_HEADER},
         )
     assert response.status_code == 200
-    assert response.json()["full_name"] == "Jane Smith"
+    body = response.json()
+    assert body["profile"]["full_name"] == "Jane Smith"
+    assert body["completion"]["completion_percentage"] == 100
 
 
 def test_upsert_profile_injects_user_id():

@@ -5,6 +5,15 @@ import Sidebar from '../components/layout/Sidebar';
 import TopBar from '../components/layout/TopBar';
 import './ProfilePage.css';
 
+const REQUIRED_PROFILE_FIELDS = [
+  { key: 'full_name', label: 'Full Name' },
+  { key: 'headline', label: 'Headline' },
+  { key: 'location', label: 'Location' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'website', label: 'Website' },
+  { key: 'linkedin_url', label: 'LinkedIn URL' },
+];
+
 const EMPTY_FORM = {
   full_name: '',
   headline: '',
@@ -40,6 +49,23 @@ function toFormValues(profile) {
   };
 }
 
+function getCompletionState(values, fields = REQUIRED_PROFILE_FIELDS) {
+  const completedFields = fields.filter(({ key }) => values[key].trim().length > 0);
+  const missingFields = fields.filter(({ key }) => values[key].trim().length === 0);
+  const totalFields = fields.length;
+  const completionPercentage = totalFields
+    ? Math.round((completedFields.length / totalFields) * 100)
+    : 0;
+
+  return {
+    completedCount: completedFields.length,
+    requiredCount: totalFields,
+    completionPercentage,
+    isComplete: missingFields.length === 0,
+    missingFields: missingFields.map(({ label }) => label),
+  };
+}
+
 export default function ProfilePage() {
   const { session, user } = useAuth();
   const { profile, loading, error, saving, saveError, saveProfile } = useProfile(
@@ -48,6 +74,7 @@ export default function ProfilePage() {
 
   const [values, setValues] = useState(EMPTY_FORM);
   const [saved, setSaved] = useState(false);
+  const draftCompletion = getCompletionState(values);
 
   useEffect(() => {
     if (profile) {
@@ -97,6 +124,38 @@ export default function ProfilePage() {
                 <p className="profile-state profile-state--error" role="alert">
                   {error}
                 </p>
+              )}
+
+              {!draftCompletion.isComplete && (
+                <section className="profile-completion" aria-labelledby="profile-completion-heading">
+                  <div className="profile-completion-header">
+                    <div>
+                      <h2 id="profile-completion-heading" className="profile-completion-title">
+                        Profile completion
+                      </h2>
+                      <p className="profile-completion-copy">
+                        {draftCompletion.completedCount}/{draftCompletion.requiredCount} required fields complete.
+                      </p>
+                    </div>
+                    <div
+                      className="profile-completion-score"
+                      aria-label={`Draft completion ${draftCompletion.completionPercentage}%`}
+                    >
+                      {draftCompletion.completionPercentage}%
+                    </div>
+                  </div>
+
+                  <div className="profile-progress" aria-hidden="true">
+                    <div
+                      className="profile-progress-bar"
+                      style={{ width: `${draftCompletion.completionPercentage}%` }}
+                    />
+                  </div>
+
+                  <p className="profile-completion-footnote">
+                    Missing: {draftCompletion.missingFields.join(', ')}.
+                  </p>
+                </section>
               )}
 
               <form className="profile-form" onSubmit={handleSubmit}>
