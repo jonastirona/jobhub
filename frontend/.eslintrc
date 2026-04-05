@@ -22,5 +22,13 @@
       "ecmaFeatures": {
         "jsx": true
       }
+    },
+    "overrides": [
+    {
+      "files": ["**/*.test.js", "**/*.test.ts"],
+      "rules": {
+        "@typescript-eslint/no-empty-function": "off"
+      }
     }
+  ]
   }

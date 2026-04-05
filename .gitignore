@@ -54,3 +54,4 @@ shared/coverage/
 
 *.code-workspace
 .ruff_cache/
+build/
