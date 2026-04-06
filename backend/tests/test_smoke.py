@@ -8,7 +8,15 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from main import JobCreate, JobUpdate, ProfileUpsert, app
+from main import (
+    PROFILE_REQUIRED_FIELDS,
+    JobCreate,
+    JobUpdate,
+    ProfileUpsert,
+    _normalize_profile_value,
+    app,
+    get_profile_completion,
+)
 
 client = TestClient(app)
 
@@ -405,6 +413,8 @@ def test_get_profile_returns_existing_profile():
     assert body["profile"]["user_id"] == MOCK_USER_ID
     assert body["completion"]["completion_percentage"] == 100
     assert body["completion"]["is_complete"] is True
+    assert body["completion"]["missing_fields"] == []
+    assert body["completion"]["required_count"] == 6
 
 
 def test_get_profile_returns_empty_when_no_profile():
@@ -416,6 +426,8 @@ def test_get_profile_returns_empty_when_no_profile():
     assert body["profile"] == {}
     assert body["completion"]["completion_percentage"] == 0
     assert body["completion"]["is_complete"] is False
+    assert body["completion"]["missing_fields"] == list(PROFILE_REQUIRED_FIELDS)
+    assert body["completion"]["required_count"] == 6
 
 
 def test_get_profile_scoped_to_user():
@@ -449,6 +461,8 @@ def test_upsert_profile_success():
     body = response.json()
     assert body["profile"]["full_name"] == "Jane Smith"
     assert body["completion"]["completion_percentage"] == 100
+    assert body["completion"]["is_complete"] is True
+    assert body["completion"]["missing_fields"] == []
 
 
 def test_upsert_profile_injects_user_id():
@@ -536,6 +550,49 @@ def test_upsert_profile_can_clear_field():
         )
     upserted = mock_query.upsert.call_args[0][0]
     assert upserted["full_name"] is None
+
+
+# ---------------------------------------------------------------------------
+# Profile completion helper unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_get_profile_completion_empty_profile():
+    completion = get_profile_completion({})
+    assert set(completion.keys()) == {
+        "required_fields",
+        "completed_fields",
+        "missing_fields",
+        "completed_count",
+        "required_count",
+        "completion_percentage",
+        "is_complete",
+    }
+    assert completion["required_fields"] == list(PROFILE_REQUIRED_FIELDS)
+    assert completion["completed_fields"] == []
+    assert completion["missing_fields"] == list(PROFILE_REQUIRED_FIELDS)
+    assert completion["completed_count"] == 0
+    assert completion["required_count"] == 6
+    assert completion["completion_percentage"] == 0
+    assert completion["is_complete"] is False
+
+
+def test_get_profile_completion_fully_populated_profile():
+    completion = get_profile_completion(SAMPLE_PROFILE)
+    assert completion["required_fields"] == list(PROFILE_REQUIRED_FIELDS)
+    assert completion["completed_fields"] == list(PROFILE_REQUIRED_FIELDS)
+    assert completion["missing_fields"] == []
+    assert completion["completed_count"] == 6
+    assert completion["required_count"] == 6
+    assert completion["completion_percentage"] == 100
+    assert completion["is_complete"] is True
+
+
+def test_normalize_profile_value_edge_cases():
+    assert _normalize_profile_value("   ") == ""
+    assert _normalize_profile_value("") == ""
+    assert _normalize_profile_value(None) == ""
+    assert _normalize_profile_value(123) == ""
 
 
 # ---------------------------------------------------------------------------

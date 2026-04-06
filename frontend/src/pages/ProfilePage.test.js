@@ -35,6 +35,22 @@ const SAMPLE_PROFILE = {
   summary: 'Experienced engineer.',
 };
 
+const REQUIRED_FIELD_KEYS = ['full_name', 'headline', 'location', 'phone', 'website', 'linkedin_url'];
+
+const EMPTY_COMPLETION = {
+  completion_percentage: 0,
+  is_complete: false,
+  missing_fields: REQUIRED_FIELD_KEYS,
+  required_count: 6,
+};
+
+const COMPLETE_COMPLETION = {
+  completion_percentage: 100,
+  is_complete: true,
+  missing_fields: [],
+  required_count: 6,
+};
+
 function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE } = {}) {
   global.fetch = jest.fn((url, opts = {}) => {
     if (opts.method === 'PUT') {
@@ -212,7 +228,7 @@ describe('rendering — empty profile (no existing data)', () => {
   });
 
   test('shows profile completion at 0 percent for an empty profile', async () => {
-    mockFetch({ getProfile: {} });
+    mockFetch({ getProfile: { profile: {}, completion: EMPTY_COMPLETION } });
     renderPage();
     await waitFor(() => {
       expect(screen.getByText(/profile completion/i)).toBeInTheDocument();
@@ -312,7 +328,12 @@ describe('rendering — existing profile', () => {
   });
 
   test('hides profile completion panel when required fields are complete', async () => {
-    mockFetch({ getProfile: SAMPLE_PROFILE });
+    mockFetch({
+      getProfile: {
+        profile: SAMPLE_PROFILE,
+        completion: COMPLETE_COMPLETION,
+      },
+    });
     renderPage();
     await waitFor(() => {
       expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith');
@@ -373,6 +394,26 @@ describe('form interaction', () => {
     await waitFor(() => expect(screen.getByLabelText(/headline/i)).toBeInTheDocument());
     await userEvent.type(screen.getByLabelText(/headline/i), 'Dev');
     expect(screen.getByText('Dev')).toBeInTheDocument();
+  });
+
+  test('completion panel disappears after filling all required fields', async () => {
+    mockFetch({ getProfile: { profile: {}, completion: EMPTY_COMPLETION } });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/profile completion/i)).toBeInTheDocument();
+    });
+
+    await userEvent.type(screen.getByLabelText(/full name/i), 'Jane Smith');
+    await userEvent.type(screen.getByLabelText(/headline/i), 'Software Engineer');
+    await userEvent.type(screen.getByLabelText(/location/i), 'New York, NY');
+    await userEvent.type(screen.getByLabelText(/phone/i), '555-123-4567');
+    await userEvent.type(screen.getByLabelText(/website/i), 'https://janesmith.dev');
+    await userEvent.type(screen.getByLabelText(/linkedin url/i), 'https://linkedin.com/in/janesmith');
+
+    await waitFor(() => {
+      expect(screen.queryByText(/profile completion/i)).not.toBeInTheDocument();
+    });
   });
 
   test('typing in summary updates character count', async () => {
