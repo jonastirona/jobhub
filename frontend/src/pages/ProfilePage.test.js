@@ -48,14 +48,14 @@ const EMPTY_COMPLETION = {
   completion_percentage: 0,
   is_complete: false,
   missing_fields: REQUIRED_FIELD_KEYS,
-  required_count: 6,
+  required_count: REQUIRED_FIELD_KEYS.length,
 };
 
 const COMPLETE_COMPLETION = {
   completion_percentage: 100,
   is_complete: true,
   missing_fields: [],
-  required_count: 6,
+  required_count: REQUIRED_FIELD_KEYS.length,
 };
 
 function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE } = {}) {
