@@ -141,7 +141,7 @@ export default function ProfilePage() {
           </p>
         )}
 
-        {!draftCompletion.isComplete && (
+        {!error && !draftCompletion.isComplete && (
           <section className="profile-completion" aria-labelledby="profile-completion-heading">
             <div className="profile-completion-header">
               <div>
