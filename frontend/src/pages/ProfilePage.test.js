@@ -219,7 +219,9 @@ describe('rendering — empty profile (no existing data)', () => {
     });
     expect(screen.getByText('0%')).toBeInTheDocument();
     expect(screen.getByText(/0\/6 required fields complete\./i)).toBeInTheDocument();
-    expect(screen.getByText(/missing: full name, headline, location, phone, website, linkedin url\./i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/missing: full name, headline, location, phone, website, linkedin url\./i)
+    ).toBeInTheDocument();
   });
 
   test('avatar falls back to email initial when no full_name', async () => {
