@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProfileAvatarProvider } from './context/ProfileAvatarContext';
 import Dashboard from './pages/Dashboard';
+import DocumentLibrary from './pages/DocumentLibrary';
 import ForgotPassword from './pages/ForgotPassword';
 import Login from './pages/Login';
 import ProfilePage from './pages/ProfilePage';
@@ -56,6 +57,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/documents"
+        element={
+          <ProtectedRoute>
+            <DocumentLibrary />
           </ProtectedRoute>
         }
       />

@@ -144,7 +144,7 @@ describe('page structure', () => {
 
 describe('loading state', () => {
   test('shows "Loading profile..." while fetch is in flight', () => {
-    global.fetch = jest.fn(() => new Promise(() => {}));
+    global.fetch = jest.fn(() => new Promise(() => undefined));
     renderPage();
     expect(screen.getByText(/loading profile/i)).toBeInTheDocument();
   });

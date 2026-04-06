@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useProfileAvatar } from '../context/ProfileAvatarContext';
-import Sidebar from '../components/layout/Sidebar';
-import TopBar from '../components/layout/TopBar';
-import '../styles/Dashboard.css';
+import AppShell from '../components/layout/AppShell';
+import './ShellPages.css';
 import '../styles/Settings.css';
 
 export default function Settings() {
@@ -25,182 +24,174 @@ export default function Settings() {
   }, [deleteModalOpen]);
 
   return (
-    <div className="dashboard-layout">
-      <Sidebar />
+    <AppShell title="Settings" notificationCount={0}>
+      <div className="dashboard-content settings-page">
+        <p className="settings-lead">
+          Manage your account details. Saving and account actions are not wired up yet — this is a
+          UI baseline only.
+        </p>
 
-      <main className="dashboard-main">
-        <TopBar title="Settings" notificationCount={0} />
-
-        <div className="dashboard-content settings-page">
-          <p className="settings-lead">
-            Manage your account details. Saving and account actions are not wired up yet — this is a
-            UI baseline only.
+        <section className="settings-card" aria-labelledby="settings-update-name-heading">
+          <h2 id="settings-update-name-heading" className="settings-section-title">
+            Update name
+          </h2>
+          <p className="settings-section-desc">
+            This name appears in the app header and on your profile.
           </p>
-
-          <section className="settings-card" aria-labelledby="settings-update-name-heading">
-            <h2 id="settings-update-name-heading" className="settings-section-title">
-              Update name
-            </h2>
-            <p className="settings-section-desc">
-              This name appears in the app header and on your profile.
-            </p>
-            <form
-              className="settings-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-              }}
-            >
-              <div className="settings-field-row">
-                <div className="settings-field">
-                  <label htmlFor="settings-first-name">First name</label>
-                  <input
-                    id="settings-first-name"
-                    name="firstName"
-                    type="text"
-                    autoComplete="given-name"
-                    placeholder="First name"
-                    defaultValue=""
-                  />
-                </div>
-                <div className="settings-field">
-                  <label htmlFor="settings-last-name">Last name</label>
-                  <input
-                    id="settings-last-name"
-                    name="lastName"
-                    type="text"
-                    autoComplete="family-name"
-                    placeholder="Last name"
-                    defaultValue=""
-                  />
-                </div>
-              </div>
-              <div className="settings-form-actions">
-                <button type="button" className="settings-btn settings-btn--secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="settings-btn settings-btn--primary">
-                  Save
-                </button>
-              </div>
-            </form>
-          </section>
-
-          <section className="settings-card" aria-labelledby="settings-password-heading">
-            <h2 id="settings-password-heading" className="settings-section-title">
-              Password
-            </h2>
-            <p className="settings-section-desc">
-              Update your password to keep your account secure.
-            </p>
-            <form
-              className="settings-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-              }}
-            >
+          <form
+            className="settings-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+            }}
+          >
+            <div className="settings-field-row">
               <div className="settings-field">
-                <label htmlFor="settings-current-password">Current password</label>
+                <label htmlFor="settings-first-name">First name</label>
                 <input
-                  id="settings-current-password"
-                  name="currentPassword"
-                  type="password"
-                  autoComplete="current-password"
+                  id="settings-first-name"
+                  name="firstName"
+                  type="text"
+                  autoComplete="given-name"
+                  placeholder="First name"
+                  defaultValue=""
                 />
               </div>
               <div className="settings-field">
-                <label htmlFor="settings-new-password">New password</label>
+                <label htmlFor="settings-last-name">Last name</label>
                 <input
-                  id="settings-new-password"
-                  name="newPassword"
-                  type="password"
-                  autoComplete="new-password"
+                  id="settings-last-name"
+                  name="lastName"
+                  type="text"
+                  autoComplete="family-name"
+                  placeholder="Last name"
+                  defaultValue=""
                 />
-              </div>
-              <div className="settings-field">
-                <label htmlFor="settings-confirm-password">Confirm new password</label>
-                <input
-                  id="settings-confirm-password"
-                  name="confirmPassword"
-                  type="password"
-                  autoComplete="new-password"
-                />
-              </div>
-              <div className="settings-form-actions">
-                <button type="button" className="settings-btn settings-btn--secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="settings-btn settings-btn--primary">
-                  Update password
-                </button>
-              </div>
-            </form>
-          </section>
-
-          <section className="settings-card" aria-labelledby="settings-avatar-heading">
-            <h2 id="settings-avatar-heading" className="settings-section-title">
-              Profile picture
-            </h2>
-            <p className="settings-section-desc">
-              Upload a photo. Recommended square image, at least 256×256px.
-            </p>
-            <div className="settings-avatar-row">
-              <div
-                className="settings-avatar-preview"
-                aria-label={avatarPreviewUrl ? 'Profile preview' : 'No profile image selected'}
-              >
-                {avatarPreviewUrl ? (
-                  <img src={avatarPreviewUrl} alt="" className="settings-avatar-preview-img" />
-                ) : (
-                  <span className="settings-avatar-placeholder">?</span>
-                )}
-              </div>
-              <div className="settings-avatar-actions">
-                <input
-                  ref={avatarInputRef}
-                  id="settings-avatar-file"
-                  name="avatar"
-                  type="file"
-                  accept="image/*"
-                  className="settings-file-input"
-                  onChange={handleAvatarChange}
-                />
-                <label
-                  htmlFor="settings-avatar-file"
-                  className="settings-btn settings-btn--secondary"
-                >
-                  Choose image
-                </label>
-                <button
-                  type="button"
-                  className="settings-btn settings-btn--primary"
-                  onClick={() => avatarInputRef.current?.click()}
-                >
-                  Upload
-                </button>
               </div>
             </div>
-          </section>
+            <div className="settings-form-actions">
+              <button type="button" className="settings-btn settings-btn--secondary">
+                Cancel
+              </button>
+              <button type="submit" className="settings-btn settings-btn--primary">
+                Save
+              </button>
+            </div>
+          </form>
+        </section>
 
-          <section
-            className="settings-card settings-card--danger"
-            aria-labelledby="settings-delete-heading"
+        <section className="settings-card" aria-labelledby="settings-password-heading">
+          <h2 id="settings-password-heading" className="settings-section-title">
+            Password
+          </h2>
+          <p className="settings-section-desc">Update your password to keep your account secure.</p>
+          <form
+            className="settings-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+            }}
           >
-            <h2 id="settings-delete-heading" className="settings-section-title">
-              Delete account
-            </h2>
-            <p className="settings-section-desc">
-              Permanently delete your account and associated data. This cannot be undone.
-            </p>
-            <button
-              type="button"
-              className="settings-btn settings-btn--destructive"
-              onClick={() => setDeleteModalOpen(true)}
+            <div className="settings-field">
+              <label htmlFor="settings-current-password">Current password</label>
+              <input
+                id="settings-current-password"
+                name="currentPassword"
+                type="password"
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="settings-field">
+              <label htmlFor="settings-new-password">New password</label>
+              <input
+                id="settings-new-password"
+                name="newPassword"
+                type="password"
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="settings-field">
+              <label htmlFor="settings-confirm-password">Confirm new password</label>
+              <input
+                id="settings-confirm-password"
+                name="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="settings-form-actions">
+              <button type="button" className="settings-btn settings-btn--secondary">
+                Cancel
+              </button>
+              <button type="submit" className="settings-btn settings-btn--primary">
+                Update password
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section className="settings-card" aria-labelledby="settings-avatar-heading">
+          <h2 id="settings-avatar-heading" className="settings-section-title">
+            Profile picture
+          </h2>
+          <p className="settings-section-desc">
+            Upload a photo. Recommended square image, at least 256×256px.
+          </p>
+          <div className="settings-avatar-row">
+            <div
+              className="settings-avatar-preview"
+              aria-label={avatarPreviewUrl ? 'Profile preview' : 'No profile image selected'}
             >
-              Delete account
-            </button>
-          </section>
-        </div>
-      </main>
+              {avatarPreviewUrl ? (
+                <img src={avatarPreviewUrl} alt="" className="settings-avatar-preview-img" />
+              ) : (
+                <span className="settings-avatar-placeholder">?</span>
+              )}
+            </div>
+            <div className="settings-avatar-actions">
+              <input
+                ref={avatarInputRef}
+                id="settings-avatar-file"
+                name="avatar"
+                type="file"
+                accept="image/*"
+                className="settings-file-input"
+                onChange={handleAvatarChange}
+              />
+              <label
+                htmlFor="settings-avatar-file"
+                className="settings-btn settings-btn--secondary"
+              >
+                Choose image
+              </label>
+              <button
+                type="button"
+                className="settings-btn settings-btn--primary"
+                onClick={() => avatarInputRef.current?.click()}
+              >
+                Upload
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section
+          className="settings-card settings-card--danger"
+          aria-labelledby="settings-delete-heading"
+        >
+          <h2 id="settings-delete-heading" className="settings-section-title">
+            Delete account
+          </h2>
+          <p className="settings-section-desc">
+            Permanently delete your account and associated data. This cannot be undone.
+          </p>
+          <button
+            type="button"
+            className="settings-btn settings-btn--destructive"
+            onClick={() => setDeleteModalOpen(true)}
+          >
+            Delete account
+          </button>
+        </section>
+      </div>
 
       {deleteModalOpen && (
         <div
@@ -249,6 +240,6 @@ export default function Settings() {
           </div>
         </div>
       )}
-    </div>
+    </AppShell>
   );
 }
