@@ -1,7 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+function normalizeProfileResponse(data) {
+  if (data && typeof data === 'object' && ('profile' in data || 'completion' in data)) {
+    return {
+      profile: data.profile ?? null,
+      completion: data.completion ?? null,
+    };
+  }
+
+  return {
+    profile: data ?? null,
+    completion: null,
+  };
+}
+
 export function useProfile(accessToken) {
   const [profile, setProfile] = useState(null);
+  const [completion, setCompletion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -15,6 +30,7 @@ export function useProfile(accessToken) {
 
       if (!accessToken || !backendBase) {
         setProfile(null);
+        setCompletion(null);
         setError(null);
         setLoading(false);
         return;
@@ -32,7 +48,9 @@ export function useProfile(accessToken) {
         if (!res.ok) throw new Error(`Failed to load profile (${res.status})`);
         const data = await res.json();
         if (signal?.aborted) return;
-        setProfile(data);
+        const normalized = normalizeProfileResponse(data);
+        setProfile(normalized.profile);
+        setCompletion(normalized.completion);
       } catch (err) {
         if (signal?.aborted) return;
         setError(err instanceof Error ? err.message : String(err));
@@ -99,7 +117,9 @@ export function useProfile(accessToken) {
         }
         const saved = await res.json();
         if (controller.signal.aborted) return false;
-        setProfile(saved);
+        const normalized = normalizeProfileResponse(saved);
+        setProfile(normalized.profile);
+        setCompletion(normalized.completion);
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
@@ -112,5 +132,5 @@ export function useProfile(accessToken) {
     [accessToken]
   );
 
-  return { profile, loading, error, saving, saveError, saveProfile, refetch };
+  return { profile, completion, loading, error, saving, saveError, saveProfile, refetch };
 }

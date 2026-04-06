@@ -4,6 +4,15 @@ import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../hooks/useProfile';
 import './ProfilePage.css';
 
+const REQUIRED_PROFILE_FIELDS = [
+  { key: 'full_name', label: 'Full Name' },
+  { key: 'headline', label: 'Headline' },
+  { key: 'location', label: 'Location' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'website', label: 'Website' },
+  { key: 'linkedin_url', label: 'LinkedIn URL' },
+];
+
 const EMPTY_FORM = {
   full_name: '',
   headline: '',
@@ -34,13 +43,30 @@ function getInitials(fullName, email) {
   return asText(email).charAt(0).toUpperCase() || 'U';
 }
 
+function getCompletionState(values, fields = REQUIRED_PROFILE_FIELDS) {
+  const completedFields = fields.filter(({ key }) => asText(values[key]).trim().length > 0);
+  const missingFields = fields.filter(({ key }) => asText(values[key]).trim().length === 0);
+  const totalFields = fields.length;
+  const completionPercentage = totalFields
+    ? Math.round((completedFields.length / totalFields) * 100)
+    : 0;
+
+  return {
+    completedCount: completedFields.length,
+    requiredCount: totalFields,
+    completionPercentage,
+    isComplete: missingFields.length === 0,
+    missingFields: missingFields.map(({ label }) => label),
+  };
+}
+
 export default function ProfilePage() {
   const { session, user } = useAuth();
   const accessToken = session?.access_token;
   const { profile, loading, error, saving, saveError, saveProfile } = useProfile(accessToken);
-  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const [formData, setFormData] = useState(EMPTY_FORM);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => {
     setFormData({
@@ -55,10 +81,13 @@ export default function ProfilePage() {
     });
   }, [profile]);
 
+  const draftCompletion = useMemo(() => getCompletionState(formData), [formData]);
+
   const avatarInitials = useMemo(
     () => getInitials(formData.full_name, user?.email),
     [formData.full_name, user?.email]
   );
+
   const displayName = asText(formData.full_name).trim() || user?.email || 'User';
   const displayHeadline = asText(formData.headline).trim() || 'Add a headline';
   const summaryCount = asText(formData.summary).length;
@@ -75,6 +104,7 @@ export default function ProfilePage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
+
     setSaveSuccess(false);
 
     const payload = {
@@ -89,14 +119,12 @@ export default function ProfilePage() {
     };
 
     const saved = await saveProfile(payload);
-    if (saved) {
-      setSaveSuccess(true);
-    }
+    if (saved) setSaveSuccess(true);
   };
 
   if (loading) {
     return (
-      <AppShell title="My Profile">
+      <AppShell title="My Profile" notificationCount={0}>
         <div className="profile-content">
           <p className="profile-state">Loading profile...</p>
         </div>
@@ -105,22 +133,45 @@ export default function ProfilePage() {
   }
 
   return (
-    <AppShell title="My Profile">
+    <AppShell title="My Profile" notificationCount={0}>
       <div className="profile-content">
         {error && (
-          <div className="profile-state profile-state--error" role="alert">
+          <p className="profile-state profile-state--error" role="alert">
             {error}
-          </div>
-        )}
-        {saveError && (
-          <div className="profile-state profile-state--error" role="alert">
-            {saveError}
-          </div>
-        )}
-        {saveSuccess && !saveError && (
-          <p className="profile-save-success" role="status">
-            Profile saved successfully.
           </p>
+        )}
+
+        {!error && !draftCompletion.isComplete && (
+          <section className="profile-completion" aria-labelledby="profile-completion-heading">
+            <div className="profile-completion-header">
+              <div>
+                <h2 id="profile-completion-heading" className="profile-completion-title">
+                  Profile completion
+                </h2>
+                <p className="profile-completion-copy">
+                  {draftCompletion.completedCount}/{draftCompletion.requiredCount} required fields
+                  complete.
+                </p>
+              </div>
+              <div
+                className="profile-completion-score"
+                aria-label={`Draft completion ${draftCompletion.completionPercentage}%`}
+              >
+                {draftCompletion.completionPercentage}%
+              </div>
+            </div>
+
+            <div className="profile-progress" aria-hidden="true">
+              <div
+                className="profile-progress-bar"
+                style={{ width: `${draftCompletion.completionPercentage}%` }}
+              />
+            </div>
+
+            <p className="profile-completion-footnote">
+              Missing: {draftCompletion.missingFields.join(', ')}.
+            </p>
+          </section>
         )}
 
         <form className="profile-form" onSubmit={handleSubmit}>
@@ -130,6 +181,7 @@ export default function ProfilePage() {
                 Identity
               </h2>
             </div>
+
             <div className="profile-avatar-row">
               <div className="profile-avatar">{avatarInitials}</div>
               <div className="profile-avatar-meta">
@@ -267,6 +319,16 @@ export default function ProfilePage() {
           </section>
 
           <div className="profile-actions">
+            {saveError && (
+              <p className="profile-save-error" role="alert">
+                {saveError}
+              </p>
+            )}
+            {saveSuccess && !saveError && (
+              <p className="profile-save-success" role="status">
+                Profile saved successfully.
+              </p>
+            )}
             <button type="submit" disabled={saving} className="profile-btn-save">
               {saving ? 'Saving...' : 'Save Profile'}
             </button>

@@ -35,6 +35,29 @@ const SAMPLE_PROFILE = {
   summary: 'Experienced engineer.',
 };
 
+const REQUIRED_FIELD_KEYS = [
+  'full_name',
+  'headline',
+  'location',
+  'phone',
+  'website',
+  'linkedin_url',
+];
+
+const EMPTY_COMPLETION = {
+  completion_percentage: 0,
+  is_complete: false,
+  missing_fields: REQUIRED_FIELD_KEYS,
+  required_count: REQUIRED_FIELD_KEYS.length,
+};
+
+const COMPLETE_COMPLETION = {
+  completion_percentage: 100,
+  is_complete: true,
+  missing_fields: [],
+  required_count: REQUIRED_FIELD_KEYS.length,
+};
+
 function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE } = {}) {
   global.fetch = jest.fn((url, opts = {}) => {
     if (opts.method === 'PUT') {
@@ -211,6 +234,19 @@ describe('rendering — empty profile (no existing data)', () => {
     expect(screen.getByLabelText('Summary')).toHaveValue('');
   });
 
+  test('shows profile completion at 0 percent for an empty profile', async () => {
+    mockFetch({ getProfile: { profile: {}, completion: EMPTY_COMPLETION } });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/profile completion/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText('0%')).toBeInTheDocument();
+    expect(screen.getByText(/0\/6 required fields complete\./i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/missing: full name, headline, location, phone, website, linkedin url\./i)
+    ).toBeInTheDocument();
+  });
+
   test('avatar falls back to email initial when no full_name', async () => {
     mockFetch({ getProfile: {} });
     renderPage();
@@ -298,6 +334,20 @@ describe('rendering — existing profile', () => {
     });
   });
 
+  test('hides profile completion panel when required fields are complete', async () => {
+    mockFetch({
+      getProfile: {
+        profile: SAMPLE_PROFILE,
+        completion: COMPLETE_COMPLETION,
+      },
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith');
+    });
+    expect(screen.queryByText(/profile completion/i)).not.toBeInTheDocument();
+  });
+
   test('handles null optional fields gracefully', async () => {
     const profile = {
       ...SAMPLE_PROFILE,
@@ -351,6 +401,29 @@ describe('form interaction', () => {
     await waitFor(() => expect(screen.getByLabelText(/headline/i)).toBeInTheDocument());
     await userEvent.type(screen.getByLabelText(/headline/i), 'Dev');
     expect(screen.getByText('Dev')).toBeInTheDocument();
+  });
+
+  test('completion panel disappears after filling all required fields', async () => {
+    mockFetch({ getProfile: { profile: {}, completion: EMPTY_COMPLETION } });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/profile completion/i)).toBeInTheDocument();
+    });
+
+    await userEvent.type(screen.getByLabelText(/full name/i), 'Jane Smith');
+    await userEvent.type(screen.getByLabelText(/headline/i), 'Software Engineer');
+    await userEvent.type(screen.getByLabelText(/location/i), 'New York, NY');
+    await userEvent.type(screen.getByLabelText(/phone/i), '555-123-4567');
+    await userEvent.type(screen.getByLabelText(/website/i), 'https://janesmith.dev');
+    await userEvent.type(
+      screen.getByLabelText(/linkedin url/i),
+      'https://linkedin.com/in/janesmith'
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText(/profile completion/i)).not.toBeInTheDocument();
+    });
   });
 
   test('typing in summary updates character count', async () => {
