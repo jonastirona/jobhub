@@ -35,7 +35,14 @@ const SAMPLE_PROFILE = {
   summary: 'Experienced engineer.',
 };
 
-const REQUIRED_FIELD_KEYS = ['full_name', 'headline', 'location', 'phone', 'website', 'linkedin_url'];
+const REQUIRED_FIELD_KEYS = [
+  'full_name',
+  'headline',
+  'location',
+  'phone',
+  'website',
+  'linkedin_url',
+];
 
 const EMPTY_COMPLETION = {
   completion_percentage: 0,
@@ -409,7 +416,10 @@ describe('form interaction', () => {
     await userEvent.type(screen.getByLabelText(/location/i), 'New York, NY');
     await userEvent.type(screen.getByLabelText(/phone/i), '555-123-4567');
     await userEvent.type(screen.getByLabelText(/website/i), 'https://janesmith.dev');
-    await userEvent.type(screen.getByLabelText(/linkedin url/i), 'https://linkedin.com/in/janesmith');
+    await userEvent.type(
+      screen.getByLabelText(/linkedin url/i),
+      'https://linkedin.com/in/janesmith'
+    );
 
     await waitFor(() => {
       expect(screen.queryByText(/profile completion/i)).not.toBeInTheDocument();
