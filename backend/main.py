@@ -69,15 +69,13 @@ def _normalize_profile_value(value: Optional[str]) -> str:
 
 def get_profile_completion(profile: dict) -> dict:
     completed_fields = [
-        field
-        for field in PROFILE_REQUIRED_FIELDS
-        if _normalize_profile_value(profile.get(field))
+        field for field in PROFILE_REQUIRED_FIELDS if _normalize_profile_value(profile.get(field))
     ]
-    missing_fields = [
-        field for field in PROFILE_REQUIRED_FIELDS if field not in completed_fields
-    ]
+    missing_fields = [field for field in PROFILE_REQUIRED_FIELDS if field not in completed_fields]
     total_fields = len(PROFILE_REQUIRED_FIELDS)
-    completion_percentage = round((len(completed_fields) / total_fields) * 100) if total_fields else 0
+    completion_percentage = (
+        round((len(completed_fields) / total_fields) * 100) if total_fields else 0
+    )
 
     return {
         "required_fields": list(PROFILE_REQUIRED_FIELDS),
