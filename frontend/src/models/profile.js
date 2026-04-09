@@ -1,3 +1,12 @@
+const REQUIRED_PROFILE_FIELD_KEYS = [
+  'full_name',
+  'headline',
+  'location',
+  'phone',
+  'website',
+  'linkedin_url',
+];
+
 export const PROFILE_FIELDS = [
   { key: 'full_name', label: 'Full Name', type: 'text' },
   { key: 'headline', label: 'Headline', type: 'text' },
@@ -10,16 +19,7 @@ export const PROFILE_FIELDS = [
 ];
 
 export const REQUIRED_PROFILE_FIELDS = PROFILE_FIELDS.filter(({ key }) =>
-  ['full_name', 'headline', 'location', 'phone', 'website', 'linkedin_url'].includes(key)
+  REQUIRED_PROFILE_FIELD_KEYS.includes(key)
 );
 
-export const EMPTY_PROFILE = {
-  full_name: '',
-  headline: '',
-  location: '',
-  phone: '',
-  website: '',
-  linkedin_url: '',
-  github_url: '',
-  summary: '',
-};
+export const EMPTY_PROFILE = Object.fromEntries(PROFILE_FIELDS.map(({ key }) => [key, '']));
