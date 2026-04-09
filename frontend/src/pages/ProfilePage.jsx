@@ -2,27 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../hooks/useProfile';
+import { EMPTY_PROFILE, REQUIRED_PROFILE_FIELDS } from '../models/profile';
 import './ProfilePage.css';
-
-const REQUIRED_PROFILE_FIELDS = [
-  { key: 'full_name', label: 'Full Name' },
-  { key: 'headline', label: 'Headline' },
-  { key: 'location', label: 'Location' },
-  { key: 'phone', label: 'Phone' },
-  { key: 'website', label: 'Website' },
-  { key: 'linkedin_url', label: 'LinkedIn URL' },
-];
-
-const EMPTY_FORM = {
-  full_name: '',
-  headline: '',
-  location: '',
-  phone: '',
-  website: '',
-  linkedin_url: '',
-  github_url: '',
-  summary: '',
-};
 
 function asText(value) {
   return typeof value === 'string' ? value : '';
@@ -65,7 +46,7 @@ export default function ProfilePage() {
   const accessToken = session?.access_token;
   const { profile, loading, error, saving, saveError, saveProfile } = useProfile(accessToken);
 
-  const [formData, setFormData] = useState(EMPTY_FORM);
+  const [formData, setFormData] = useState(EMPTY_PROFILE);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => {

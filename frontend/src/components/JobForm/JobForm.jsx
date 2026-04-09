@@ -1,27 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { EMPTY_JOB, JOB_STATUS_ALIAS, JOB_STATUSES } from '../../models/job';
 import './JobForm.css';
-
-const STATUS_OPTIONS = [
-  { value: 'interested', label: 'Interested' },
-  { value: 'applied', label: 'Applied' },
-  { value: 'interviewing', label: 'Interviewing' },
-  { value: 'offered', label: 'Offered' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: 'archived', label: 'Archived' },
-];
-
-const EMPTY_FORM = {
-  title: '',
-  company: '',
-  location: '',
-  status: 'applied',
-  applied_date: '',
-  description: '',
-  notes: '',
-};
-
-// Normalize legacy short-form values stored by older records
-const STATUS_ALIAS = { interview: 'interviewing', offer: 'offered' };
 
 function toFormValues(job) {
   const rawStatus = job.status ?? 'applied';
@@ -29,7 +8,7 @@ function toFormValues(job) {
     title: job.title ?? '',
     company: job.company ?? '',
     location: job.location ?? '',
-    status: STATUS_ALIAS[rawStatus] ?? rawStatus,
+    status: JOB_STATUS_ALIAS[rawStatus] ?? rawStatus,
     applied_date: job.applied_date?.slice(0, 10) ?? '',
     description: job.description ?? '',
     notes: job.notes ?? '',
@@ -38,7 +17,7 @@ function toFormValues(job) {
 
 export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
   const isEdit = mode === 'edit';
-  const [values, setValues] = useState(() => (isEdit && job ? toFormValues(job) : EMPTY_FORM));
+  const [values, setValues] = useState(() => (isEdit && job ? toFormValues(job) : EMPTY_JOB));
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -264,7 +243,7 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
                 value={values.status}
                 onChange={handleChange}
               >
-                {STATUS_OPTIONS.map((opt) => (
+                {JOB_STATUSES.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
