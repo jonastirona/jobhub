@@ -37,7 +37,7 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ notes: notes.trim() || null }),
+        body: JSON.stringify({ notes: notes.trim() }),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
