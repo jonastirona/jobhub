@@ -31,9 +31,7 @@ const sampleHistory = [
 ];
 
 function mockFetchOk(body) {
-  global.fetch = jest.fn(() =>
-    Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
-  );
+  global.fetch = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(body) }));
 }
 
 function mockFetchError(status = 500) {

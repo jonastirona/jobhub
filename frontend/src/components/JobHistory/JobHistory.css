@@ -186,7 +186,9 @@
   resize: vertical;
   min-height: 90px;
   box-sizing: border-box;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .jh-notes-textarea:focus {
@@ -232,13 +234,21 @@
 
 /* Animations */
 @keyframes jhFadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes jhSlideIn {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -207,12 +207,14 @@ def update_job(job_id: str, job: JobUpdate, authorization: Optional[str] = Heade
     updated = response.data[0]
     new_status = updated["status"]
     if "status" in payload and new_status != old_status:
-        sb.table("job_status_history").insert({
-            "job_id": job_id,
-            "user_id": user_id,
-            "from_status": old_status,
-            "to_status": new_status,
-        }).execute()
+        sb.table("job_status_history").insert(
+            {
+                "job_id": job_id,
+                "user_id": user_id,
+                "from_status": old_status,
+                "to_status": new_status,
+            }
+        ).execute()
     return updated
 
 

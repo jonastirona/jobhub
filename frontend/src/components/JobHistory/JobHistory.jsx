@@ -88,7 +88,9 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
               {history.map((entry, index) => (
                 <li key={entry.id} className="jh-entry">
                   <div className="jh-entry-line">
-                    <div className={`jh-dot${index === history.length - 1 ? ' jh-dot--current' : ''}`} />
+                    <div
+                      className={`jh-dot${index === history.length - 1 ? ' jh-dot--current' : ''}`}
+                    />
                     {index < history.length - 1 && <div className="jh-connector" />}
                   </div>
                   <div className="jh-entry-content">
@@ -121,7 +123,10 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
             id="jh-notes-input"
             className="jh-notes-textarea"
             value={notes}
-            onChange={(e) => { setNotes(e.target.value); setNotesSaved(false); }}
+            onChange={(e) => {
+              setNotes(e.target.value);
+              setNotesSaved(false);
+            }}
             placeholder="Interview notes, contacts, follow-up reminders..."
             rows={4}
           />
