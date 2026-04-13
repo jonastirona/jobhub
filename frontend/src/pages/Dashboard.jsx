@@ -5,6 +5,7 @@ import AppShell from '../components/layout/AppShell';
 import StatCard from '../components/common/StatCard';
 import StatusBadge from '../components/common/StatusBadge';
 import JobForm from '../components/JobForm/JobForm';
+import JobTimeline from '../components/JobTimeline/JobTimeline';
 import '../styles/Dashboard.css';
 
 const COMPANY_GRADIENTS = {
@@ -69,6 +70,7 @@ export default function Dashboard() {
   const { session } = useAuth();
   const { jobs, loading, error, refetch } = useJobs(session?.access_token);
   const [formState, setFormState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', job }
+  const [timelineJob, setTimelineJob] = useState(null);
 
   const totalApplications = jobs.length;
   const interviews = jobs.filter(
@@ -120,6 +122,14 @@ export default function Dashboard() {
 
   function handleSaved() {
     refetch();
+  }
+
+  function openTimeline(job) {
+    setTimelineJob(job);
+  }
+
+  function closeTimeline() {
+    setTimelineJob(null);
   }
 
   return (
@@ -192,7 +202,8 @@ export default function Dashboard() {
                           <button
                             type="button"
                             className="action-btn"
-                            aria-label="View application"
+                            aria-label="View application timeline"
+                            onClick={() => openTimeline(job)}
                           >
                             👁
                           </button>
@@ -263,6 +274,10 @@ export default function Dashboard() {
           onClose={closeForm}
           onSaved={handleSaved}
         />
+      )}
+
+      {timelineJob && (
+        <JobTimeline job={timelineJob} onClose={closeTimeline} />
       )}
     </AppShell>
   );
