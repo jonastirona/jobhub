@@ -92,6 +92,38 @@ describe('buildTimelineEvents', () => {
     expect(tracked.detail).toContain('Software Engineer');
     expect(tracked.detail).toContain('Acme Corp');
   });
+
+  test('normalizes legacy status alias "interview" to interviewing milestone', () => {
+    const events = buildTimelineEvents({ ...baseJob, status: 'interview' });
+    expect(events.some((e) => e.id === 'status-interviewing')).toBe(true);
+  });
+
+  test('normalizes legacy status alias "offer" to offered milestone', () => {
+    const events = buildTimelineEvents({ ...baseJob, status: 'offer' });
+    expect(events.some((e) => e.id === 'status-offered')).toBe(true);
+  });
+
+  test('sorts dated events chronologically', () => {
+    const events = buildTimelineEvents({
+      ...baseJob,
+      status: 'interviewing',
+      created_at: '2026-03-10T12:00:00Z',
+      applied_date: '2026-03-15',
+      updated_at: '2026-03-20T10:00:00Z',
+    });
+    const dated = events.filter((e) => e.rawDate);
+    for (let i = 1; i < dated.length; i++) {
+      expect(new Date(dated[i].rawDate).getTime()).toBeGreaterThanOrEqual(
+        new Date(dated[i - 1].rawDate).getTime()
+      );
+    }
+  });
+
+  test('applied event rawDate uses original applied_date string', () => {
+    const events = buildTimelineEvents(baseJob);
+    const applied = events.find((e) => e.id === 'applied');
+    expect(applied.rawDate).toBe('2026-03-15');
+  });
 });
 
 // ─── Rendering ────────────────────────────────────────────────────────────────
@@ -156,16 +188,12 @@ describe('rendering', () => {
   });
 
   test('renders notes event detail text', () => {
-    render(
-      <JobTimeline job={{ ...baseJob, notes: 'Call recruiter Monday.' }} onClose={onClose} />
-    );
+    render(<JobTimeline job={{ ...baseJob, notes: 'Call recruiter Monday.' }} onClose={onClose} />);
     expect(screen.getByText('Call recruiter Monday.')).toBeInTheDocument();
   });
 
   test('renders Notes label when notes are present', () => {
-    render(
-      <JobTimeline job={{ ...baseJob, notes: 'Some note.' }} onClose={onClose} />
-    );
+    render(<JobTimeline job={{ ...baseJob, notes: 'Some note.' }} onClose={onClose} />);
     expect(screen.getByText('Notes')).toBeInTheDocument();
   });
 

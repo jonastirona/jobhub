@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import './JobTimeline.css';
 
+const STATUS_ALIAS = { interview: 'interviewing', offer: 'offered' };
+
 function formatDate(dateStr) {
   if (!dateStr) return null;
   const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
@@ -17,6 +19,7 @@ const STATUS_MILESTONES = {
 };
 
 export function buildTimelineEvents(job) {
+  const normalizedStatus = STATUS_ALIAS[job.status] ?? job.status;
   const events = [];
 
   events.push({
@@ -24,7 +27,7 @@ export function buildTimelineEvents(job) {
     icon: '📁',
     label: 'Application Tracked',
     date: formatDate(job.created_at),
-    rawDate: job.created_at,
+    rawDate: job.created_at ?? null,
     detail: `Added ${job.title} at ${job.company} to your tracker.`,
     variant: 'orange',
   });
@@ -35,20 +38,20 @@ export function buildTimelineEvents(job) {
       icon: '📨',
       label: 'Applied',
       date: formatDate(job.applied_date),
-      rawDate: `${job.applied_date}T00:00:00`,
+      rawDate: job.applied_date,
       detail: `Submitted application to ${job.company}.`,
       variant: 'blue',
     });
   }
 
-  const milestone = STATUS_MILESTONES[job.status];
+  const milestone = STATUS_MILESTONES[normalizedStatus];
   if (milestone) {
     events.push({
-      id: `status-${job.status}`,
+      id: `status-${normalizedStatus}`,
       icon: milestone.icon,
       label: milestone.label,
       date: formatDate(job.updated_at),
-      rawDate: job.updated_at,
+      rawDate: job.updated_at ?? null,
       detail: null,
       variant: milestone.variant,
     });
@@ -68,7 +71,11 @@ export function buildTimelineEvents(job) {
     });
   }
 
-  return events;
+  const datedEvents = events.filter((e) => e.rawDate);
+  const undatedEvents = events.filter((e) => !e.rawDate);
+  datedEvents.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
+
+  return [...datedEvents, ...undatedEvents];
 }
 
 export default function JobTimeline({ job, onClose }) {
@@ -91,7 +98,9 @@ export default function JobTimeline({ job, onClose }) {
   const handleModalKeyDown = useCallback((e) => {
     if (e.key !== 'Tab' || !modalRef.current) return;
     const focusable = Array.from(
-      modalRef.current.querySelectorAll('button:not([disabled]), [tabindex]:not([tabindex="-1"])')
+      modalRef.current.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
     );
     if (focusable.length === 0) return;
     const first = focusable[0];
