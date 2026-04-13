@@ -161,6 +161,99 @@ test('clicking Edit opens form pre-filled with that job', async () => {
   });
 });
 
+test('clicking View opens the timeline modal for that job', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Frontend Engineer',
+            company: 'WidgetCo',
+            status: 'applied',
+            applied_date: '2026-03-10',
+            location: 'Remote',
+            description: null,
+            notes: null,
+            created_at: '2026-03-01T00:00:00Z',
+            updated_at: '2026-03-10T00:00:00Z',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => screen.getByText('Frontend Engineer'));
+  fireEvent.click(screen.getByRole('button', { name: /view application timeline/i }));
+  await waitFor(() => {
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Activity Timeline')).toBeInTheDocument();
+    expect(screen.getByText(/Frontend Engineer — WidgetCo/)).toBeInTheDocument();
+  });
+});
+
+test('timeline modal closes when close button clicked', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Frontend Engineer',
+            company: 'WidgetCo',
+            status: 'applied',
+            applied_date: '2026-03-10',
+            location: null,
+            description: null,
+            notes: null,
+            created_at: '2026-03-01T00:00:00Z',
+            updated_at: '2026-03-10T00:00:00Z',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => screen.getByText('Frontend Engineer'));
+  fireEvent.click(screen.getByRole('button', { name: /view application timeline/i }));
+  await waitFor(() => screen.getByRole('dialog'));
+  fireEvent.click(screen.getByRole('button', { name: /close timeline/i }));
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+test('timeline modal closes when Escape is pressed', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Frontend Engineer',
+            company: 'WidgetCo',
+            status: 'applied',
+            applied_date: null,
+            location: null,
+            description: null,
+            notes: null,
+            created_at: '2026-03-01T00:00:00Z',
+            updated_at: '2026-03-10T00:00:00Z',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => screen.getByText('Frontend Engineer'));
+  fireEvent.click(screen.getByRole('button', { name: /view application timeline/i }));
+  await waitFor(() => screen.getByRole('dialog'));
+  fireEvent.keyDown(document, { key: 'Escape' });
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
 test('edit form modal closes when Cancel is clicked', async () => {
   global.fetch = jest.fn(() =>
     Promise.resolve({
