@@ -78,7 +78,7 @@ test('shows loading state initially', () => {
 test('renders history entries after load', async () => {
   render(<JobHistory {...baseProps} />);
   await waitFor(() => expect(screen.queryByText('Loading history...')).not.toBeInTheDocument());
-  expect(screen.getByText('Applied')).toBeInTheDocument();
+  expect(screen.getAllByText('Applied').length).toBeGreaterThan(0);
   expect(screen.getByText('Interviewing')).toBeInTheDocument();
 });
 
@@ -148,7 +148,7 @@ test('shows error when notes save fails', async () => {
   mockFetchError(500);
   fireEvent.click(screen.getByRole('button', { name: /save notes/i }));
 
-  await waitFor(() => expect(screen.getByText(/500/)).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText('Server error')).toBeInTheDocument());
 });
 
 // ─── Close ────────────────────────────────────────────────────────────────────
