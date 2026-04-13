@@ -56,8 +56,8 @@ export function buildTimelineEvents(job) {
       id: `status-${normalizedStatus}`,
       icon: milestone.icon,
       label: milestone.label,
-      date: formatDate(job.updated_at),
-      rawDate: job.updated_at ?? null,
+      date: null,
+      rawDate: null,
       detail: null,
       variant: milestone.variant,
     });
