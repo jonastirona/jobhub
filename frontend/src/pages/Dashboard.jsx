@@ -5,6 +5,7 @@ import AppShell from '../components/layout/AppShell';
 import StatCard from '../components/common/StatCard';
 import StatusBadge from '../components/common/StatusBadge';
 import JobForm from '../components/JobForm/JobForm';
+import JobHistory from '../components/JobHistory/JobHistory';
 import '../styles/Dashboard.css';
 
 const COMPANY_GRADIENTS = {
@@ -69,6 +70,7 @@ export default function Dashboard() {
   const { session } = useAuth();
   const { jobs, loading, error, refetch } = useJobs(session?.access_token);
   const [formState, setFormState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', job }
+  const [historyJob, setHistoryJob] = useState(null);
 
   const totalApplications = jobs.length;
   const interviews = jobs.filter(
@@ -193,6 +195,7 @@ export default function Dashboard() {
                             type="button"
                             className="action-btn"
                             aria-label="View application"
+                            onClick={() => setHistoryJob(job)}
                           >
                             👁
                           </button>
@@ -261,6 +264,15 @@ export default function Dashboard() {
           job={formState.job}
           accessToken={session?.access_token}
           onClose={closeForm}
+          onSaved={handleSaved}
+        />
+      )}
+
+      {historyJob && (
+        <JobHistory
+          job={historyJob}
+          accessToken={session?.access_token}
+          onClose={() => setHistoryJob(null)}
           onSaved={handleSaved}
         />
       )}
