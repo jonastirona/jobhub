@@ -276,9 +276,7 @@ export default function Dashboard() {
         />
       )}
 
-      {timelineJob && (
-        <JobTimeline job={timelineJob} onClose={closeTimeline} />
-      )}
+      {timelineJob && <JobTimeline job={timelineJob} onClose={closeTimeline} />}
     </AppShell>
   );
 }

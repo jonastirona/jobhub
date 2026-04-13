@@ -91,9 +91,7 @@ export default function JobTimeline({ job, onClose }) {
   const handleModalKeyDown = useCallback((e) => {
     if (e.key !== 'Tab' || !modalRef.current) return;
     const focusable = Array.from(
-      modalRef.current.querySelectorAll(
-        'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      )
+      modalRef.current.querySelectorAll('button:not([disabled]), [tabindex]:not([tabindex="-1"])')
     );
     if (focusable.length === 0) return;
     const first = focusable[0];
@@ -118,12 +116,7 @@ export default function JobTimeline({ job, onClose }) {
   const events = buildTimelineEvents(job);
 
   return (
-    <div
-      className="jt-overlay"
-      ref={overlayRef}
-      onClick={handleOverlayClick}
-      role="presentation"
-    >
+    <div className="jt-overlay" ref={overlayRef} onClick={handleOverlayClick} role="presentation">
       <div
         className="jt-modal"
         ref={modalRef}
