@@ -3,11 +3,17 @@ import './JobTimeline.css';
 
 const STATUS_ALIAS = { interview: 'interviewing', offer: 'offered' };
 
-function formatDate(dateStr) {
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseDate(dateStr) {
   if (!dateStr) return null;
-  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
-  const d = isDateOnly ? new Date(`${dateStr}T00:00:00`) : new Date(dateStr);
-  if (isNaN(d.getTime())) return null;
+  const d = DATE_ONLY.test(dateStr) ? new Date(`${dateStr}T00:00:00`) : new Date(dateStr);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatDate(dateStr) {
+  const d = parseDate(dateStr);
+  if (!d) return null;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
@@ -71,9 +77,9 @@ export function buildTimelineEvents(job) {
     });
   }
 
-  const datedEvents = events.filter((e) => e.rawDate);
-  const undatedEvents = events.filter((e) => !e.rawDate);
-  datedEvents.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
+  const datedEvents = events.filter((e) => e.rawDate && parseDate(e.rawDate));
+  const undatedEvents = events.filter((e) => !e.rawDate || !parseDate(e.rawDate));
+  datedEvents.sort((a, b) => parseDate(a.rawDate) - parseDate(b.rawDate));
 
   return [...datedEvents, ...undatedEvents];
 }
