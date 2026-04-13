@@ -185,7 +185,9 @@ def get_job_history(job_id: str, authorization: Optional[str] = Header(default=N
         .order("changed_at", desc=False)
         .execute()
     )
-    return response.data
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch job history")
+    return response.data or []
 
 
 @app.put("/jobs/{job_id}")
