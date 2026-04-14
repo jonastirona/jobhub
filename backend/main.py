@@ -150,7 +150,20 @@ def create_job(job: JobCreate, authorization: Optional[str] = Header(default=Non
     response = sb.table("jobs").insert(payload).execute()
     if not response.data:
         raise HTTPException(status_code=500, detail="Failed to create job")
-    return response.data[0]
+    created = response.data[0]
+    history_entry = {
+        "job_id": created["id"],
+        "user_id": user_id,
+        "from_status": None,
+        "to_status": created["status"],
+    }
+    if created.get("applied_date"):
+        history_entry["changed_at"] = f"{created['applied_date']}T00:00:00+00:00"
+    history_response = sb.table("job_status_history").insert(history_entry).execute()
+    if not history_response.data:
+        sb.table("jobs").delete().eq("id", created["id"]).eq("user_id", user_id).execute()
+        raise HTTPException(status_code=500, detail="Failed to create initial job status history")
+    return created
 
 
 @app.get("/jobs/{job_id}")
@@ -163,6 +176,23 @@ def get_job(job_id: str, authorization: Optional[str] = Header(default=None)):
     return response.data[0]
 
 
+@app.get("/jobs/{job_id}/history")
+def get_job_history(job_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = (
+        sb.table("job_status_history")
+        .select("*")
+        .eq("job_id", job_id)
+        .eq("user_id", user_id)
+        .order("changed_at", desc=False)
+        .execute()
+    )
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch job history")
+    return response.data or []
+
+
 @app.put("/jobs/{job_id}")
 def update_job(job_id: str, job: JobUpdate, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
@@ -172,10 +202,25 @@ def update_job(job_id: str, job: JobUpdate, authorization: Optional[str] = Heade
         raise HTTPException(status_code=400, detail="No fields to update")
     if "applied_date" in payload and payload["applied_date"] is not None:
         payload["applied_date"] = str(payload["applied_date"])
+    existing = sb.table("jobs").select("status").eq("id", job_id).eq("user_id", user_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    old_status = existing.data[0]["status"]
     response = sb.table("jobs").update(payload).eq("id", job_id).eq("user_id", user_id).execute()
     if not response.data:
         raise HTTPException(status_code=404, detail="Job not found")
-    return response.data[0]
+    updated = response.data[0]
+    new_status = updated["status"]
+    if "status" in payload and new_status != old_status:
+        sb.table("job_status_history").insert(
+            {
+                "job_id": job_id,
+                "user_id": user_id,
+                "from_status": old_status,
+                "to_status": new_status,
+            }
+        ).execute()
+    return updated
 
 
 @app.delete("/jobs/{job_id}")
