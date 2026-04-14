@@ -159,7 +159,10 @@ def create_job(job: JobCreate, authorization: Optional[str] = Header(default=Non
     }
     if created.get("applied_date"):
         history_entry["changed_at"] = f"{created['applied_date']}T00:00:00+00:00"
-    sb.table("job_status_history").insert(history_entry).execute()
+    history_response = sb.table("job_status_history").insert(history_entry).execute()
+    if not history_response.data:
+        sb.table("jobs").delete().eq("id", created["id"]).eq("user_id", user_id).execute()
+        raise HTTPException(status_code=500, detail="Failed to create initial job status history")
     return created
 
 
