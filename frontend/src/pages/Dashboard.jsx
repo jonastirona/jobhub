@@ -194,7 +194,7 @@ export default function Dashboard() {
                           <button
                             type="button"
                             className="action-btn"
-                            aria-label="View application"
+                            aria-label="View stage history"
                             onClick={() => setHistoryJob(job)}
                           >
                             👁
