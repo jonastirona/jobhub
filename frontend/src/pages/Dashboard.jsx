@@ -89,7 +89,6 @@ export default function Dashboard() {
   const deleteCancelButtonRef = useRef(null);
   const [viewJob, setViewJob] = useState(null);
   const filteredJobs = jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm));
-
   const totalApplications = filteredJobs.length;
   const interviews = filteredJobs.filter(
     (j) => j.status === 'interviewing' || j.status === 'interview'
