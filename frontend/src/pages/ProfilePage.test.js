@@ -22,6 +22,10 @@ jest.mock('../context/AuthContext', () => ({
   useAuth: () => mockAuthValue,
 }));
 
+jest.mock('../hooks/useReminders', () => ({
+  useReminders: () => ({ reminders: [], loading: false, error: null, refetch: jest.fn() }),
+}));
+
 const SAMPLE_PROFILE = {
   id: 'profile-1',
   user_id: 'user-1',
