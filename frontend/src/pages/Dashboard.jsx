@@ -64,17 +64,41 @@ const STAT_BARS = {
 };
 
 const PAGE_NUMBERS = [1, 2, 3, 4, 5];
+const SEARCHABLE_JOB_FIELDS = [
+  'title',
+  'company',
+  'location',
+  'description',
+  'notes',
+  'status',
+  'applied_date',
+];
 
 export default function Dashboard() {
   const { session } = useAuth();
-  const { jobs, loading, error, refetch } = useJobs(session?.access_token);
+  const [searchTerm, setSearchTerm] = useState('');
+  const { jobs, loading, error, refetch } = useJobs(session?.access_token, searchTerm);
   const [formState, setFormState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', job }
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+  const filteredJobs = jobs.filter((job) => {
+    if (!normalizedSearchTerm) return true;
+    const basicFieldMatch = SEARCHABLE_JOB_FIELDS.some((field) => {
+      const fieldValue = job[field];
+      return (
+        typeof fieldValue === 'string' && fieldValue.toLowerCase().includes(normalizedSearchTerm)
+      );
+    });
+    if (basicFieldMatch) return true;
 
-  const totalApplications = jobs.length;
-  const interviews = jobs.filter(
+    const formattedAppliedDate = formatDate(job.applied_date).toLowerCase();
+    return formattedAppliedDate.includes(normalizedSearchTerm);
+  });
+
+  const totalApplications = filteredJobs.length;
+  const interviews = filteredJobs.filter(
     (j) => j.status === 'interviewing' || j.status === 'interview'
   ).length;
-  const offers = jobs.filter((j) => j.status === 'offered' || j.status === 'offer').length;
+  const offers = filteredJobs.filter((j) => j.status === 'offered' || j.status === 'offer').length;
 
   const statCards = [
     {
@@ -138,6 +162,20 @@ export default function Dashboard() {
               + Add Job
             </button>
           </div>
+          <div className="table-search-row">
+            <div className="dashboard-search-box">
+              <span className="dashboard-search-icon" aria-hidden="true">
+                🔍
+              </span>
+              <input
+                type="text"
+                placeholder="Search by title, company, status, applied date..."
+                aria-label="Search job applications"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+            </div>
+          </div>
 
           {loading && <p className="table-state">Loading jobs...</p>}
           {error && <p className="table-state table-state--error">{error}</p>}
@@ -155,14 +193,16 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {jobs.length === 0 ? (
+                {filteredJobs.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="table-empty">
-                      No applications yet. Add your first job!
+                      {jobs.length === 0
+                        ? 'No applications yet. Add your first job!'
+                        : 'No matches found. Try another keyword.'}
                     </td>
                   </tr>
                 ) : (
-                  jobs.map((job, index) => (
+                  filteredJobs.map((job, index) => (
                     <tr key={job.id}>
                       <td className="row-number">{index + 1}</td>
                       <td>

@@ -21,17 +21,6 @@ export default function TopBar({ title, notificationCount }) {
     <header className="topbar">
       <div className="topbar-title">{title}</div>
       <div className="topbar-right">
-        <div className="search-box">
-          <span className="search-icon" aria-hidden="true">
-            🔍
-          </span>
-          <input
-            type="text"
-            placeholder="Search jobs, companies..."
-            aria-label="Search jobs and companies"
-          />
-        </div>
-
         <button type="button" className="notif-btn" aria-label="Notifications">
           🔔
           {notificationCount > 0 && <span className="notif-badge">{notificationCount}</span>}
