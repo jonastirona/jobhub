@@ -23,12 +23,23 @@ function formatDate(dateStr) {
   });
 }
 
+function truncateNote(text, maxLen = 100) {
+  if (!text?.trim()) return null;
+  const t = text.trim();
+  if (t.length <= maxLen) return t;
+  return `${t.slice(0, maxLen - 1)}…`;
+}
+
 export default function JobCard({ job }) {
-  const { title, company, status, applied_date, updated_at } = job;
-  const activityDate = applied_date || updated_at;
-  const formattedDate = formatDate(activityDate);
+  const { title, company, status, applied_date, updated_at, deadline, recruiter_notes } = job;
+  const formattedApplied = applied_date ? formatDate(applied_date) : null;
+  const formattedUpdated = !formattedApplied && updated_at ? formatDate(updated_at) : null;
+  const formattedDeadline = deadline ? formatDate(deadline) : null;
+  const recruiterSnippet = truncateNote(recruiter_notes);
   const statusLabel = STATUS_LABELS[status] || status;
   const badgeModifier = KNOWN_STATUSES.has(status) ? status : 'unknown';
+  const recruiterTitle =
+    recruiter_notes && typeof recruiter_notes === 'string' ? recruiter_notes.trim() : undefined;
 
   return (
     <article className="JobCard">
@@ -37,7 +48,18 @@ export default function JobCard({ job }) {
         <span className={`JobCard-badge JobCard-badge--${badgeModifier}`}>{statusLabel}</span>
       </div>
       <p className="JobCard-company">{company}</p>
-      {formattedDate && <p className="JobCard-date">{formattedDate}</p>}
+      {formattedApplied && <p className="JobCard-date">Applied {formattedApplied}</p>}
+      {!formattedApplied && formattedUpdated && (
+        <p className="JobCard-date">Updated {formattedUpdated}</p>
+      )}
+      {formattedDeadline && (
+        <p className="JobCard-date JobCard-date--deadline">Deadline {formattedDeadline}</p>
+      )}
+      {recruiterSnippet && (
+        <p className="JobCard-recruiter" title={recruiterTitle || undefined}>
+          {recruiterSnippet}
+        </p>
+      )}
     </article>
   );
 }

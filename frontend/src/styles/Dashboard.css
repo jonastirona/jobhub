@@ -220,6 +220,20 @@
   color: var(--text-secondary);
 }
 
+.date-text--deadline {
+  color: var(--orange-400, #fb923c);
+}
+
+.table-recruiter-cell {
+  display: block;
+  max-width: 14rem;
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Action buttons */
 .actions-cell {
   display: flex;

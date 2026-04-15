@@ -31,8 +31,10 @@ const sampleJob = {
   location: 'New York, NY',
   status: 'interviewing',
   applied_date: '2026-03-15',
+  deadline: '2026-05-01',
   description: 'Build great products.',
   notes: 'Call on Monday.',
+  recruiter_notes: 'jane@acme.com',
 };
 
 function mockFetchOk(body = { id: 'new-job' }) {
@@ -90,8 +92,10 @@ describe('rendering - create mode', () => {
     expect(screen.getByLabelText(/location/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/status/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/applied date/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/job deadline/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/job description/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/notes/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^notes$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/recruiter.*contact notes/i)).toBeInTheDocument();
   });
 
   test('default status is "applied"', () => {
@@ -109,8 +113,10 @@ describe('rendering - create mode', () => {
     render(<JobForm {...baseProps} />);
     expect(screen.getByLabelText(/location/i)).toHaveValue('');
     expect(screen.getByLabelText(/applied date/i)).toHaveValue('');
+    expect(screen.getByLabelText(/job deadline/i)).toHaveValue('');
     expect(screen.getByLabelText(/job description/i)).toHaveValue('');
-    expect(screen.getByLabelText(/notes/i)).toHaveValue('');
+    expect(screen.getByLabelText(/^notes$/i)).toHaveValue('');
+    expect(screen.getByLabelText(/recruiter.*contact notes/i)).toHaveValue('');
   });
 
   test('renders Add Job submit button', () => {
@@ -146,6 +152,8 @@ describe('rendering - edit mode', () => {
     expect(screen.getByLabelText(/location/i)).toHaveValue('New York, NY');
     expect(screen.getByLabelText(/job description/i)).toHaveValue('Build great products.');
     expect(screen.getByLabelText(/^notes$/i)).toHaveValue('Call on Monday.');
+    expect(screen.getByLabelText(/job deadline/i)).toHaveValue('2026-05-01');
+    expect(screen.getByLabelText(/recruiter.*contact notes/i)).toHaveValue('jane@acme.com');
   });
 
   test('pre-fills status dropdown', () => {
@@ -183,20 +191,30 @@ describe('rendering - edit mode', () => {
       location: null,
       status: 'applied',
       applied_date: null,
+      deadline: null,
       description: null,
       notes: null,
+      recruiter_notes: null,
     };
     render(<JobForm {...baseProps} mode="edit" job={minimalJob} />);
     expect(screen.getByLabelText(/location/i)).toHaveValue('');
     expect(screen.getByLabelText(/applied date/i)).toHaveValue('');
+    expect(screen.getByLabelText(/job deadline/i)).toHaveValue('');
     expect(screen.getByLabelText(/job description/i)).toHaveValue('');
-    expect(screen.getByLabelText(/notes/i)).toHaveValue('');
+    expect(screen.getByLabelText(/^notes$/i)).toHaveValue('');
+    expect(screen.getByLabelText(/recruiter.*contact notes/i)).toHaveValue('');
   });
 
   test('strips time portion from ISO applied_date for date input', () => {
     const job = { ...sampleJob, applied_date: '2026-03-15T00:00:00+00:00' };
     render(<JobForm {...baseProps} mode="edit" job={job} />);
     expect(screen.getByLabelText(/applied date/i)).toHaveValue('2026-03-15');
+  });
+
+  test('strips time portion from ISO deadline for date input', () => {
+    const job = { ...sampleJob, deadline: '2026-05-01T00:00:00+00:00' };
+    render(<JobForm {...baseProps} mode="edit" job={job} />);
+    expect(screen.getByLabelText(/job deadline/i)).toHaveValue('2026-05-01');
   });
 
   test('normalizes legacy "interview" alias to canonical "interviewing"', () => {
@@ -434,8 +452,10 @@ describe('create mode - form submission', () => {
     const body = JSON.parse(global.fetch.mock.calls[0][1].body);
     expect(body.location).toBeNull();
     expect(body.applied_date).toBeNull();
+    expect(body.deadline).toBeNull();
     expect(body.description).toBeNull();
     expect(body.notes).toBeNull();
+    expect(body.recruiter_notes).toBeNull();
   });
 
   test('sends trimmed location (null when only spaces)', async () => {
@@ -460,6 +480,41 @@ describe('create mode - form submission', () => {
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
     const body = JSON.parse(global.fetch.mock.calls[0][1].body);
     expect(body.applied_date).toBe('2026-04-01');
+  });
+
+  test('sends deadline when provided on create', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.change(screen.getByLabelText(/job deadline/i), {
+      target: { value: '2026-06-10' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.deadline).toBe('2026-06-10');
+  });
+
+  test('sends recruiter_notes when provided on create', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    await userEvent.type(screen.getByLabelText(/recruiter.*contact notes/i), 'Recruiter: Sam');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.recruiter_notes).toBe('Recruiter: Sam');
+  });
+
+  test('sends null recruiter_notes when only whitespace', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    await userEvent.type(screen.getByLabelText(/recruiter.*contact notes/i), '   \n\t  ');
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.recruiter_notes).toBeNull();
   });
 
   test('calls onSaved after successful create', async () => {
@@ -526,6 +581,17 @@ describe('edit mode - form submission', () => {
     expect(body.location).toBeNull();
   });
 
+  test('sends null deadline and recruiter_notes when cleared in edit', async () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    fireEvent.change(screen.getByLabelText(/job deadline/i), { target: { value: '' } });
+    await userEvent.clear(screen.getByLabelText(/recruiter.*contact notes/i));
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.deadline).toBeNull();
+    expect(body.recruiter_notes).toBeNull();
+  });
+
   test('sends existing optional fields as-is', async () => {
     render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
@@ -534,6 +600,8 @@ describe('edit mode - form submission', () => {
     expect(body.location).toBe('New York, NY');
     expect(body.description).toBe('Build great products.');
     expect(body.notes).toBe('Call on Monday.');
+    expect(body.deadline).toBe('2026-05-01');
+    expect(body.recruiter_notes).toBe('jane@acme.com');
   });
 
   test('calls onSaved after successful edit', async () => {

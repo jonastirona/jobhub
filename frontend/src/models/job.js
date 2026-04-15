@@ -18,6 +18,8 @@ export const EMPTY_JOB = {
   location: '',
   status: 'applied',
   applied_date: '',
+  deadline: '',
   description: '',
   notes: '',
+  recruiter_notes: '',
 };

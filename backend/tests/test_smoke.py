@@ -4,6 +4,7 @@ Backend tests for jobhub.
 Supabase is fully mocked — no live database or credentials required.
 """
 
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -46,8 +47,10 @@ SAMPLE_JOB = {
     "location": "Remote",
     "status": "applied",
     "applied_date": None,
+    "deadline": None,
     "description": None,
     "notes": None,
+    "recruiter_notes": None,
     "created_at": "2026-01-01T00:00:00+00:00",
     "updated_at": "2026-01-01T00:00:00+00:00",
 }
@@ -170,6 +173,8 @@ def test_list_jobs_returns_user_jobs():
     assert len(body) == 1
     assert body[0]["id"] == SAMPLE_JOB["id"]
     assert body[0]["company"] == "TechCorp"
+    assert "deadline" in body[0]
+    assert "recruiter_notes" in body[0]
 
 
 # Verifies list endpoint returns an empty array when no jobs exist.
@@ -231,7 +236,10 @@ def test_list_jobs_q_filters_across_text_fields():
         ]
     )
     with patch("main.get_supabase", return_value=mock_sb):
-        response = client.get("/jobs?q=francisco", headers={"authorization": AUTH_HEADER})
+        response = client.get(
+            "/jobs?q=francisco",
+            headers={"authorization": AUTH_HEADER},
+        )
 
     assert response.status_code == 200
     body = response.json()
@@ -239,21 +247,163 @@ def test_list_jobs_q_filters_across_text_fields():
     assert body[0]["id"] == "job-location-match"
 
     with patch("main.get_supabase", return_value=mock_sb):
-        status_response = client.get("/jobs?q=interviewing", headers={"authorization": AUTH_HEADER})
+        status_response = client.get(
+            "/jobs?q=interviewing",
+            headers={"authorization": AUTH_HEADER},
+        )
     assert status_response.status_code == 200
     assert status_response.json()[0]["id"] == "job-status-match"
 
     with patch("main.get_supabase", return_value=mock_sb):
-        date_response = client.get("/jobs?q=2026-03-15", headers={"authorization": AUTH_HEADER})
+        date_response = client.get(
+            "/jobs?q=2026-03-15",
+            headers={"authorization": AUTH_HEADER},
+        )
     assert date_response.status_code == 200
     assert date_response.json()[0]["id"] == "job-date-match"
+
+    matching_by_recruiter = {
+        **SAMPLE_JOB,
+        "id": "job-recruiter-match",
+        "recruiter_notes": "Reach out to Alex Chen before onsite",
+    }
+    matching_by_deadline = {
+        **SAMPLE_JOB,
+        "id": "job-deadline-match",
+        "deadline": "2026-07-04",
+    }
+    mock_sb2, _, _ = make_mock_sb(
+        data=[
+            matching_by_recruiter,
+            matching_by_deadline,
+            non_match,
+        ]
+    )
+    with patch("main.get_supabase", return_value=mock_sb2):
+        recruiter_response = client.get(
+            "/jobs?q=alex+chen",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert recruiter_response.status_code == 200
+    assert len(recruiter_response.json()) == 1
+    assert recruiter_response.json()[0]["id"] == "job-recruiter-match"
+
+    with patch("main.get_supabase", return_value=mock_sb2):
+        deadline_response = client.get(
+            "/jobs?q=2026-07-04",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert deadline_response.status_code == 200
+    assert len(deadline_response.json()) == 1
+    assert deadline_response.json()[0]["id"] == "job-deadline-match"
+
+
+# Verifies q matches calendar month names, years, day numbers, abbreviations, and notes.
+def test_list_jobs_q_month_year_day_tokens_and_notes():
+    april_deadline = {
+        **SAMPLE_JOB,
+        "id": "job-april-deadline",
+        "deadline": "2026-04-10",
+        "applied_date": None,
+    }
+    march_applied = {
+        **SAMPLE_JOB,
+        "id": "job-march-applied",
+        "applied_date": "2026-03-20",
+        "deadline": None,
+    }
+    mock_sb, _, _ = make_mock_sb(data=[april_deadline, march_applied])
+    with patch("main.get_supabase", return_value=mock_sb):
+        april_resp = client.get(
+            "/jobs?q=april",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert april_resp.status_code == 200
+    assert len(april_resp.json()) == 1
+    assert april_resp.json()[0]["id"] == "job-april-deadline"
+
+    with patch("main.get_supabase", return_value=mock_sb):
+        apr_resp = client.get(
+            "/jobs?q=apr",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert apr_resp.status_code == 200
+    assert len(apr_resp.json()) == 1
+    assert apr_resp.json()[0]["id"] == "job-april-deadline"
+
+    year_2027 = {
+        **SAMPLE_JOB,
+        "id": "job-2027",
+        "deadline": "2027-01-01",
+        "applied_date": None,
+    }
+    year_2026 = {
+        **SAMPLE_JOB,
+        "id": "job-2026-only",
+        "deadline": "2026-12-31",
+        "applied_date": None,
+    }
+    mock_y, _, _ = make_mock_sb(data=[year_2027, year_2026])
+    with patch("main.get_supabase", return_value=mock_y):
+        y_resp = client.get(
+            "/jobs?q=2027",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert y_resp.status_code == 200
+    assert len(y_resp.json()) == 1
+    assert y_resp.json()[0]["id"] == "job-2027"
+
+    day_14 = {
+        **SAMPLE_JOB,
+        "id": "job-day-14",
+        "applied_date": "2026-05-14",
+        "deadline": None,
+    }
+    day_15 = {
+        **SAMPLE_JOB,
+        "id": "job-day-15",
+        "applied_date": "2026-05-15",
+        "deadline": None,
+    }
+    mock_d, _, _ = make_mock_sb(data=[day_14, day_15])
+    with patch("main.get_supabase", return_value=mock_d):
+        d_resp = client.get(
+            "/jobs?q=14",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert d_resp.status_code == 200
+    assert len(d_resp.json()) == 1
+    assert d_resp.json()[0]["id"] == "job-day-14"
+
+    notes_job = {
+        **SAMPLE_JOB,
+        "id": "job-notes-xyz",
+        "notes": "Follow up about offer details xyz123",
+    }
+    other = {
+        **SAMPLE_JOB,
+        "id": "job-other-notes",
+        "notes": "Different content",
+    }
+    mock_n, _, _ = make_mock_sb(data=[notes_job, other])
+    with patch("main.get_supabase", return_value=mock_n):
+        n_resp = client.get(
+            "/jobs?q=xyz123",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert n_resp.status_code == 200
+    assert len(n_resp.json()) == 1
+    assert n_resp.json()[0]["id"] == "job-notes-xyz"
 
 
 # Verifies whitespace-only q values are treated as empty search input.
 def test_list_jobs_q_ignores_whitespace_only_query():
     mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
     with patch("main.get_supabase", return_value=mock_sb):
-        response = client.get("/jobs?q=%20%20", headers={"authorization": AUTH_HEADER})
+        response = client.get(
+            "/jobs?q=%20%20",
+            headers={"authorization": AUTH_HEADER},
+        )
     assert response.status_code == 200
     assert len(response.json()) == 1
 
@@ -262,7 +412,10 @@ def test_list_jobs_q_ignores_whitespace_only_query():
 def test_list_jobs_q_keeps_user_scope_filter():
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_JOB])
     with patch("main.get_supabase", return_value=mock_sb):
-        client.get("/jobs?q=techcorp", headers={"authorization": AUTH_HEADER})
+        client.get(
+            "/jobs?q=techcorp",
+            headers={"authorization": AUTH_HEADER},
+        )
     mock_query.eq.assert_any_call("user_id", MOCK_USER_ID)
 
 
@@ -300,6 +453,39 @@ def test_create_job_sets_user_id():
         )
     inserted_payload = mock_query.insert.call_args[0][0]
     assert inserted_payload["user_id"] == MOCK_USER_ID
+
+
+# Verifies create serializes deadline to ISO date string for Supabase.
+def test_create_job_serializes_deadline_in_insert_payload():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/jobs",
+            json={
+                "title": "Engineer",
+                "company": "Acme",
+                "deadline": "2026-08-20",
+                "recruiter_notes": "  HR: Pat  ",
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    inserted = mock_query.insert.call_args[0][0]
+    assert inserted["deadline"] == "2026-08-20"
+    assert inserted["recruiter_notes"] == "  HR: Pat  "
+
+
+# Verifies update serializes deadline in the update payload.
+def test_update_job_serializes_deadline_in_update_payload():
+    updated = {**SAMPLE_JOB, "deadline": "2026-09-01"}
+    mock_sb, mock_query, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"deadline": "2026-09-01"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    update_payload = mock_query.update.call_args[0][0]
+    assert update_payload == {"deadline": "2026-09-01"}
 
 
 # Verifies missing required title fails FastAPI validation.
@@ -987,8 +1173,10 @@ def test_job_create_defaults():
     assert job.status == "applied"
     assert job.location is None
     assert job.applied_date is None
+    assert job.deadline is None
     assert job.description is None
     assert job.notes is None
+    assert job.recruiter_notes is None
 
 
 # Verifies JobCreate model accepts and stores all provided fields.
@@ -998,11 +1186,16 @@ def test_job_create_all_fields():
         company="TechCorp",
         location="Remote",
         status="interviewing",
+        applied_date=date(2026, 3, 1),
+        deadline=date(2026, 4, 15),
         description="Build APIs",
         notes="Referral from alumni",
+        recruiter_notes="Recruiter: Alex",
     )
     assert job.status == "interviewing"
     assert job.location == "Remote"
+    assert job.deadline == date(2026, 4, 15)
+    assert job.recruiter_notes == "Recruiter: Alex"
 
 
 def test_job_create_accepts_final_outcome_statuses():

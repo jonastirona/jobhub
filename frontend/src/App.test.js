@@ -152,9 +152,11 @@ test('clicking Edit opens form pre-filled with that job', async () => {
             company: 'DataCorp',
             status: 'applied',
             applied_date: '2026-03-01',
+            deadline: '2026-04-15',
             location: 'Remote',
             description: null,
             notes: null,
+            recruiter_notes: 'hiring@datacorp.com',
             updated_at: '2026-03-29T00:00:00+00:00',
           },
         ]),
@@ -168,6 +170,8 @@ test('clicking Edit opens form pre-filled with that job', async () => {
     expect(screen.getByRole('heading', { name: /edit application/i })).toBeInTheDocument();
     expect(screen.getByDisplayValue('Backend Engineer')).toBeInTheDocument();
     expect(screen.getByDisplayValue('DataCorp')).toBeInTheDocument();
+    expect(screen.getByLabelText(/job deadline/i)).toHaveValue('2026-04-15');
+    expect(screen.getByLabelText(/recruiter.*contact notes/i)).toHaveValue('hiring@datacorp.com');
   });
 });
 
@@ -691,6 +695,152 @@ test('filters jobs by title text', async () => {
   });
 });
 
+// Verifies table lists Deadline and Recruiter columns for job rows.
+test('renders Deadline and Recruiter column headers', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Analyst',
+            company: 'Metrics Inc',
+            status: 'applied',
+            applied_date: '2026-03-01',
+            deadline: '2026-06-01',
+            recruiter_notes: 'team@metrics.inc',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => {
+    expect(screen.getByRole('columnheader', { name: /^deadline$/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /^recruiter$/i })).toBeInTheDocument();
+  });
+});
+
+// Verifies formatted deadline appears in the dashboard table.
+test('shows formatted deadline in table when job has deadline', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'SRE',
+            company: 'OpsCo',
+            status: 'applied',
+            applied_date: null,
+            deadline: '2026-07-04',
+            recruiter_notes: null,
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => {
+    expect(screen.getByText('Jul 4, 2026')).toBeInTheDocument();
+  });
+});
+
+// Verifies recruiter snippet appears in the recruiter column.
+test('shows recruiter_notes text in recruiter column', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'PM',
+            company: 'PlanCo',
+            status: 'applied',
+            applied_date: '2026-01-01',
+            deadline: null,
+            recruiter_notes: 'Jamie — jamie@planco.com',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => {
+    expect(screen.getByText(/jamie.*jamie@planco\.com/i)).toBeInTheDocument();
+  });
+});
+
+// Verifies hybrid client filter matches recruiter_notes.
+test('filters jobs by recruiter_notes text', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Role A',
+            company: 'Co',
+            status: 'applied',
+            recruiter_notes: 'Call Morgan Lee before Friday',
+          },
+          {
+            id: 'job-2',
+            title: 'Role B',
+            company: 'Co',
+            status: 'applied',
+            recruiter_notes: 'Different hiring manager',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => expect(screen.getByText('Role A')).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: 'morgan lee' },
+  });
+  await waitFor(() => {
+    expect(screen.getByText('Role A')).toBeInTheDocument();
+    expect(screen.queryByText('Role B')).not.toBeInTheDocument();
+  });
+});
+
+// Verifies hybrid client filter matches formatted deadline (not only raw ISO).
+test('filters jobs by formatted deadline text', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Role A',
+            company: 'X',
+            status: 'applied',
+            deadline: '2026-07-04',
+          },
+          {
+            id: 'job-2',
+            title: 'Role B',
+            company: 'Y',
+            status: 'applied',
+            deadline: '2026-12-01',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => expect(screen.getByText('Role A')).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: 'jul 4' },
+  });
+  await waitFor(() => {
+    expect(screen.getByText('Role A')).toBeInTheDocument();
+    expect(screen.queryByText('Role B')).not.toBeInTheDocument();
+  });
+});
+
 // Verifies company text can be used to filter matching jobs.
 test('filters jobs by company text', async () => {
   global.fetch = jest.fn(() =>
@@ -729,5 +879,77 @@ test('filters jobs by company text', async () => {
   await waitFor(() => {
     expect(screen.getByText('Acme Robotics')).toBeInTheDocument();
     expect(screen.queryByText('Nimbus Cloud')).not.toBeInTheDocument();
+  });
+});
+
+// Verifies hybrid client filter matches calendar month name on deadline or applied date.
+test('filters jobs by month name across deadline and applied_date', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'April Role',
+            company: 'X',
+            status: 'applied',
+            deadline: '2026-04-10',
+            applied_date: null,
+          },
+          {
+            id: 'job-2',
+            title: 'March Role',
+            company: 'Y',
+            status: 'applied',
+            applied_date: '2026-03-20',
+            deadline: null,
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => expect(screen.getByText('April Role')).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: 'april' },
+  });
+  await waitFor(() => {
+    expect(screen.getByText('April Role')).toBeInTheDocument();
+    expect(screen.queryByText('March Role')).not.toBeInTheDocument();
+  });
+});
+
+// Verifies hybrid client filter matches year token on date fields.
+test('filters jobs by year on deadline', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Future',
+            company: 'Z',
+            status: 'applied',
+            deadline: '2027-01-01',
+          },
+          {
+            id: 'job-2',
+            title: 'Past',
+            company: 'Z',
+            status: 'applied',
+            deadline: '2026-12-31',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => expect(screen.getByText('Future')).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: '2027' },
+  });
+  await waitFor(() => {
+    expect(screen.getByText('Future')).toBeInTheDocument();
+    expect(screen.queryByText('Past')).not.toBeInTheDocument();
   });
 });
