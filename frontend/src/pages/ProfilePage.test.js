@@ -826,17 +826,13 @@ describe('career preferences section', () => {
   test('renders Career Preferences section heading', async () => {
     renderPage();
     await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: /career preferences/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /career preferences/i })).toBeInTheDocument();
     });
   });
 
   test('renders all career preferences fields', async () => {
     renderPage();
-    await waitFor(() =>
-      expect(screen.getByLabelText(/target roles/i)).toBeInTheDocument()
-    );
+    await waitFor(() => expect(screen.getByLabelText(/target roles/i)).toBeInTheDocument());
     expect(screen.getByLabelText(/preferred locations/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/work mode/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/minimum salary/i)).toBeInTheDocument();
@@ -871,8 +867,7 @@ describe('career preferences section', () => {
     fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
     await waitFor(() => {
       const putCall = global.fetch.mock.calls.find(
-        ([url, opts = {}]) =>
-          url === `${BACKEND}/career-preferences` && opts.method === 'PUT'
+        ([url, opts = {}]) => url === `${BACKEND}/career-preferences` && opts.method === 'PUT'
       );
       expect(putCall).toBeDefined();
     });
@@ -893,9 +888,7 @@ describe('career preferences section', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
     await waitFor(() => {
-      expect(
-        screen.getByText(/career preferences saved successfully/i)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/career preferences saved successfully/i)).toBeInTheDocument();
     });
   });
 
@@ -932,8 +925,6 @@ describe('career preferences section', () => {
     fireEvent.change(screen.getByLabelText(/target roles/i), {
       target: { value: 'Frontend Engineer' },
     });
-    expect(
-      screen.queryByText(/career preferences saved successfully/i)
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/career preferences saved successfully/i)).not.toBeInTheDocument();
   });
 });
