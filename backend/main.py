@@ -347,7 +347,7 @@ def reorder_experience(
 ):
     user_id = get_user_id(authorization)
     sb = get_supabase()
-    existing_resp = sb.table("experience").select("id").eq("user_id", user_id).execute()
+    existing_resp = sb.table("experience").select("id,position").eq("user_id", user_id).execute()
     if existing_resp.data is None:
         raise HTTPException(status_code=500, detail="Failed to validate experience for reorder")
     existing_ids = [r["id"] for r in existing_resp.data]
@@ -361,6 +361,8 @@ def reorder_experience(
             ),
         )
     if data.ids:
+        # Capture current positions for best-effort recovery if phase 2 fails.
+        original_positions = {r["id"]: r["position"] for r in existing_resp.data if "position" in r}
         # Phase 1: shift all positions to temporary out-of-range values to avoid
         # violating the UNIQUE (user_id, position) constraint during swaps.
         temp_updates = [
@@ -377,6 +379,14 @@ def reorder_experience(
         ]
         update_resp = sb.table("experience").upsert(final_updates, on_conflict="id").execute()
         if update_resp.data is None:
+            # Best-effort: attempt to restore original positions so rows are not
+            # left with out-of-range position values from phase 1.
+            if original_positions:
+                recovery_updates = [
+                    {"id": entry_id, "user_id": user_id, "position": pos}
+                    for entry_id, pos in original_positions.items()
+                ]
+                sb.table("experience").upsert(recovery_updates, on_conflict="id").execute()
             raise HTTPException(status_code=500, detail="Failed to reorder experience")
     response = sb.table("experience").select("*").eq("user_id", user_id).order("position").execute()
     if response.data is None:

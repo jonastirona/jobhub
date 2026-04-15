@@ -48,7 +48,7 @@ function formatYearRange(startYear, endYear) {
   return `${startYear} – ${endYear}`;
 }
 
-const _parseYear = (value) => {
+const parseYear = (value) => {
   const trimmed = String(value ?? '').trim();
   if (!/^\d+$/.test(trimmed)) return null;
   return Number(trimmed);
@@ -130,15 +130,15 @@ export default function ProfilePage() {
     if (saved) setSaveSuccess(true);
   };
 
-  const _expStartYear = _parseYear(experienceForm.start_year);
-  const _expEndYear = _parseYear(experienceForm.end_year);
-  const _expHasEndYear = String(experienceForm.end_year ?? '').trim() !== '';
+  const expStartYear = parseYear(experienceForm.start_year);
+  const expEndYear = parseYear(experienceForm.end_year);
+  const expHasEndYear = String(experienceForm.end_year ?? '').trim() !== '';
   const isExperienceFormValid =
     experienceForm.title.trim().length > 0 &&
     experienceForm.company.trim().length > 0 &&
-    _expStartYear !== null &&
-    _expStartYear >= 1900 &&
-    (!_expHasEndYear || (_expEndYear !== null && _expEndYear >= _expStartYear));
+    expStartYear !== null &&
+    expStartYear >= 1900 &&
+    (!expHasEndYear || (expEndYear !== null && expEndYear >= expStartYear));
 
   const handleExperienceFormChange = (e) => {
     const { name, value } = e.target;
@@ -169,8 +169,8 @@ export default function ProfilePage() {
       title: experienceForm.title.trim(),
       company: experienceForm.company.trim(),
       location: experienceForm.location.trim() || null,
-      start_year: _parseYear(experienceForm.start_year),
-      end_year: _expHasEndYear ? _parseYear(experienceForm.end_year) : null,
+      start_year: parseYear(experienceForm.start_year),
+      end_year: expHasEndYear ? parseYear(experienceForm.end_year) : null,
       description: experienceForm.description.trim() || null,
     };
     const saved = editingExperienceId

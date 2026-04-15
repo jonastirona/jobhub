@@ -6,7 +6,9 @@ Supabase is fully mocked — no live database or credentials required.
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from main import (
     PROFILE_REQUIRED_FIELDS,
@@ -1277,27 +1279,18 @@ def test_delete_experience_scoped_to_user():
 
 
 def test_experience_create_requires_title():
-    try:
+    with pytest.raises(ValidationError):
         ExperienceCreate(company="Acme", start_year=2020)
-        assert False, "Should have raised"
-    except Exception:
-        pass
 
 
 def test_experience_create_requires_company():
-    try:
+    with pytest.raises(ValidationError):
         ExperienceCreate(title="Engineer", start_year=2020)
-        assert False, "Should have raised"
-    except Exception:
-        pass
 
 
 def test_experience_create_requires_start_year():
-    try:
+    with pytest.raises(ValidationError):
         ExperienceCreate(title="Engineer", company="Acme")
-        assert False, "Should have raised"
-    except Exception:
-        pass
 
 
 def test_experience_update_all_optional():
