@@ -1045,21 +1045,7 @@ describe('education section', () => {
     });
   });
 
-  test('shows save error when addEducation fails', async () => {
-    global.fetch = jest.fn((url, opts = {}) => {
-      if (url && url.includes('/education')) {
-        if (opts.method === 'POST') {
-          return Promise.resolve({
-            ok: false,
-            status: 422,
-            text: () => Promise.resolve('start_year must be 1900 or later'),
-          });
-        }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-    });
-
+  test('submit button stays disabled when start_year is before 1900', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/institution/i)).toBeInTheDocument());
 
@@ -1067,10 +1053,7 @@ describe('education section', () => {
     await userEvent.type(screen.getByLabelText(/^degree$/i), 'BS');
     await userEvent.type(screen.getByLabelText(/field of study/i), 'CS');
     await userEvent.type(screen.getByLabelText(/start year/i), '1800');
-    fireEvent.click(screen.getByRole('button', { name: /add education/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText('start_year must be 1900 or later')).toBeInTheDocument();
-    });
+    expect(screen.getByRole('button', { name: /add education/i })).toBeDisabled();
   });
 });

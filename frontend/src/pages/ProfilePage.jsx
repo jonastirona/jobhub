@@ -122,11 +122,20 @@ export default function ProfilePage() {
     if (saved) setSaveSuccess(true);
   };
 
+  const _parseYear = (value) => {
+    const n = parseInt(String(value ?? '').trim(), 10);
+    return Number.isFinite(n) && Number.isInteger(n) ? n : null;
+  };
+  const _startYear = _parseYear(educationForm.start_year);
+  const _endYear = _parseYear(educationForm.end_year);
+  const _hasEndYear = String(educationForm.end_year ?? '').trim() !== '';
   const isEducationFormValid =
     educationForm.institution.trim() &&
     educationForm.degree.trim() &&
     educationForm.field_of_study.trim() &&
-    String(educationForm.start_year).trim();
+    _startYear !== null &&
+    _startYear >= 1900 &&
+    (!_hasEndYear || (_endYear !== null && _endYear >= _startYear));
 
   const handleEducationFormChange = (e) => {
     const { name, value } = e.target;

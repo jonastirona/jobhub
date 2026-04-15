@@ -1008,6 +1008,23 @@ def test_create_education_end_year_before_start_year_returns_422():
     assert "end_year" in response.json()["detail"]
 
 
+def test_create_education_negative_gpa_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "BS",
+                "field_of_study": "CS",
+                "start_year": 2022,
+                "gpa": -0.1,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
 def test_create_education_db_failure_returns_500():
     mock_sb, _, _ = make_mock_sb(data=[])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -1070,6 +1087,19 @@ def test_update_education_end_year_before_start_year_returns_422():
         response = client.put(
             f"/education/{SAMPLE_EDUCATION['id']}",
             json={"start_year": 2024, "end_year": 2020},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "end_year" in response.json()["detail"]
+
+
+def test_update_education_partial_end_year_before_existing_start_year_returns_422():
+    """Sending only end_year earlier than the stored start_year must return 422."""
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/education/{SAMPLE_EDUCATION['id']}",
+            json={"end_year": SAMPLE_EDUCATION["start_year"] - 1},
             headers={"authorization": AUTH_HEADER},
         )
     assert response.status_code == 422

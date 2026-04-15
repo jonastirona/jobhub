@@ -5,7 +5,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 load_dotenv()
 
@@ -128,7 +128,7 @@ class EducationCreate(BaseModel):
     field_of_study: str
     start_year: int
     end_year: Optional[int] = None
-    gpa: Optional[float] = None
+    gpa: Optional[float] = Field(default=None, ge=0)
     description: Optional[str] = None
 
 
@@ -138,7 +138,7 @@ class EducationUpdate(BaseModel):
     field_of_study: Optional[str] = None
     start_year: Optional[int] = None
     end_year: Optional[int] = None
-    gpa: Optional[float] = None
+    gpa: Optional[float] = Field(default=None, ge=0)
     description: Optional[str] = None
 
 
@@ -328,10 +328,22 @@ def update_education(
     payload = entry.model_dump(exclude_unset=True)
     if not payload:
         raise HTTPException(status_code=400, detail="No fields to update")
-    _validate_education_years(payload.get("start_year"), payload.get("end_year"))
+    existing_resp = (
+        sb.table("education").select("*").eq("id", entry_id).eq("user_id", user_id).execute()
+    )
+    if existing_resp.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch education entry")
+    if not existing_resp.data:
+        raise HTTPException(status_code=404, detail="Education entry not found")
+    existing = existing_resp.data[0]
+    effective_start = payload.get("start_year", existing.get("start_year"))
+    effective_end = payload.get("end_year", existing.get("end_year"))
+    _validate_education_years(effective_start, effective_end)
     response = (
         sb.table("education").update(payload).eq("id", entry_id).eq("user_id", user_id).execute()
     )
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to update education entry")
     if not response.data:
         raise HTTPException(status_code=404, detail="Education entry not found")
     return response.data[0]
@@ -342,6 +354,8 @@ def delete_education(entry_id: str, authorization: Optional[str] = Header(defaul
     user_id = get_user_id(authorization)
     sb = get_supabase()
     response = sb.table("education").delete().eq("id", entry_id).eq("user_id", user_id).execute()
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to delete education entry")
     if not response.data:
         raise HTTPException(status_code=404, detail="Education entry not found")
     return Response(status_code=204)
