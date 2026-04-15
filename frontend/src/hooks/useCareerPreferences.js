@@ -84,8 +84,21 @@ export function useCareerPreferences(accessToken) {
           signal: controller.signal,
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Save failed (${res.status})`);
+          const contentType = res.headers.get('content-type') || '';
+          let message = '';
+          if (contentType.includes('application/json')) {
+            const body = await res.json().catch(() => null);
+            if (typeof body?.detail === 'string') {
+              message = body.detail;
+            } else if (body?.detail != null) {
+              message = JSON.stringify(body.detail);
+            } else if (body != null) {
+              message = JSON.stringify(body);
+            }
+          } else {
+            message = await res.text().catch(() => '');
+          }
+          throw new Error(message || `Save failed (${res.status})`);
         }
         const saved = await res.json();
         if (controller.signal.aborted) return false;
