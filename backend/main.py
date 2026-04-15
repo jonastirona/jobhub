@@ -303,6 +303,12 @@ def create_skill(skill: SkillCreate, authorization: Optional[str] = Header(defau
             status_code=422,
             detail=f"proficiency must be one of: {', '.join(sorted(VALID_PROFICIENCY_LEVELS))}",
         )
+    # NOTE: there is a narrow race window where two concurrent creates can
+    # read the same max position and both attempt to insert with the same value.
+    # The UNIQUE (user_id, position) constraint in the migration prevents silent
+    # data corruption — one of the two requests will get a DB constraint error
+    # (surfaced as 500). A per-user sequence or atomic INSERT…SELECT would
+    # eliminate the window entirely but requires a Supabase RPC.
     position_resp = (
         sb.table("skills")
         .select("position")
@@ -384,6 +390,8 @@ def update_skill(
     response = (
         sb.table("skills").update(payload).eq("id", skill_id).eq("user_id", user_id).execute()
     )
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to update skill")
     if not response.data:
         raise HTTPException(status_code=404, detail="Skill not found")
     return response.data[0]
@@ -394,6 +402,8 @@ def delete_skill(skill_id: str, authorization: Optional[str] = Header(default=No
     user_id = get_user_id(authorization)
     sb = get_supabase()
     response = sb.table("skills").delete().eq("id", skill_id).eq("user_id", user_id).execute()
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to delete skill")
     if not response.data:
         raise HTTPException(status_code=404, detail="Skill not found")
     return Response(status_code=204)

@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS skills (
   CONSTRAINT skills_user_id_position_key UNIQUE (user_id, position)
 );
 
-CREATE INDEX IF NOT EXISTS skills_user_id_position_idx ON skills (user_id, position);
+-- Note: no separate index needed — the UNIQUE (user_id, position) constraint
+-- above already creates an implicit index on (user_id, position).
 
 ALTER TABLE skills ENABLE ROW LEVEL SECURITY;
 
