@@ -1085,6 +1085,26 @@ def test_create_experience_blank_location_stored_as_null():
     assert insert_payload.get("location") is None
 
 
+def test_create_experience_retries_on_position_conflict():
+    """If the first insert fails (e.g. UNIQUE position conflict), a second
+    attempt re-reads max position and retries the insert."""
+    # side-effects: position_read_1 → insert_fail → position_read_2 → insert_ok
+    mock_sb, _ = _make_mock_sb_with_side_effects(
+        [],  # first position read: no existing rows → position 0
+        None,  # first insert: fails (simulates unique constraint violation)
+        [],  # second position read: still no rows (race resolved)
+        [SAMPLE_EXPERIENCE],  # second insert: succeeds
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/experience",
+            json={"title": "Engineer", "company": "Acme", "start_year": 2020},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    assert response.json()["title"] == "Software Engineer"
+
+
 # ---------------------------------------------------------------------------
 # PUT /experience/reorder
 # ---------------------------------------------------------------------------

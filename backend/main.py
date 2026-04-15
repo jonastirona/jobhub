@@ -309,23 +309,6 @@ def create_experience(entry: ExperienceCreate, authorization: Optional[str] = He
         raise HTTPException(status_code=422, detail="title must not be blank")
     if not entry.company.strip():
         raise HTTPException(status_code=422, detail="company must not be blank")
-    position_resp = (
-        sb.table("experience")
-        .select("position")
-        .eq("user_id", user_id)
-        .order("position", desc=True)
-        .limit(1)
-        .execute()
-    )
-    if position_resp.data is None:
-        raise HTTPException(status_code=500, detail="Failed to determine experience position")
-    # NOTE: there is a narrow race window where two concurrent creates can
-    # read the same max position and both attempt to insert with the same value.
-    # The UNIQUE (user_id, position) constraint in the migration prevents silent
-    # data corruption — one of the two requests will get a DB constraint error
-    # (surfaced as 500). A per-user sequence or atomic INSERT…SELECT would
-    # eliminate the window entirely but requires a Supabase RPC.
-    position = (position_resp.data[0]["position"] if position_resp.data else -1) + 1
     payload = entry.model_dump(exclude_none=True)
     payload["title"] = entry.title.strip()
     payload["company"] = entry.company.strip()
@@ -334,13 +317,28 @@ def create_experience(entry: ExperienceCreate, authorization: Optional[str] = He
     if "description" in payload:
         payload["description"] = entry.description.strip() or None
     payload["user_id"] = user_id
-    payload["position"] = position
-    response = sb.table("experience").insert(payload).execute()
-    if response.data is None:
-        raise HTTPException(status_code=500, detail="Failed to create experience entry")
-    if not response.data:
-        raise HTTPException(status_code=500, detail="Failed to create experience entry")
-    return response.data[0]
+    # Retry once on insert failure to handle the narrow race window where two
+    # concurrent creates read the same max position and collide on the UNIQUE
+    # (user_id, position) constraint.  A per-user DB sequence would eliminate
+    # the window entirely but requires a Supabase RPC.
+    for attempt in range(2):
+        position_resp = (
+            sb.table("experience")
+            .select("position")
+            .eq("user_id", user_id)
+            .order("position", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if position_resp.data is None:
+            raise HTTPException(status_code=500, detail="Failed to determine experience position")
+        payload["position"] = (position_resp.data[0]["position"] if position_resp.data else -1) + 1
+        response = sb.table("experience").insert(payload).execute()
+        if response.data:
+            return response.data[0]
+        if attempt == 0:
+            continue  # retry with a fresh position read
+    raise HTTPException(status_code=500, detail="Failed to create experience entry")
 
 
 @app.put("/experience/reorder")
