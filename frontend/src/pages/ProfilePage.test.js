@@ -63,14 +63,20 @@ function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE } = {}) {
     if (opts.method === 'PUT') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(saveProfile) });
     }
+    if (url.includes('/experience')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
     return Promise.resolve({ ok: true, json: () => Promise.resolve(getProfile) });
   });
 }
 
 function mockFetchGetError(status = 500, message = 'Internal Server Error') {
-  global.fetch = jest.fn(() =>
-    Promise.resolve({ ok: false, status, text: () => Promise.resolve(message) })
-  );
+  global.fetch = jest.fn((url) => {
+    if (url.includes('/experience')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
+    return Promise.resolve({ ok: false, status, text: () => Promise.resolve(message) });
+  });
 }
 
 function mockFetchSaveError(status = 500, text = 'Server Error') {
@@ -78,12 +84,20 @@ function mockFetchSaveError(status = 500, text = 'Server Error') {
     if (opts.method === 'PUT') {
       return Promise.resolve({ ok: false, status, text: () => Promise.resolve(text) });
     }
+    if (url.includes('/experience')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
   });
 }
 
 function mockFetchNetworkError(message = 'Network error') {
-  global.fetch = jest.fn(() => Promise.reject(new Error(message)));
+  global.fetch = jest.fn((url) => {
+    if (url.includes('/experience')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
+    return Promise.reject(new Error(message));
+  });
 }
 
 function makePendingSave() {
@@ -93,6 +107,9 @@ function makePendingSave() {
   });
   global.fetch = jest.fn((url, opts = {}) => {
     if (opts.method === 'PUT') return promise;
+    if (url.includes('/experience')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
   });
   return () => resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
@@ -451,8 +468,11 @@ describe('save — success', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const [url, opts] = global.fetch.mock.calls[1];
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+      expect(putCall).toBeDefined();
+    });
+    const [url, opts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
     expect(url).toBe(`${BACKEND}/profile`);
     expect(opts.method).toBe('PUT');
     const body = JSON.parse(opts.body);
@@ -464,8 +484,11 @@ describe('save — success', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const [, opts] = global.fetch.mock.calls[1];
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+      expect(putCall).toBeDefined();
+    });
+    const [, opts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
     expect(opts.headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
   });
 
@@ -495,8 +518,12 @@ describe('save — success', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     await userEvent.type(screen.getByLabelText(/full name/i), '   ');
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const body = JSON.parse(global.fetch.mock.calls[1][1].body);
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+      expect(putCall).toBeDefined();
+    });
+    const [, opts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+    const body = JSON.parse(opts.body);
     expect(body.full_name).toBeNull();
   });
 
@@ -716,8 +743,12 @@ describe('fetch payload', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const body = JSON.parse(global.fetch.mock.calls[1][1].body);
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+      expect(putCall).toBeDefined();
+    });
+    const [, putOpts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+    const body = JSON.parse(putOpts.body);
     for (const field of [
       'full_name',
       'headline',
@@ -745,8 +776,12 @@ describe('fetch payload', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const body = JSON.parse(global.fetch.mock.calls[1][1].body);
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+      expect(putCall).toBeDefined();
+    });
+    const [, putOpts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+    const body = JSON.parse(putOpts.body);
     expect(body.full_name).toBeNull();
     expect(body.summary).toBeNull();
   });
