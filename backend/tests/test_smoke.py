@@ -900,6 +900,14 @@ def test_get_career_preferences_returns_empty_when_none():
     assert response.json() == {}
 
 
+def test_get_career_preferences_returns_500_on_db_failure():
+    mock_sb, _, mock_result = make_mock_sb(data=None)
+    mock_result.data = None
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/career-preferences", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 500
+
+
 def test_get_career_preferences_scoped_to_user():
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PREFS])
     with patch("main.get_supabase", return_value=mock_sb):

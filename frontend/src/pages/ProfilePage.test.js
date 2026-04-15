@@ -58,10 +58,28 @@ const COMPLETE_COMPLETION = {
   required_count: REQUIRED_FIELD_KEYS.length,
 };
 
-function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE } = {}) {
+const SAMPLE_PREFS = {
+  id: 'prefs-1',
+  user_id: 'user-1',
+  target_roles: 'Software Engineer',
+  preferred_locations: 'New York, NY',
+  work_mode: 'hybrid',
+  salary_min: 80000,
+  salary_max: 120000,
+};
+
+function mockFetch({
+  getProfile = {},
+  saveProfile = SAMPLE_PROFILE,
+  getPrefs = {},
+  savePrefs = SAMPLE_PREFS,
+} = {}) {
   global.fetch = jest.fn((url, opts = {}) => {
     if (url.includes('/career-preferences')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      if (opts.method === 'PUT') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(savePrefs) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(getPrefs) });
     }
     if (opts.method === 'PUT') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(saveProfile) });
@@ -776,7 +794,8 @@ describe('fetch payload', () => {
   test('GET /profile is called with Authorization header', async () => {
     renderPage();
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    const [url, opts] = global.fetch.mock.calls[0];
+    const profileCall = global.fetch.mock.calls.find(([u]) => u === `${BACKEND}/profile`);
+    const [url, opts] = profileCall;
     expect(url).toBe(`${BACKEND}/profile`);
     expect(opts.headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
   });
@@ -798,5 +817,123 @@ describe('fetch payload', () => {
     const body = JSON.parse(opts.body);
     expect(body.full_name).toBeNull();
     expect(body.summary).toBeNull();
+  });
+});
+
+// ─── Career Preferences section ───────────────────────────────────────────────
+
+describe('career preferences section', () => {
+  test('renders Career Preferences section heading', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /career preferences/i })
+      ).toBeInTheDocument();
+    });
+  });
+
+  test('renders all career preferences fields', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByLabelText(/target roles/i)).toBeInTheDocument()
+    );
+    expect(screen.getByLabelText(/preferred locations/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/work mode/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/minimum salary/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/maximum salary/i)).toBeInTheDocument();
+  });
+
+  test('pre-fills career preferences from fetched data', async () => {
+    mockFetch({ getPrefs: SAMPLE_PREFS });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByLabelText(/target roles/i)).toHaveValue('Software Engineer')
+    );
+    expect(screen.getByLabelText(/preferred locations/i)).toHaveValue('New York, NY');
+    expect(screen.getByLabelText(/work mode/i)).toHaveValue('hybrid');
+    expect(screen.getByLabelText(/minimum salary/i)).toHaveValue(80000);
+    expect(screen.getByLabelText(/maximum salary/i)).toHaveValue(120000);
+  });
+
+  test('renders Save Preferences button', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /save preferences/i })).toBeInTheDocument();
+    });
+  });
+
+  test('submits PUT to /career-preferences on save', async () => {
+    mockFetch({ getPrefs: SAMPLE_PREFS });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByLabelText(/target roles/i)).toHaveValue('Software Engineer')
+    );
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(
+        ([url, opts = {}]) =>
+          url === `${BACKEND}/career-preferences` && opts.method === 'PUT'
+      );
+      expect(putCall).toBeDefined();
+    });
+    const [url, opts] = global.fetch.mock.calls.find(
+      ([u, o = {}]) => u === `${BACKEND}/career-preferences` && o.method === 'PUT'
+    );
+    expect(url).toBe(`${BACKEND}/career-preferences`);
+    const body = JSON.parse(opts.body);
+    expect(body).toHaveProperty('target_roles');
+    expect(body).toHaveProperty('salary_min');
+    expect(body).toHaveProperty('salary_max');
+  });
+
+  test('shows "Career preferences saved successfully." after save', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save preferences/i })).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+    await waitFor(() => {
+      expect(
+        screen.getByText(/career preferences saved successfully/i)
+      ).toBeInTheDocument();
+    });
+  });
+
+  test('shows save error when PUT /career-preferences fails', async () => {
+    global.fetch = jest.fn((url, opts = {}) => {
+      if (url.includes('/career-preferences') && opts.method === 'PUT') {
+        return Promise.resolve({
+          ok: false,
+          status: 422,
+          text: () => Promise.resolve('Invalid work_mode'),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save preferences/i })).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/invalid work_mode/i)).toBeInTheDocument();
+    });
+  });
+
+  test('success message disappears after editing a preferences field', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save preferences/i })).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/career preferences saved successfully/i)).toBeInTheDocument()
+    );
+    fireEvent.change(screen.getByLabelText(/target roles/i), {
+      target: { value: 'Frontend Engineer' },
+    });
+    expect(
+      screen.queryByText(/career preferences saved successfully/i)
+    ).not.toBeInTheDocument();
   });
 });

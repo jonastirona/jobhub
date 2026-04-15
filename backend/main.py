@@ -277,6 +277,8 @@ def get_career_preferences(authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
     sb = get_supabase()
     response = sb.table("career_preferences").select("*").eq("user_id", user_id).execute()
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch career preferences")
     return response.data[0] if response.data else {}
 
 
