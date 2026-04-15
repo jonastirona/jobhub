@@ -5,6 +5,7 @@ import AppShell from '../components/layout/AppShell';
 import StatCard from '../components/common/StatCard';
 import StatusBadge from '../components/common/StatusBadge';
 import JobForm from '../components/JobForm/JobForm';
+import JobOverviewModal from '../components/JobOverviewModal/JobOverviewModal';
 import { jobMatchesSearchQuery } from '../utils/jobSearch';
 import '../styles/Dashboard.css';
 
@@ -78,6 +79,7 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const { jobs, loading, error, refetch } = useJobs(session?.access_token, searchTerm);
   const [formState, setFormState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', job }
+  const [viewJob, setViewJob] = useState(null);
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
   const filteredJobs = jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm));
 
@@ -118,15 +120,26 @@ export default function Dashboard() {
   ];
 
   function openCreate() {
+    setViewJob(null);
     setFormState({ mode: 'create' });
   }
 
   function openEdit(job) {
+    setViewJob(null);
     setFormState({ mode: 'edit', job });
+  }
+
+  function openView(job) {
+    setFormState(null);
+    setViewJob(job);
   }
 
   function closeForm() {
     setFormState(null);
+  }
+
+  function closeView() {
+    setViewJob(null);
   }
 
   function handleSaved() {
@@ -239,6 +252,7 @@ export default function Dashboard() {
                             type="button"
                             className="action-btn"
                             aria-label="View application"
+                            onClick={() => openView(job)}
                           >
                             👁
                           </button>
@@ -299,6 +313,8 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {viewJob && <JobOverviewModal job={viewJob} onClose={closeView} />}
 
       {formState && (
         <JobForm
