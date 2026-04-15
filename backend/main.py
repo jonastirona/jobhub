@@ -331,6 +331,8 @@ def create_experience(entry: ExperienceCreate, authorization: Optional[str] = He
     payload["company"] = entry.company.strip()
     if "location" in payload:
         payload["location"] = entry.location.strip() or None
+    if "description" in payload:
+        payload["description"] = entry.description.strip() or None
     payload["user_id"] = user_id
     payload["position"] = position
     response = sb.table("experience").insert(payload).execute()
@@ -419,6 +421,8 @@ def update_experience(
             raise HTTPException(status_code=422, detail="company must not be blank")
     if "location" in payload:
         payload["location"] = (payload["location"] or "").strip() or None
+    if "description" in payload:
+        payload["description"] = (payload["description"] or "").strip() or None
     existing_resp = (
         sb.table("experience").select("*").eq("id", entry_id).eq("user_id", user_id).execute()
     )

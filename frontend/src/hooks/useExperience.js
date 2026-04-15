@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 async function extractErrorMessage(res) {
+  const text = await res.text().catch(() => '');
   const contentType = res.headers?.get?.('content-type') ?? '';
   if (contentType.includes('application/json')) {
-    const body = await res.json().catch(() => null);
-    if (typeof body?.detail === 'string') return body.detail;
-    if (body?.detail != null) return JSON.stringify(body.detail);
-    if (body != null) return JSON.stringify(body);
+    try {
+      const body = JSON.parse(text);
+      if (typeof body?.detail === 'string') return body.detail;
+      if (body?.detail != null) return JSON.stringify(body.detail);
+      if (body != null) return JSON.stringify(body);
+    } catch {
+      // fall through to raw text
+    }
   }
-  return res.text().catch(() => '');
+  return text;
 }
 
 export function useExperience(accessToken) {

@@ -260,13 +260,14 @@ describe('addExperience', () => {
   });
 
   test('extracts detail string from JSON error body', async () => {
+    const errBody = JSON.stringify({ detail: 'end_year must be >= start_year' });
     global.fetch = jest.fn((url, opts = {}) => {
       if (opts.method === 'POST') {
         return Promise.resolve({
           ok: false,
           status: 400,
           headers: { get: () => 'application/json' },
-          json: () => Promise.resolve({ detail: 'end_year must be >= start_year' }),
+          text: () => Promise.resolve(errBody),
         });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve(SAMPLE_EXPERIENCE) });

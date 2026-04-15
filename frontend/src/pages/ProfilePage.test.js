@@ -60,11 +60,11 @@ const COMPLETE_COMPLETION = {
 
 function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE } = {}) {
   global.fetch = jest.fn((url, opts = {}) => {
-    if (opts.method === 'PUT') {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(saveProfile) });
-    }
     if (url.includes('/experience')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
+    if (opts.method === 'PUT' && url.endsWith('/profile')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(saveProfile) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve(getProfile) });
   });
@@ -81,11 +81,11 @@ function mockFetchGetError(status = 500, message = 'Internal Server Error') {
 
 function mockFetchSaveError(status = 500, text = 'Server Error') {
   global.fetch = jest.fn((url, opts = {}) => {
-    if (opts.method === 'PUT') {
-      return Promise.resolve({ ok: false, status, text: () => Promise.resolve(text) });
-    }
     if (url.includes('/experience')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
+    if (opts.method === 'PUT' && url.endsWith('/profile')) {
+      return Promise.resolve({ ok: false, status, text: () => Promise.resolve(text) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
   });
@@ -106,10 +106,10 @@ function makePendingSave() {
     resolve = res;
   });
   global.fetch = jest.fn((url, opts = {}) => {
-    if (opts.method === 'PUT') return promise;
     if (url.includes('/experience')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
     }
+    if (opts.method === 'PUT' && url.endsWith('/profile')) return promise;
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
   });
   return () => resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
@@ -578,7 +578,11 @@ describe('save — error', () => {
 
   test('shows network error message when fetch rejects on save', async () => {
     global.fetch = jest.fn((url, opts = {}) => {
-      if (opts.method === 'PUT') return Promise.reject(new Error('Connection refused'));
+      if (url.includes('/experience')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      if (opts.method === 'PUT' && url.endsWith('/profile'))
+        return Promise.reject(new Error('Connection refused'));
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
     renderPage();
@@ -604,7 +608,10 @@ describe('save — error', () => {
     // First save succeeds, second fails
     let callCount = 0;
     global.fetch = jest.fn((url, opts = {}) => {
-      if (opts.method === 'PUT') {
+      if (url.includes('/experience')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      if (opts.method === 'PUT' && url.endsWith('/profile')) {
         callCount++;
         if (callCount === 1) {
           return Promise.resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
