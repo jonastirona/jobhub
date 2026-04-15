@@ -350,11 +350,21 @@ def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(def
             detail="ids must contain each of the authenticated user's skills exactly once",
         )
     if data.ids:
-        updates = [
+        # Phase 1: shift all positions to temporary values (len + original index) to avoid
+        # violating the UNIQUE (user_id, position) constraint during swaps.
+        temp_updates = [
+            {"id": skill_id, "user_id": user_id, "position": len(data.ids) + i}
+            for i, skill_id in enumerate(data.ids)
+        ]
+        temp_resp = sb.table("skills").upsert(temp_updates, on_conflict="id").execute()
+        if temp_resp.data is None:
+            raise HTTPException(status_code=500, detail="Failed to reorder skills")
+        # Phase 2: write the final 0..n-1 positions.
+        final_updates = [
             {"id": skill_id, "user_id": user_id, "position": position}
             for position, skill_id in enumerate(data.ids)
         ]
-        update_resp = sb.table("skills").upsert(updates, on_conflict="id").execute()
+        update_resp = sb.table("skills").upsert(final_updates, on_conflict="id").execute()
         if update_resp.data is None:
             raise HTTPException(status_code=500, detail="Failed to reorder skills")
     response = sb.table("skills").select("*").eq("user_id", user_id).order("position").execute()

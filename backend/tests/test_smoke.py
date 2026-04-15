@@ -1077,9 +1077,10 @@ def test_create_skill_db_failure_returns_500():
 def test_reorder_skills_success():
     skill2 = {**SAMPLE_SKILL, "id": "skill-uuid-2222", "name": "Python", "position": 1}
     reordered = [{**skill2, "position": 0}, {**SAMPLE_SKILL, "position": 1}]
-    # 1 select existing IDs + 1 upsert + 1 final select
+    # 1 select existing IDs + 1 temp upsert + 1 final upsert + 1 final select
     mock_sb, _ = _make_mock_sb_with_side_effects(
         [{"id": skill2["id"]}, {"id": SAMPLE_SKILL["id"]}],
+        reordered,
         reordered,
         reordered,
     )
