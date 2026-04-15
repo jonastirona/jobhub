@@ -988,8 +988,8 @@ def test_create_skill_sets_user_id():
 
 
 def test_create_skill_sets_position_from_count():
-    """position equals the count of pre-existing skills."""
-    existing = [{"id": "s1"}, {"id": "s2"}]
+    """position is max(existing positions) + 1."""
+    existing = [{"position": 0}, {"position": 1}]
     mock_sb, mock_query = _make_mock_sb_with_side_effects(existing, [SAMPLE_SKILL])
     with patch("main.get_supabase", return_value=mock_sb):
         client.post(
@@ -1041,10 +1041,10 @@ def test_create_skill_db_failure_returns_500():
 def test_reorder_skills_success():
     skill2 = {**SAMPLE_SKILL, "id": "skill-uuid-2222", "name": "Python", "position": 1}
     reordered = [{**skill2, "position": 0}, {**SAMPLE_SKILL, "position": 1}]
-    # 2 update execute()s (one per skill) + 1 final select execute()
+    # 1 select existing IDs + 1 upsert + 1 final select
     mock_sb, _ = _make_mock_sb_with_side_effects(
-        [{"id": skill2["id"]}],
-        [{"id": SAMPLE_SKILL["id"]}],
+        [{"id": skill2["id"]}, {"id": SAMPLE_SKILL["id"]}],
+        reordered,
         reordered,
     )
     with patch("main.get_supabase", return_value=mock_sb):
@@ -1061,8 +1061,8 @@ def test_reorder_skills_success():
 
 
 def test_reorder_skills_empty_ids():
-    # no update executes, just the final select
-    mock_sb, _ = _make_mock_sb_with_side_effects([])
+    # select existing IDs (empty), skip upsert, final select
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [])
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.put(
             "/skills/reorder",

@@ -299,10 +299,10 @@ def create_skill(skill: SkillCreate, authorization: Optional[str] = Header(defau
             status_code=422,
             detail=f"proficiency must be one of: {', '.join(sorted(VALID_PROFICIENCY_LEVELS))}",
         )
-    count_resp = sb.table("skills").select("id").eq("user_id", user_id).execute()
+    count_resp = sb.table("skills").select("position").eq("user_id", user_id).execute()
     if count_resp.data is None:
         raise HTTPException(status_code=500, detail="Failed to determine skill position")
-    position = len(count_resp.data)
+    position = max((r["position"] for r in count_resp.data), default=-1) + 1
     payload = skill.model_dump(exclude_none=True)
     payload["user_id"] = user_id
     payload["position"] = position
@@ -318,10 +318,25 @@ def create_skill(skill: SkillCreate, authorization: Optional[str] = Header(defau
 def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
     sb = get_supabase()
-    for position, skill_id in enumerate(data.ids):
-        sb.table("skills").update({"position": position}).eq("id", skill_id).eq(
-            "user_id", user_id
-        ).execute()
+    existing_resp = sb.table("skills").select("id").eq("user_id", user_id).execute()
+    if existing_resp.data is None:
+        raise HTTPException(status_code=500, detail="Failed to validate skills for reorder")
+    existing_ids = [r["id"] for r in existing_resp.data]
+    if len(data.ids) != len(set(data.ids)):
+        raise HTTPException(status_code=400, detail="Skill ids must be unique")
+    if set(data.ids) != set(existing_ids):
+        raise HTTPException(
+            status_code=400,
+            detail="ids must contain each of the authenticated user's skills exactly once",
+        )
+    if data.ids:
+        updates = [
+            {"id": skill_id, "user_id": user_id, "position": position}
+            for position, skill_id in enumerate(data.ids)
+        ]
+        update_resp = sb.table("skills").upsert(updates, on_conflict="id").execute()
+        if update_resp.data is None:
+            raise HTTPException(status_code=500, detail="Failed to reorder skills")
     response = sb.table("skills").select("*").eq("user_id", user_id).order("position").execute()
     if response.data is None:
         raise HTTPException(status_code=500, detail="Failed to fetch reordered skills")
