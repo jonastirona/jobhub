@@ -493,8 +493,8 @@ test('shows delete error when delete request fails', async () => {
   });
 });
 
-// Verifies typing in the top search input immediately updates visible dashboard rows.
-test('filters jobs immediately when typing in search input', async () => {
+// Verifies typing in the dashboard table search input immediately updates visible dashboard rows.
+test('filters jobs immediately when typing in dashboard table search input', async () => {
   global.fetch = jest.fn(() =>
     Promise.resolve({
       ok: true,
