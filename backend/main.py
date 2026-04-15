@@ -313,6 +313,9 @@ def create_skill(skill: SkillCreate, authorization: Optional[str] = Header(defau
         raise HTTPException(status_code=500, detail="Failed to determine skill position")
     position = (position_resp.data[0]["position"] if position_resp.data else -1) + 1
     payload = skill.model_dump(exclude_none=True)
+    payload["name"] = skill.name.strip()
+    if "category" in payload:
+        payload["category"] = skill.category.strip() or None
     payload["user_id"] = user_id
     payload["position"] = position
     response = sb.table("skills").insert(payload).execute()
@@ -361,8 +364,12 @@ def update_skill(
     payload = skill.model_dump(exclude_unset=True)
     if not payload:
         raise HTTPException(status_code=400, detail="No fields to update")
-    if "name" in payload and not (payload["name"] or "").strip():
-        raise HTTPException(status_code=422, detail="name must not be blank")
+    if "name" in payload:
+        payload["name"] = (payload["name"] or "").strip()
+        if not payload["name"]:
+            raise HTTPException(status_code=422, detail="name must not be blank")
+    if "category" in payload:
+        payload["category"] = (payload["category"] or "").strip() or None
     if (
         "proficiency" in payload
         and payload["proficiency"] is not None

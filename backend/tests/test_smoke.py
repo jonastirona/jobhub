@@ -1033,6 +1033,30 @@ def test_create_skill_blank_name_returns_422():
     assert "name" in response.json()["detail"]
 
 
+def test_create_skill_trims_name_before_insert():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([], [SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/skills",
+            json={"name": "  React  "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    insert_payload = mock_query.insert.call_args[0][0]
+    assert insert_payload["name"] == "React"
+
+
+def test_create_skill_blank_category_stored_as_null():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([], [SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/skills",
+            json={"name": "React", "category": "   "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    insert_payload = mock_query.insert.call_args[0][0]
+    assert insert_payload.get("category") is None
+
+
 def test_create_skill_db_failure_returns_500():
     # insert returns empty data
     mock_sb, _ = _make_mock_sb_with_side_effects([], [])
@@ -1135,6 +1159,32 @@ def test_update_skill_blank_name_returns_422():
         )
     assert response.status_code == 422
     assert "name" in response.json()["detail"]
+
+
+def test_update_skill_trims_name_before_update():
+    updated = {**SAMPLE_SKILL, "name": "TypeScript"}
+    mock_sb, mock_query, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            json={"name": "  TypeScript  "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    update_payload = mock_query.update.call_args[0][0]
+    assert update_payload["name"] == "TypeScript"
+
+
+def test_update_skill_blank_category_stored_as_null():
+    updated = {**SAMPLE_SKILL, "category": None}
+    mock_sb, mock_query, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            json={"category": "   "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    update_payload = mock_query.update.call_args[0][0]
+    assert update_payload["category"] is None
 
 
 def test_update_skill_invalid_proficiency_returns_422():
