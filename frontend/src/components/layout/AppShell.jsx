@@ -7,7 +7,9 @@ import TopBar from './TopBar';
 import './AppShell.css';
 
 function isToday(isoString) {
-  const d = new Date(isoString);
+  if (!isoString) return false;
+  const datePart = isoString.split('T')[0];
+  const d = new Date(`${datePart}T00:00:00`);
   const today = new Date();
   return (
     d.getFullYear() === today.getFullYear() &&

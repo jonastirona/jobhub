@@ -2,20 +2,36 @@ import { useState } from 'react';
 import { useJobs } from '../../hooks/useJobs';
 import './ReminderPanel.css';
 
+function parseLocalDate(isoString) {
+  // Always extract just the YYYY-MM-DD part and parse as local midnight.
+  // If we use the full ISO string (e.g. "2026-04-14T00:00:00+00:00"), the
+  // UTC-to-local conversion shifts the date back a day in timezones west of UTC.
+  if (!isoString) return new Date(NaN);
+  const datePart = isoString.split('T')[0];
+  return new Date(`${datePart}T00:00:00`);
+}
+
 function formatDate(isoString) {
-  const d = new Date(isoString);
+  const d = parseLocalDate(isoString);
   if (isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function isToday(isoString) {
-  const d = new Date(isoString);
+  const d = parseLocalDate(isoString);
   const today = new Date();
   return (
     d.getFullYear() === today.getFullYear() &&
     d.getMonth() === today.getMonth() &&
     d.getDate() === today.getDate()
   );
+}
+
+function isPastDue(isoString) {
+  const d = parseLocalDate(isoString);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d < today;
 }
 
 export default function ReminderPanel({ accessToken, reminders, onClose, onRefetch }) {
@@ -49,7 +65,7 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
           job_id: form.job_id,
           title: form.title.trim(),
           notes: form.notes.trim() || undefined,
-          due_date: new Date(form.due_date).toISOString(),
+          due_date: form.due_date,
         }),
       });
       if (!res.ok) {
@@ -123,7 +139,7 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
           {pending.length > 0 && (
             <ul className="rp-list">
               {pending.map((r) => (
-                <li key={r.id} className={`rp-item${isToday(r.due_date) ? ' rp-item--due' : ''}`}>
+                <li key={r.id} className={`rp-item${isToday(r.due_date) ? ' rp-item--due' : isPastDue(r.due_date) ? ' rp-item--overdue' : ''}`}>
                   <div className="rp-item-main">
                     <span className="rp-item-title">{r.title}</span>
                     <span className="rp-item-job">
@@ -131,7 +147,7 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
                     </span>
                     {r.notes && <span className="rp-item-notes">{r.notes}</span>}
                     <span className="rp-item-date">
-                      {isToday(r.due_date) ? 'Due today' : formatDate(r.due_date)}
+                      {isToday(r.due_date) ? 'Due today' : isPastDue(r.due_date) ? `Overdue · ${formatDate(r.due_date)}` : formatDate(r.due_date)}
                     </span>
                   </div>
                   <div className="rp-item-actions">

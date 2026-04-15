@@ -101,6 +101,11 @@
   background: rgba(249, 115, 22, 0.04);
 }
 
+.rp-item--overdue {
+  border-color: var(--red, #ef4444);
+  background: rgba(239, 68, 68, 0.04);
+}
+
 .rp-item--completed {
   opacity: 0.55;
 }
@@ -137,6 +142,11 @@
 
 .rp-item--due .rp-item-date {
   color: var(--orange-500);
+  font-weight: 600;
+}
+
+.rp-item--overdue .rp-item-date {
+  color: var(--red, #ef4444);
   font-weight: 600;
 }
 
