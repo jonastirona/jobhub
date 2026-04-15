@@ -297,9 +297,7 @@ def upsert_career_preferences(
     if "salary_max" in payload and payload["salary_max"] is not None and payload["salary_max"] < 0:
         raise HTTPException(status_code=422, detail="salary_max must be non-negative")
     payload["user_id"] = user_id
-    response = (
-        sb.table("career_preferences").upsert(payload, on_conflict="user_id").execute()
-    )
+    response = sb.table("career_preferences").upsert(payload, on_conflict="user_id").execute()
     if not response.data:
         raise HTTPException(status_code=500, detail="Failed to save career preferences")
     return response.data[0]
