@@ -6,7 +6,6 @@ export function useCareerPreferences(accessToken) {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
-  const pendingFetchRef = useRef(null);
   const pendingSaveRef = useRef(null);
 
   const fetchPreferences = useCallback(
@@ -45,11 +44,9 @@ export function useCareerPreferences(accessToken) {
 
   useEffect(() => {
     const controller = new AbortController();
-    pendingFetchRef.current = controller;
     fetchPreferences(controller.signal);
     return () => {
       controller.abort();
-      pendingFetchRef.current = null;
     };
   }, [fetchPreferences]);
 

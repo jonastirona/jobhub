@@ -60,11 +60,11 @@ const COMPLETE_COMPLETION = {
 
 function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE } = {}) {
   global.fetch = jest.fn((url, opts = {}) => {
-    if (opts.method === 'PUT') {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(saveProfile) });
-    }
     if (url.includes('/career-preferences')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }
+    if (opts.method === 'PUT') {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(saveProfile) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve(getProfile) });
   });

@@ -300,10 +300,28 @@ def upsert_career_preferences(
         raise HTTPException(status_code=422, detail="salary_min must be non-negative")
     if "salary_max" in payload and payload["salary_max"] is not None and payload["salary_max"] < 0:
         raise HTTPException(status_code=422, detail="salary_max must be non-negative")
-    salary_min = payload.get("salary_min")
-    salary_max = payload.get("salary_max")
-    if salary_min is not None and salary_max is not None and salary_min > salary_max:
-        raise HTTPException(status_code=422, detail="salary_min must not exceed salary_max")
+    if "salary_min" in payload or "salary_max" in payload:
+        existing_salary: dict = {}
+        if "salary_min" not in payload or "salary_max" not in payload:
+            existing_resp = (
+                sb.table("career_preferences")
+                .select("salary_min,salary_max")
+                .eq("user_id", user_id)
+                .execute()
+            )
+            existing_salary = existing_resp.data[0] if existing_resp.data else {}
+        effective_min = (
+            payload["salary_min"] if "salary_min" in payload else existing_salary.get("salary_min")
+        )
+        effective_max = (
+            payload["salary_max"] if "salary_max" in payload else existing_salary.get("salary_max")
+        )
+        if (
+            effective_min is not None
+            and effective_max is not None
+            and effective_min > effective_max
+        ):
+            raise HTTPException(status_code=422, detail="salary_min must not exceed salary_max")
     payload["user_id"] = user_id
     response = sb.table("career_preferences").upsert(payload, on_conflict="user_id").execute()
     if not response.data:

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS career_preferences (
   work_mode           TEXT CHECK (work_mode IN ('remote', 'hybrid', 'onsite', 'any')),
   salary_min          INTEGER CHECK (salary_min IS NULL OR salary_min >= 0),
   salary_max          INTEGER CHECK (salary_max IS NULL OR salary_max >= 0),
+  CHECK (salary_min IS NULL OR salary_max IS NULL OR salary_min <= salary_max),
   created_at          TIMESTAMPTZ DEFAULT now() NOT NULL,
   updated_at          TIMESTAMPTZ DEFAULT now() NOT NULL
 );
