@@ -9,7 +9,7 @@ create table if not exists education (
   field_of_study text         not null,
   start_year     integer      not null check (start_year >= 1900),
   end_year       integer      check (end_year is null or end_year >= start_year),
-  gpa            numeric(3,2) check (gpa is null or gpa >= 0),
+  gpa            numeric(3,2) check (gpa is null or (gpa >= 0 and gpa <= 9.99)),
   description    text,
   created_at     timestamptz  not null default now(),
   updated_at     timestamptz  not null default now()

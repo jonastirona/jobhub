@@ -170,7 +170,7 @@ export default function ProfilePage() {
       field_of_study: educationForm.field_of_study.trim(),
       start_year: parseInt(educationForm.start_year, 10),
       end_year: educationForm.end_year ? parseInt(educationForm.end_year, 10) : null,
-      gpa: educationForm.gpa ? parseFloat(educationForm.gpa) : null,
+      gpa: educationForm.gpa.trim() !== '' ? parseFloat(educationForm.gpa) : null,
       description: educationForm.description.trim() || null,
     };
     const saved = editingEducationId

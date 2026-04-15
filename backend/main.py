@@ -128,7 +128,7 @@ class EducationCreate(BaseModel):
     field_of_study: str
     start_year: int
     end_year: Optional[int] = None
-    gpa: Optional[float] = Field(default=None, ge=0)
+    gpa: Optional[float] = Field(default=None, ge=0, le=9.99)
     description: Optional[str] = None
 
 
@@ -138,7 +138,7 @@ class EducationUpdate(BaseModel):
     field_of_study: Optional[str] = None
     start_year: Optional[int] = None
     end_year: Optional[int] = None
-    gpa: Optional[float] = Field(default=None, ge=0)
+    gpa: Optional[float] = Field(default=None, ge=0, le=9.99)
     description: Optional[str] = None
 
 

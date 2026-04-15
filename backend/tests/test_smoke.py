@@ -1025,6 +1025,23 @@ def test_create_education_negative_gpa_returns_422():
     assert response.status_code == 422
 
 
+def test_create_education_gpa_too_large_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "BS",
+                "field_of_study": "CS",
+                "start_year": 2022,
+                "gpa": 10.0,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
 def test_create_education_db_failure_returns_500():
     mock_sb, _, _ = make_mock_sb(data=[])
     with patch("main.get_supabase", return_value=mock_sb):

@@ -1,5 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+async function extractErrorMessage(res) {
+  const contentType = res.headers?.get?.('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    const body = await res.json().catch(() => null);
+    if (typeof body?.detail === 'string') return body.detail;
+    if (body?.detail != null) return JSON.stringify(body.detail);
+    if (body != null) return JSON.stringify(body);
+  }
+  return res.text().catch(() => '');
+}
+
+const byStartYearDesc = (a, b) => (b.start_year ?? 0) - (a.start_year ?? 0);
+
 export function useEducation(accessToken) {
   const [education, setEducation] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -81,12 +94,12 @@ export function useEducation(accessToken) {
           signal: controller.signal,
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Failed to add education entry (${res.status})`);
+          const message = await extractErrorMessage(res);
+          throw new Error(message || `Failed to add education entry (${res.status})`);
         }
         const created = await res.json();
         if (controller.signal.aborted) return false;
-        setEducation((prev) => [created, ...prev]);
+        setEducation((prev) => [...prev, created].sort(byStartYearDesc));
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
@@ -126,12 +139,12 @@ export function useEducation(accessToken) {
           signal: controller.signal,
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Failed to update education entry (${res.status})`);
+          const message = await extractErrorMessage(res);
+          throw new Error(message || `Failed to update education entry (${res.status})`);
         }
         const updated = await res.json();
         if (controller.signal.aborted) return false;
-        setEducation((prev) => prev.map((e) => (e.id === id ? updated : e)));
+        setEducation((prev) => prev.map((e) => (e.id === id ? updated : e)).sort(byStartYearDesc));
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
@@ -167,8 +180,8 @@ export function useEducation(accessToken) {
           signal: controller.signal,
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Failed to delete education entry (${res.status})`);
+          const message = await extractErrorMessage(res);
+          throw new Error(message || `Failed to delete education entry (${res.status})`);
         }
         if (controller.signal.aborted) return false;
         setEducation((prev) => prev.filter((e) => e.id !== id));
