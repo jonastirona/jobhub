@@ -62,6 +62,7 @@ export function useSkills(accessToken) {
   useEffect(() => {
     return () => {
       pendingSaveRef.current?.abort();
+      pendingSaveRef.current = null;
     };
   }, []);
 
@@ -98,6 +99,7 @@ export function useSkills(accessToken) {
         const created = await res.json();
         if (controller.signal.aborted) return false;
         setSkills((prev) => [...prev, created]);
+        setError(null);
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
@@ -143,6 +145,7 @@ export function useSkills(accessToken) {
         const updated = await res.json();
         if (controller.signal.aborted) return false;
         setSkills((prev) => prev.map((s) => (s.id === id ? updated : s)));
+        setError(null);
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
@@ -183,6 +186,7 @@ export function useSkills(accessToken) {
         }
         if (controller.signal.aborted) return false;
         setSkills((prev) => prev.filter((s) => s.id !== id));
+        setError(null);
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
@@ -228,6 +232,7 @@ export function useSkills(accessToken) {
         const reordered = await res.json();
         if (controller.signal.aborted) return false;
         setSkills(reordered);
+        setError(null);
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
