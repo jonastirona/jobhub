@@ -80,7 +80,6 @@ export default function Dashboard() {
   const { jobs, loading, error, refetch } = useJobs(session?.access_token, searchTerm);
   const [formState, setFormState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', job }
   const [viewJob, setViewJob] = useState(null);
-  const normalizedSearchTerm = searchTerm.trim().toLowerCase();
   const filteredJobs = jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm));
 
   const totalApplications = filteredJobs.length;
