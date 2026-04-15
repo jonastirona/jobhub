@@ -7,6 +7,7 @@ import StatusBadge from '../components/common/StatusBadge';
 import JobForm from '../components/JobForm/JobForm';
 import JobOverviewModal from '../components/JobOverviewModal/JobOverviewModal';
 import { jobMatchesSearchQuery } from '../utils/jobSearch';
+import JobHistory from '../components/JobHistory/JobHistory';
 import '../styles/Dashboard.css';
 
 const COMPANY_GRADIENTS = {
@@ -81,6 +82,7 @@ export default function Dashboard() {
   const [formState, setFormState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', job }
   const [viewJob, setViewJob] = useState(null);
   const filteredJobs = jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm));
+  const [historyJob, setHistoryJob] = useState(null);
 
   const totalApplications = filteredJobs.length;
   const interviews = filteredJobs.filter(
@@ -120,16 +122,19 @@ export default function Dashboard() {
 
   function openCreate() {
     setViewJob(null);
+    setHistoryJob(null);
     setFormState({ mode: 'create' });
   }
 
   function openEdit(job) {
     setViewJob(null);
+    setHistoryJob(null);
     setFormState({ mode: 'edit', job });
   }
 
   function openView(job) {
     setFormState(null);
+    setHistoryJob(null);
     setViewJob(job);
   }
 
@@ -258,6 +263,17 @@ export default function Dashboard() {
                           <button
                             type="button"
                             className="action-btn"
+                            aria-label="View stage history"
+                            onClick={() => {
+                              setViewJob(null);
+                              setHistoryJob(job);
+                            }}
+                          >
+                            🕒
+                          </button>
+                          <button
+                            type="button"
+                            className="action-btn"
                             aria-label="Edit application"
                             onClick={() => openEdit(job)}
                           >
@@ -322,6 +338,15 @@ export default function Dashboard() {
           job={formState.job}
           accessToken={session?.access_token}
           onClose={closeForm}
+          onSaved={handleSaved}
+        />
+      )}
+
+      {historyJob && (
+        <JobHistory
+          job={historyJob}
+          accessToken={session?.access_token}
+          onClose={() => setHistoryJob(null)}
           onSaved={handleSaved}
         />
       )}

@@ -433,7 +433,8 @@ def test_create_job_serializes_deadline_in_insert_payload():
             },
             headers={"authorization": AUTH_HEADER},
         )
-    inserted = mock_query.insert.call_args[0][0]
+    # First insert call is for `jobs`; later insert calls may target history.
+    inserted = mock_query.insert.call_args_list[0][0][0]
     assert inserted["deadline"] == "2026-08-20"
     assert inserted["recruiter_notes"] == "  HR: Pat  "
 
@@ -577,6 +578,221 @@ def test_update_job_partial_fields():
     update_payload = mock_query.update.call_args[0][0]
     assert update_payload == {"title": "Staff Engineer"}
     assert "company" not in update_payload
+
+
+# ---------------------------------------------------------------------------
+# GET /jobs/{job_id}/history
+# ---------------------------------------------------------------------------
+
+SAMPLE_HISTORY = [
+    {
+        "id": "h1",
+        "job_id": SAMPLE_JOB["id"],
+        "user_id": MOCK_USER_ID,
+        "from_status": None,
+        "to_status": "applied",
+        "changed_at": "2026-04-01T00:00:00+00:00",
+    },
+    {
+        "id": "h2",
+        "job_id": SAMPLE_JOB["id"],
+        "user_id": MOCK_USER_ID,
+        "from_status": "applied",
+        "to_status": "interviewing",
+        "changed_at": "2026-04-05T14:32:00+00:00",
+    },
+]
+
+
+def test_get_job_history_requires_auth():
+    response = client.get(f"/jobs/{SAMPLE_JOB['id']}/history")
+    assert response.status_code == 401
+
+
+def test_get_job_history_returns_entries():
+    mock_sb, _, _ = make_mock_sb(data=SAMPLE_HISTORY)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            f"/jobs/{SAMPLE_JOB['id']}/history",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert body[0]["to_status"] == "applied"
+    assert body[1]["from_status"] == "applied"
+    assert body[1]["to_status"] == "interviewing"
+
+
+def test_get_job_history_empty():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            f"/jobs/{SAMPLE_JOB['id']}/history",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_get_job_history_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=SAMPLE_HISTORY)
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get(
+            f"/jobs/{SAMPLE_JOB['id']}/history",
+            headers={"authorization": AUTH_HEADER},
+        )
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+def test_get_job_history_scoped_to_job():
+    mock_sb, mock_query, _ = make_mock_sb(data=SAMPLE_HISTORY)
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get(
+            f"/jobs/{SAMPLE_JOB['id']}/history",
+            headers={"authorization": AUTH_HEADER},
+        )
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("job_id", SAMPLE_JOB["id"]) in eq_calls
+
+
+# ---------------------------------------------------------------------------
+# POST /jobs — history side effects
+# ---------------------------------------------------------------------------
+
+
+def test_create_job_inserts_history_row():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/jobs",
+            json={"title": "Engineer", "company": "Acme"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    table_calls = [call[0][0] for call in mock_sb.table.call_args_list]
+    assert "job_status_history" in table_calls
+
+
+def test_create_job_history_row_has_correct_fields():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/jobs",
+            json={"title": "Engineer", "company": "Acme"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    history_payload = mock_query.insert.call_args_list[-1][0][0]
+    assert history_payload["from_status"] is None
+    assert history_payload["to_status"] == SAMPLE_JOB["status"]
+    assert history_payload["user_id"] == MOCK_USER_ID
+    assert history_payload["job_id"] == SAMPLE_JOB["id"]
+
+
+def test_create_job_history_uses_applied_date_as_changed_at():
+    job_with_date = {**SAMPLE_JOB, "applied_date": "2026-04-01"}
+    mock_sb, mock_query, _ = make_mock_sb(data=[job_with_date])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/jobs",
+            json={"title": "Engineer", "company": "Acme", "applied_date": "2026-04-01"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    history_payload = mock_query.insert.call_args_list[-1][0][0]
+    assert history_payload["changed_at"] == "2026-04-01T00:00:00+00:00"
+
+
+def test_create_job_history_omits_changed_at_when_no_applied_date():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/jobs",
+            json={"title": "Engineer", "company": "Acme"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    history_payload = mock_query.insert.call_args_list[-1][0][0]
+    assert "changed_at" not in history_payload
+
+
+# ---------------------------------------------------------------------------
+# PUT /jobs/{job_id} — history side effects
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_sb_with_status_change(old_status, new_status):
+    mock_sb = MagicMock()
+    mock_user_resp = MagicMock()
+    mock_user_resp.user.id = MOCK_USER_ID
+    mock_sb.auth.get_user.return_value = mock_user_resp
+
+    select_result = MagicMock()
+    select_result.data = [{**SAMPLE_JOB, "status": old_status}]
+
+    update_result = MagicMock()
+    update_result.data = [{**SAMPLE_JOB, "status": new_status}]
+
+    history_result = MagicMock()
+    history_result.data = [{"id": "h-new"}]
+
+    mock_query = MagicMock()
+    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order"):
+        getattr(mock_query, method).return_value = mock_query
+    mock_query.execute.side_effect = [select_result, update_result, history_result]
+
+    mock_sb.table.return_value = mock_query
+    return mock_sb, mock_query
+
+
+def test_update_job_inserts_history_on_status_change():
+    mock_sb, mock_query = _make_mock_sb_with_status_change("applied", "interviewing")
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"status": "interviewing"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    table_calls = [call[0][0] for call in mock_sb.table.call_args_list]
+    assert "job_status_history" in table_calls
+
+
+def test_update_job_history_row_captures_transition():
+    mock_sb, mock_query = _make_mock_sb_with_status_change("applied", "interviewing")
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"status": "interviewing"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    history_payload = mock_query.insert.call_args_list[-1][0][0]
+    assert history_payload["from_status"] == "applied"
+    assert history_payload["to_status"] == "interviewing"
+    assert history_payload["job_id"] == SAMPLE_JOB["id"]
+    assert history_payload["user_id"] == MOCK_USER_ID
+
+
+def test_update_job_no_history_when_status_unchanged():
+    mock_sb, mock_query = _make_mock_sb_with_status_change("applied", "applied")
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"status": "applied"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    table_calls = [call[0][0] for call in mock_sb.table.call_args_list]
+    assert "job_status_history" not in table_calls
+
+
+def test_update_job_no_history_when_status_not_in_payload():
+    mock_sb, mock_query = _make_mock_sb_with_status_change("applied", "applied")
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"title": "Senior Engineer"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    table_calls = [call[0][0] for call in mock_sb.table.call_args_list]
+    assert "job_status_history" not in table_calls
 
 
 # ---------------------------------------------------------------------------
