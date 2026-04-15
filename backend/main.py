@@ -122,6 +122,17 @@ class ProfileUpsert(BaseModel):
     summary: Optional[str] = None
 
 
+VALID_WORK_MODES = {"remote", "hybrid", "onsite", "any"}
+
+
+class CareerPreferencesUpsert(BaseModel):
+    target_roles: Optional[str] = None
+    preferred_locations: Optional[str] = None
+    work_mode: Optional[str] = None
+    salary_min: Optional[int] = None
+    salary_max: Optional[int] = None
+
+
 # --- Routes ---
 
 
@@ -256,3 +267,39 @@ def upsert_profile(profile: ProfileUpsert, authorization: Optional[str] = Header
         raise HTTPException(status_code=500, detail="Failed to save profile")
     saved_profile = response.data[0]
     return {"profile": saved_profile, "completion": get_profile_completion(saved_profile)}
+
+
+# --- Career preferences routes ---
+
+
+@app.get("/career-preferences")
+def get_career_preferences(authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = sb.table("career_preferences").select("*").eq("user_id", user_id).execute()
+    return response.data[0] if response.data else {}
+
+
+@app.put("/career-preferences")
+def upsert_career_preferences(
+    prefs: CareerPreferencesUpsert, authorization: Optional[str] = Header(default=None)
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    payload = prefs.model_dump(exclude_unset=True)
+    if "work_mode" in payload and payload["work_mode"] not in VALID_WORK_MODES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"work_mode must be one of: {', '.join(sorted(VALID_WORK_MODES))}",
+        )
+    if "salary_min" in payload and payload["salary_min"] is not None and payload["salary_min"] < 0:
+        raise HTTPException(status_code=422, detail="salary_min must be non-negative")
+    if "salary_max" in payload and payload["salary_max"] is not None and payload["salary_max"] < 0:
+        raise HTTPException(status_code=422, detail="salary_max must be non-negative")
+    payload["user_id"] = user_id
+    response = (
+        sb.table("career_preferences").upsert(payload, on_conflict="user_id").execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=500, detail="Failed to save career preferences")
+    return response.data[0]

@@ -63,14 +63,20 @@ function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE } = {}) {
     if (opts.method === 'PUT') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(saveProfile) });
     }
+    if (url.includes('/career-preferences')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }
     return Promise.resolve({ ok: true, json: () => Promise.resolve(getProfile) });
   });
 }
 
 function mockFetchGetError(status = 500, message = 'Internal Server Error') {
-  global.fetch = jest.fn(() =>
-    Promise.resolve({ ok: false, status, text: () => Promise.resolve(message) })
-  );
+  global.fetch = jest.fn((url) => {
+    if (url.includes('/career-preferences')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }
+    return Promise.resolve({ ok: false, status, text: () => Promise.resolve(message) });
+  });
 }
 
 function mockFetchSaveError(status = 500, text = 'Server Error') {
@@ -83,7 +89,12 @@ function mockFetchSaveError(status = 500, text = 'Server Error') {
 }
 
 function mockFetchNetworkError(message = 'Network error') {
-  global.fetch = jest.fn(() => Promise.reject(new Error(message)));
+  global.fetch = jest.fn((url) => {
+    if (url.includes('/career-preferences')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }
+    return Promise.reject(new Error(message));
+  });
 }
 
 function makePendingSave() {
@@ -226,7 +237,7 @@ describe('rendering — empty profile (no existing data)', () => {
       expect(screen.getByLabelText(/full name/i)).toHaveValue('');
     });
     expect(screen.getByLabelText(/headline/i)).toHaveValue('');
-    expect(screen.getByLabelText(/location/i)).toHaveValue('');
+    expect(screen.getByLabelText('Location')).toHaveValue('');
     expect(screen.getByLabelText(/phone/i)).toHaveValue('');
     expect(screen.getByLabelText(/website/i)).toHaveValue('');
     expect(screen.getByLabelText(/linkedin url/i)).toHaveValue('');
@@ -293,7 +304,7 @@ describe('rendering — existing profile', () => {
       expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith');
     });
     expect(screen.getByLabelText(/headline/i)).toHaveValue('Software Engineer');
-    expect(screen.getByLabelText(/location/i)).toHaveValue('New York, NY');
+    expect(screen.getByLabelText('Location')).toHaveValue('New York, NY');
     expect(screen.getByLabelText(/phone/i)).toHaveValue('555-123-4567');
     expect(screen.getByLabelText(/website/i)).toHaveValue('https://janesmith.dev');
     expect(screen.getByLabelText(/linkedin url/i)).toHaveValue('https://linkedin.com/in/janesmith');
@@ -361,7 +372,7 @@ describe('rendering — existing profile', () => {
     mockFetch({ getProfile: profile });
     renderPage();
     await waitFor(() => {
-      expect(screen.getByLabelText(/location/i)).toHaveValue('');
+      expect(screen.getByLabelText('Location')).toHaveValue('');
     });
     expect(screen.getByLabelText(/phone/i)).toHaveValue('');
     expect(screen.getByLabelText('Summary')).toHaveValue('');
@@ -413,7 +424,7 @@ describe('form interaction', () => {
 
     await userEvent.type(screen.getByLabelText(/full name/i), 'Jane Smith');
     await userEvent.type(screen.getByLabelText(/headline/i), 'Software Engineer');
-    await userEvent.type(screen.getByLabelText(/location/i), 'New York, NY');
+    await userEvent.type(screen.getByLabelText('Location'), 'New York, NY');
     await userEvent.type(screen.getByLabelText(/phone/i), '555-123-4567');
     await userEvent.type(screen.getByLabelText(/website/i), 'https://janesmith.dev');
     await userEvent.type(
@@ -451,8 +462,8 @@ describe('save — success', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const [url, opts] = global.fetch.mock.calls[1];
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
+    const [url, opts] = global.fetch.mock.calls[2];
     expect(url).toBe(`${BACKEND}/profile`);
     expect(opts.method).toBe('PUT');
     const body = JSON.parse(opts.body);
@@ -464,8 +475,8 @@ describe('save — success', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const [, opts] = global.fetch.mock.calls[1];
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
+    const [, opts] = global.fetch.mock.calls[2];
     expect(opts.headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
   });
 
@@ -495,8 +506,8 @@ describe('save — success', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     await userEvent.type(screen.getByLabelText(/full name/i), '   ');
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const body = JSON.parse(global.fetch.mock.calls[1][1].body);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
+    const body = JSON.parse(global.fetch.mock.calls[2][1].body);
     expect(body.full_name).toBeNull();
   });
 
@@ -658,7 +669,7 @@ describe('accessibility', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     expect(screen.getByLabelText(/headline/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/location/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Location')).toBeInTheDocument();
     expect(screen.getByLabelText(/phone/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/website/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/linkedin url/i)).toBeInTheDocument();
@@ -716,8 +727,8 @@ describe('fetch payload', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const body = JSON.parse(global.fetch.mock.calls[1][1].body);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
+    const body = JSON.parse(global.fetch.mock.calls[2][1].body);
     for (const field of [
       'full_name',
       'headline',
@@ -745,8 +756,8 @@ describe('fetch payload', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const body = JSON.parse(global.fetch.mock.calls[1][1].body);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
+    const body = JSON.parse(global.fetch.mock.calls[2][1].body);
     expect(body.full_name).toBeNull();
     expect(body.summary).toBeNull();
   });

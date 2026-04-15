@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { useAuth } from '../context/AuthContext';
+import { useCareerPreferences } from '../hooks/useCareerPreferences';
 import { useProfile } from '../hooks/useProfile';
+import { EMPTY_CAREER_PREFERENCES, WORK_MODES } from '../models/career';
 import { EMPTY_PROFILE, REQUIRED_PROFILE_FIELDS } from '../models/profile';
 import './ProfilePage.css';
 
@@ -12,6 +14,13 @@ function asText(value) {
 function toNullableString(value) {
   const trimmed = asText(value).trim();
   return trimmed === '' ? null : trimmed;
+}
+
+function toNullableInt(value) {
+  const trimmed = asText(value).trim();
+  if (trimmed === '') return null;
+  const n = parseInt(trimmed, 10);
+  return isNaN(n) ? null : n;
 }
 
 function getInitials(fullName, email) {
@@ -45,9 +54,20 @@ export default function ProfilePage() {
   const { session, user } = useAuth();
   const accessToken = session?.access_token;
   const { profile, loading, error, saving, saveError, saveProfile } = useProfile(accessToken);
+  const {
+    preferences,
+    loading: prefsLoading,
+    error: prefsError,
+    saving: prefsSaving,
+    saveError: prefsSaveError,
+    savePreferences,
+  } = useCareerPreferences(accessToken);
 
   const [formData, setFormData] = useState(EMPTY_PROFILE);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const [prefsData, setPrefsData] = useState(EMPTY_CAREER_PREFERENCES);
+  const [prefsSaveSuccess, setPrefsSaveSuccess] = useState(false);
 
   useEffect(() => {
     setFormData({
@@ -61,6 +81,16 @@ export default function ProfilePage() {
       summary: asText(profile?.summary),
     });
   }, [profile]);
+
+  useEffect(() => {
+    setPrefsData({
+      target_roles: asText(preferences?.target_roles),
+      preferred_locations: asText(preferences?.preferred_locations),
+      work_mode: asText(preferences?.work_mode),
+      salary_min: preferences?.salary_min != null ? String(preferences.salary_min) : '',
+      salary_max: preferences?.salary_max != null ? String(preferences.salary_max) : '',
+    });
+  }, [preferences]);
 
   const draftCompletion = useMemo(() => getCompletionState(formData), [formData]);
 
@@ -76,18 +106,19 @@ export default function ProfilePage() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setSaveSuccess(false);
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handlePrefsChange = (e) => {
+    const { name, value } = e.target;
+    setPrefsSaveSuccess(false);
+    setPrefsData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
-
     setSaveSuccess(false);
-
     const payload = {
       full_name: toNullableString(formData.full_name),
       headline: toNullableString(formData.headline),
@@ -98,12 +129,26 @@ export default function ProfilePage() {
       github_url: toNullableString(formData.github_url),
       summary: toNullableString(formData.summary),
     };
-
     const saved = await saveProfile(payload);
     if (saved) setSaveSuccess(true);
   };
 
-  if (loading) {
+  const handlePrefsSubmit = async (e) => {
+    e.preventDefault();
+    if (prefsSaving) return;
+    setPrefsSaveSuccess(false);
+    const payload = {
+      target_roles: toNullableString(prefsData.target_roles),
+      preferred_locations: toNullableString(prefsData.preferred_locations),
+      work_mode: toNullableString(prefsData.work_mode),
+      salary_min: toNullableInt(prefsData.salary_min),
+      salary_max: toNullableInt(prefsData.salary_max),
+    };
+    const saved = await savePreferences(payload);
+    if (saved) setPrefsSaveSuccess(true);
+  };
+
+  if (loading || prefsLoading) {
     return (
       <AppShell title="My Profile" notificationCount={0}>
         <div className="profile-content">
@@ -312,6 +357,131 @@ export default function ProfilePage() {
             )}
             <button type="submit" disabled={saving} className="profile-btn-save">
               {saving ? 'Saving...' : 'Save Profile'}
+            </button>
+          </div>
+        </form>
+
+        <form
+          className="profile-form"
+          onSubmit={handlePrefsSubmit}
+          aria-label="Career preferences form"
+        >
+          <section
+            className="profile-card"
+            role="region"
+            aria-labelledby="profile-career-prefs-title"
+          >
+            <div className="profile-card-header">
+              <h2 id="profile-career-prefs-title" className="profile-card-title">
+                Career Preferences
+              </h2>
+            </div>
+
+            {prefsError && (
+              <p className="profile-state profile-state--error" role="alert">
+                {prefsError}
+              </p>
+            )}
+
+            <div className="profile-grid">
+              <div className="profile-field profile-field--full">
+                <label htmlFor="target_roles" className="profile-label">
+                  Target Roles
+                </label>
+                <input
+                  id="target_roles"
+                  type="text"
+                  name="target_roles"
+                  value={prefsData.target_roles}
+                  onChange={handlePrefsChange}
+                  className="profile-input"
+                  placeholder="e.g. Software Engineer, Frontend Developer"
+                />
+              </div>
+
+              <div className="profile-field profile-field--full">
+                <label htmlFor="preferred_locations" className="profile-label">
+                  Preferred Locations
+                </label>
+                <input
+                  id="preferred_locations"
+                  type="text"
+                  name="preferred_locations"
+                  value={prefsData.preferred_locations}
+                  onChange={handlePrefsChange}
+                  className="profile-input"
+                  placeholder="e.g. New York, NY; Remote"
+                />
+              </div>
+
+              <div className="profile-field">
+                <label htmlFor="work_mode" className="profile-label">
+                  Work Mode
+                </label>
+                <select
+                  id="work_mode"
+                  name="work_mode"
+                  value={prefsData.work_mode}
+                  onChange={handlePrefsChange}
+                  className="profile-select"
+                >
+                  {WORK_MODES.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="profile-field" />
+
+              <div className="profile-field">
+                <label htmlFor="salary_min" className="profile-label">
+                  Minimum Salary (USD / yr)
+                </label>
+                <input
+                  id="salary_min"
+                  type="number"
+                  name="salary_min"
+                  value={prefsData.salary_min}
+                  onChange={handlePrefsChange}
+                  className="profile-input"
+                  placeholder="e.g. 80000"
+                  min="0"
+                />
+              </div>
+
+              <div className="profile-field">
+                <label htmlFor="salary_max" className="profile-label">
+                  Maximum Salary (USD / yr)
+                </label>
+                <input
+                  id="salary_max"
+                  type="number"
+                  name="salary_max"
+                  value={prefsData.salary_max}
+                  onChange={handlePrefsChange}
+                  className="profile-input"
+                  placeholder="e.g. 120000"
+                  min="0"
+                />
+              </div>
+            </div>
+          </section>
+
+          <div className="profile-actions">
+            {prefsSaveError && (
+              <p className="profile-save-error" role="alert">
+                {prefsSaveError}
+              </p>
+            )}
+            {prefsSaveSuccess && !prefsSaveError && (
+              <p className="profile-save-success" role="status">
+                Career preferences saved successfully.
+              </p>
+            )}
+            <button type="submit" disabled={prefsSaving} className="profile-btn-save">
+              {prefsSaving ? 'Saving...' : 'Save Preferences'}
             </button>
           </div>
         </form>
