@@ -20,8 +20,8 @@ create index if not exists education_user_year_idx
 
 alter table education enable row level security;
 
-drop policy if exists "Users manage own education" on education;
-create policy "Users manage own education"
+drop policy if exists "Users can manage their own education" on education;
+create policy "Users can manage their own education"
   on education
   for all
   using  (auth.uid() = user_id)
