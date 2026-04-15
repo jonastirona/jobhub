@@ -84,7 +84,7 @@ export function useCareerPreferences(accessToken) {
           signal: controller.signal,
         });
         if (!res.ok) {
-          const contentType = res.headers.get('content-type') || '';
+          const contentType = res.headers?.get?.('content-type') ?? '';
           let message = '';
           if (contentType.includes('application/json')) {
             const body = await res.json().catch(() => null);

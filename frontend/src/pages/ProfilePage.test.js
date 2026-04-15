@@ -900,7 +900,8 @@ describe('career preferences section', () => {
         return Promise.resolve({
           ok: false,
           status: 422,
-          text: () => Promise.resolve('Invalid work_mode'),
+          headers: { get: (name) => (name === 'content-type' ? 'application/json' : null) },
+          json: () => Promise.resolve({ detail: 'Invalid work_mode' }),
         });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
