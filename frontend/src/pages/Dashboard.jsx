@@ -6,6 +6,7 @@ import StatCard from '../components/common/StatCard';
 import StatusBadge from '../components/common/StatusBadge';
 import JobForm from '../components/JobForm/JobForm';
 import JobHistory from '../components/JobHistory/JobHistory';
+import JobOverviewModal from '../components/JobOverviewModal/JobOverviewModal';
 import { jobMatchesSearchQuery } from '../utils/jobSearch';
 import '../styles/Dashboard.css';
 
@@ -86,7 +87,7 @@ export default function Dashboard() {
   const deleteOverlayRef = useRef(null);
   const deleteModalRef = useRef(null);
   const deleteCancelButtonRef = useRef(null);
-  const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+  const [viewJob, setViewJob] = useState(null);
   const filteredJobs = jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm));
 
   const totalApplications = filteredJobs.length;
@@ -128,15 +129,35 @@ export default function Dashboard() {
   ];
 
   function openCreate() {
+    setViewJob(null);
+    setHistoryJob(null);
     setFormState({ mode: 'create' });
   }
 
   function openEdit(job) {
+    setViewJob(null);
+    setHistoryJob(null);
     setFormState({ mode: 'edit', job });
+  }
+
+  function openView(job) {
+    setFormState(null);
+    setHistoryJob(null);
+    setViewJob(job);
+  }
+
+  function openHistory(job) {
+    setFormState(null);
+    setViewJob(null);
+    setHistoryJob(job);
   }
 
   function closeForm() {
     setFormState(null);
+  }
+
+  function closeView() {
+    setViewJob(null);
   }
 
   function handleSaved() {
@@ -346,11 +367,19 @@ export default function Dashboard() {
                           <button
                             type="button"
                             className="action-btn"
-                            aria-label="View stage history"
-                            onClick={() => setHistoryJob(job)}
+                            aria-label="View application"
+                            onClick={() => openView(job)}
                             disabled={deletingJobId === job.id}
                           >
                             👁
+                          </button>
+                          <button
+                            type="button"
+                            className="action-btn"
+                            aria-label="View stage history"
+                            onClick={() => openHistory(job)}
+                          >
+                            📜
                           </button>
                           <button
                             type="button"
@@ -412,6 +441,8 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {viewJob && <JobOverviewModal job={viewJob} onClose={closeView} />}
 
       {formState && (
         <JobForm

@@ -86,6 +86,46 @@ test('renders job cards when api returns jobs', async () => {
   expect(screen.getAllByText('Applied').length).toBeGreaterThan(0);
 });
 
+// Verifies View (eye) opens a read-only job overview, not an editable form.
+test('clicking View opens read-only overview with job details', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'DevRel Engineer',
+            company: 'Contoso',
+            location: 'Remote',
+            status: 'interviewing',
+            applied_date: '2026-02-01',
+            deadline: '2026-03-01',
+            description: 'Talk at conferences.',
+            notes: 'Great fit.',
+            recruiter_notes: 'pat@example.com',
+            updated_at: '2026-03-29T00:00:00+00:00',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => screen.getByText('DevRel Engineer'));
+  fireEvent.click(screen.getByRole('button', { name: /view application/i }));
+  await waitFor(() => {
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /devrel engineer/i })).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Contoso');
+    expect(dialog).toHaveTextContent('Talk at conferences.');
+    expect(within(dialog).queryAllByRole('textbox')).toHaveLength(0);
+  });
+  fireEvent.click(screen.getByRole('button', { name: /close overview/i }));
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
 // Verifies API failures surface a user-visible load error message.
 test('shows error state when api request fails', async () => {
   global.fetch = jest.fn(() =>
