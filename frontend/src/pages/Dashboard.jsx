@@ -5,6 +5,7 @@ import AppShell from '../components/layout/AppShell';
 import StatCard from '../components/common/StatCard';
 import StatusBadge from '../components/common/StatusBadge';
 import JobForm from '../components/JobForm/JobForm';
+import { jobMatchesSearchQuery } from '../utils/jobSearch';
 import '../styles/Dashboard.css';
 
 const COMPANY_GRADIENTS = {
@@ -31,6 +32,13 @@ function formatDate(dateStr) {
   const d = isDateOnly ? new Date(`${dateStr}T00:00:00`) : new Date(dateStr);
   if (isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function truncateTableNote(text, maxLen = 56) {
+  if (!text?.trim()) return '—';
+  const t = text.trim();
+  if (t.length <= maxLen) return t;
+  return `${t.slice(0, maxLen - 1)}…`;
 }
 
 const STAT_BARS = {
@@ -64,15 +72,6 @@ const STAT_BARS = {
 };
 
 const PAGE_NUMBERS = [1, 2, 3, 4, 5];
-const SEARCHABLE_JOB_FIELDS = [
-  'title',
-  'company',
-  'location',
-  'description',
-  'notes',
-  'status',
-  'applied_date',
-];
 
 export default function Dashboard() {
   const { session } = useAuth();
@@ -80,19 +79,7 @@ export default function Dashboard() {
   const { jobs, loading, error, refetch } = useJobs(session?.access_token, searchTerm);
   const [formState, setFormState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', job }
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
-  const filteredJobs = jobs.filter((job) => {
-    if (!normalizedSearchTerm) return true;
-    const basicFieldMatch = SEARCHABLE_JOB_FIELDS.some((field) => {
-      const fieldValue = job[field];
-      return (
-        typeof fieldValue === 'string' && fieldValue.toLowerCase().includes(normalizedSearchTerm)
-      );
-    });
-    if (basicFieldMatch) return true;
-
-    const formattedAppliedDate = formatDate(job.applied_date).toLowerCase();
-    return formattedAppliedDate.includes(normalizedSearchTerm);
-  });
+  const filteredJobs = jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm));
 
   const totalApplications = filteredJobs.length;
   const interviews = filteredJobs.filter(
@@ -169,7 +156,7 @@ export default function Dashboard() {
               </span>
               <input
                 type="text"
-                placeholder="Search by title, company, status, applied date..."
+                placeholder="Search title, company, status, description, notes, recruiter, dates (month, year, day)..."
                 aria-label="Search job applications"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
@@ -188,6 +175,8 @@ export default function Dashboard() {
                   <th>Job Title</th>
                   <th>Company</th>
                   <th>Applied</th>
+                  <th>Deadline</th>
+                  <th>Recruiter</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -195,7 +184,7 @@ export default function Dashboard() {
               <tbody>
                 {filteredJobs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="table-empty">
+                    <td colSpan={8} className="table-empty">
                       {jobs.length === 0
                         ? 'No applications yet. Add your first job!'
                         : 'No matches found. Try another keyword.'}
@@ -223,6 +212,23 @@ export default function Dashboard() {
                       </td>
                       <td>
                         <span className="date-text">{formatDate(job.applied_date)}</span>
+                      </td>
+                      <td>
+                        <span className="date-text date-text--deadline">
+                          {formatDate(job.deadline)}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className="table-recruiter-cell"
+                          title={
+                            job.recruiter_notes && String(job.recruiter_notes).trim()
+                              ? String(job.recruiter_notes).trim()
+                              : undefined
+                          }
+                        >
+                          {truncateTableNote(job.recruiter_notes)}
+                        </span>
                       </td>
                       <td>
                         <StatusBadge status={job.status} />

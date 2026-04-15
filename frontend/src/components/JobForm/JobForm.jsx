@@ -10,8 +10,10 @@ function toFormValues(job) {
     location: job.location ?? '',
     status: JOB_STATUS_ALIAS[rawStatus] ?? rawStatus,
     applied_date: job.applied_date?.slice(0, 10) ?? '',
+    deadline: job.deadline?.slice(0, 10) ?? '',
     description: job.description ?? '',
     notes: job.notes ?? '',
+    recruiter_notes: job.recruiter_notes ?? '',
   };
 }
 
@@ -106,8 +108,10 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
       location: values.location.trim() || null,
       status: values.status,
       applied_date: values.applied_date || null,
+      deadline: values.deadline || null,
       description: values.description.trim() || null,
       notes: values.notes.trim() || null,
+      recruiter_notes: values.recruiter_notes.trim() || null,
     };
 
     setSaving(true);
@@ -252,7 +256,7 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
             </div>
           </div>
 
-          <div className="jf-row">
+          <div className="jf-row jf-row--two">
             <div className="jf-field">
               <label className="jf-label" htmlFor="jf-date-input">
                 Applied Date
@@ -263,6 +267,19 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
                 type="date"
                 name="applied_date"
                 value={values.applied_date}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="jf-field">
+              <label className="jf-label" htmlFor="jf-deadline-input">
+                Job Deadline
+              </label>
+              <input
+                id="jf-deadline-input"
+                className="jf-input jf-input--date"
+                type="date"
+                name="deadline"
+                value={values.deadline}
                 onChange={handleChange}
               />
             </div>
@@ -297,6 +314,23 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
                 value={values.notes}
                 onChange={handleChange}
                 placeholder="Interview notes, contacts, follow-up reminders..."
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <div className="jf-row">
+            <div className="jf-field">
+              <label className="jf-label" htmlFor="jf-recruiter-notes-input">
+                Recruiter / contact notes
+              </label>
+              <textarea
+                id="jf-recruiter-notes-input"
+                className="jf-textarea"
+                name="recruiter_notes"
+                value={values.recruiter_notes}
+                onChange={handleChange}
+                placeholder="Recruiter name, email, phone, or other contact context..."
                 rows={3}
               />
             </div>
