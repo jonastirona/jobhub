@@ -122,6 +122,25 @@ class ProfileUpsert(BaseModel):
     summary: Optional[str] = None
 
 
+VALID_PROFICIENCY_LEVELS = {"beginner", "intermediate", "advanced", "expert"}
+
+
+class SkillCreate(BaseModel):
+    name: str
+    category: Optional[str] = None
+    proficiency: Optional[str] = None
+
+
+class SkillUpdate(BaseModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    proficiency: Optional[str] = None
+
+
+class SkillReorder(BaseModel):
+    ids: list[str]
+
+
 # --- Routes ---
 
 
@@ -256,3 +275,90 @@ def upsert_profile(profile: ProfileUpsert, authorization: Optional[str] = Header
         raise HTTPException(status_code=500, detail="Failed to save profile")
     saved_profile = response.data[0]
     return {"profile": saved_profile, "completion": get_profile_completion(saved_profile)}
+
+
+# --- Skills routes ---
+
+
+@app.get("/skills")
+def list_skills(authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = sb.table("skills").select("*").eq("user_id", user_id).order("position").execute()
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch skills")
+    return response.data
+
+
+@app.post("/skills", status_code=201)
+def create_skill(skill: SkillCreate, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    if skill.proficiency is not None and skill.proficiency not in VALID_PROFICIENCY_LEVELS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"proficiency must be one of: {', '.join(sorted(VALID_PROFICIENCY_LEVELS))}",
+        )
+    count_resp = sb.table("skills").select("id").eq("user_id", user_id).execute()
+    if count_resp.data is None:
+        raise HTTPException(status_code=500, detail="Failed to determine skill position")
+    position = len(count_resp.data)
+    payload = skill.model_dump(exclude_none=True)
+    payload["user_id"] = user_id
+    payload["position"] = position
+    response = sb.table("skills").insert(payload).execute()
+    if not response.data:
+        raise HTTPException(status_code=500, detail="Failed to create skill")
+    return response.data[0]
+
+
+# NOTE: /skills/reorder must be defined before /skills/{skill_id} so the
+# literal path segment "reorder" is not captured as a skill ID.
+@app.put("/skills/reorder")
+def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    for position, skill_id in enumerate(data.ids):
+        sb.table("skills").update({"position": position}).eq("id", skill_id).eq(
+            "user_id", user_id
+        ).execute()
+    response = sb.table("skills").select("*").eq("user_id", user_id).order("position").execute()
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch reordered skills")
+    return response.data
+
+
+@app.put("/skills/{skill_id}")
+def update_skill(
+    skill_id: str, skill: SkillUpdate, authorization: Optional[str] = Header(default=None)
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    payload = skill.model_dump(exclude_unset=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    if (
+        "proficiency" in payload
+        and payload["proficiency"] is not None
+        and payload["proficiency"] not in VALID_PROFICIENCY_LEVELS
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=f"proficiency must be one of: {', '.join(sorted(VALID_PROFICIENCY_LEVELS))}",
+        )
+    response = (
+        sb.table("skills").update(payload).eq("id", skill_id).eq("user_id", user_id).execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    return response.data[0]
+
+
+@app.delete("/skills/{skill_id}")
+def delete_skill(skill_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = sb.table("skills").delete().eq("id", skill_id).eq("user_id", user_id).execute()
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    return Response(status_code=204)

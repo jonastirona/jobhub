@@ -6,13 +6,18 @@ Supabase is fully mocked — no live database or credentials required.
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from main import (
     PROFILE_REQUIRED_FIELDS,
     JobCreate,
     JobUpdate,
     ProfileUpsert,
+    SkillCreate,
+    SkillReorder,
+    SkillUpdate,
     _normalize_profile_value,
     app,
     get_profile_completion,
@@ -70,6 +75,32 @@ def make_mock_sb(data=None):
     mock_sb.table.return_value = mock_query
 
     return mock_sb, mock_query, mock_result
+
+
+def _make_mock_sb_with_side_effects(*data_list):
+    """
+    Like make_mock_sb but each successive execute() call returns the next item
+    in data_list as its .data value.  Useful for routes that call execute()
+    more than once (e.g. POST /skills: count query + insert).
+    """
+    mock_sb = MagicMock()
+    mock_user_resp = MagicMock()
+    mock_user_resp.user.id = MOCK_USER_ID
+    mock_sb.auth.get_user.return_value = mock_user_resp
+
+    results = []
+    for data in data_list:
+        r = MagicMock()
+        r.data = data
+        results.append(r)
+
+    mock_query = MagicMock()
+    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order"):
+        getattr(mock_query, method).return_value = mock_query
+    mock_query.execute.side_effect = results
+
+    mock_sb.table.return_value = mock_query
+    return mock_sb, mock_query
 
 
 # ---------------------------------------------------------------------------
@@ -841,3 +872,328 @@ def test_profile_upsert_all_fields():
     assert profile.full_name == "Jane Smith"
     assert profile.headline == "Software Engineer"
     assert profile.summary == "Experienced engineer."
+
+
+# ---------------------------------------------------------------------------
+# Skills fixtures
+# ---------------------------------------------------------------------------
+
+SAMPLE_SKILL = {
+    "id": "skill-uuid-1111",
+    "user_id": MOCK_USER_ID,
+    "name": "React",
+    "category": "Frontend",
+    "proficiency": "advanced",
+    "position": 0,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-01T00:00:00+00:00",
+}
+
+# ---------------------------------------------------------------------------
+# Auth guard — every skills route must reject requests with no token
+# ---------------------------------------------------------------------------
+
+
+def test_list_skills_requires_auth():
+    response = client.get("/skills")
+    assert response.status_code == 401
+
+
+def test_create_skill_requires_auth():
+    response = client.post("/skills", json={"name": "React"})
+    assert response.status_code == 401
+
+
+def test_reorder_skills_requires_auth():
+    response = client.put("/skills/reorder", json={"ids": []})
+    assert response.status_code == 401
+
+
+def test_update_skill_requires_auth():
+    response = client.put("/skills/some-uuid", json={"name": "Vue"})
+    assert response.status_code == 401
+
+
+def test_delete_skill_requires_auth():
+    response = client.delete("/skills/some-uuid")
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# GET /skills
+# ---------------------------------------------------------------------------
+
+
+def test_list_skills_returns_user_skills():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/skills", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["name"] == "React"
+    assert body[0]["category"] == "Frontend"
+
+
+def test_list_skills_returns_empty_list():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/skills", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_skills_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get("/skills", headers={"authorization": AUTH_HEADER})
+    mock_query.eq.assert_any_call("user_id", MOCK_USER_ID)
+
+
+def test_list_skills_data_none_returns_500():
+    mock_sb, _, mock_result = make_mock_sb(data=[])
+    mock_result.data = None
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/skills", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# POST /skills
+# ---------------------------------------------------------------------------
+
+
+def test_create_skill_success():
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/skills",
+            json={"name": "React", "category": "Frontend", "proficiency": "advanced"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    assert response.json()["name"] == "React"
+
+
+def test_create_skill_sets_user_id():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([], [SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/skills",
+            json={"name": "React"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    insert_payload = mock_query.insert.call_args[0][0]
+    assert insert_payload["user_id"] == MOCK_USER_ID
+
+
+def test_create_skill_sets_position_from_count():
+    """position equals the count of pre-existing skills."""
+    existing = [{"id": "s1"}, {"id": "s2"}]
+    mock_sb, mock_query = _make_mock_sb_with_side_effects(existing, [SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/skills",
+            json={"name": "React"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    insert_payload = mock_query.insert.call_args[0][0]
+    assert insert_payload["position"] == 2
+
+
+def test_create_skill_invalid_proficiency_returns_422():
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/skills",
+            json={"name": "React", "proficiency": "invalid"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_create_skill_missing_name_returns_422():
+    response = client.post(
+        "/skills",
+        json={"category": "Frontend"},
+        headers={"authorization": AUTH_HEADER},
+    )
+    assert response.status_code == 422
+
+
+def test_create_skill_db_failure_returns_500():
+    # insert returns empty data
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/skills",
+            json={"name": "React"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# PUT /skills/reorder
+# ---------------------------------------------------------------------------
+
+
+def test_reorder_skills_success():
+    skill2 = {**SAMPLE_SKILL, "id": "skill-uuid-2222", "name": "Python", "position": 1}
+    reordered = [{**skill2, "position": 0}, {**SAMPLE_SKILL, "position": 1}]
+    # 2 update execute()s (one per skill) + 1 final select execute()
+    mock_sb, _ = _make_mock_sb_with_side_effects(
+        [{"id": skill2["id"]}],
+        [{"id": SAMPLE_SKILL["id"]}],
+        reordered,
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/skills/reorder",
+            json={"ids": [skill2["id"], SAMPLE_SKILL["id"]]},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert body[0]["name"] == "Python"
+    assert body[1]["name"] == "React"
+
+
+def test_reorder_skills_empty_ids():
+    # no update executes, just the final select
+    mock_sb, _ = _make_mock_sb_with_side_effects([])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/skills/reorder",
+            json={"ids": []},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+# ---------------------------------------------------------------------------
+# PUT /skills/{skill_id}
+# ---------------------------------------------------------------------------
+
+
+def test_update_skill_success():
+    updated = {**SAMPLE_SKILL, "name": "Vue"}
+    mock_sb, _, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            json={"name": "Vue"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["name"] == "Vue"
+
+
+def test_update_skill_not_found():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/skills/nonexistent-id",
+            json={"name": "Vue"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_update_skill_empty_body_returns_400():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            json={},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 400
+
+
+def test_update_skill_invalid_proficiency_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            json={"proficiency": "invalid"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_update_skill_scoped_to_user():
+    updated = {**SAMPLE_SKILL, "name": "Vue"}
+    mock_sb, mock_query, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            json={"name": "Vue"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+# ---------------------------------------------------------------------------
+# DELETE /skills/{skill_id}
+# ---------------------------------------------------------------------------
+
+
+def test_delete_skill_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 204
+
+
+def test_delete_skill_not_found():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            "/skills/nonexistent-id",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_delete_skill_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.delete(f"/skills/{SAMPLE_SKILL['id']}", headers={"authorization": AUTH_HEADER})
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+# ---------------------------------------------------------------------------
+# SkillCreate / SkillUpdate / SkillReorder schema validation
+# ---------------------------------------------------------------------------
+
+
+def test_skill_create_requires_name():
+    with pytest.raises(ValidationError):
+        SkillCreate()
+
+
+def test_skill_create_optional_fields():
+    skill = SkillCreate(name="React")
+    assert skill.name == "React"
+    assert skill.category is None
+    assert skill.proficiency is None
+
+
+def test_skill_update_all_optional():
+    skill = SkillUpdate()
+    assert skill.name is None
+    assert skill.category is None
+    assert skill.proficiency is None
+
+
+def test_skill_reorder_has_ids():
+    sr = SkillReorder(ids=["a", "b", "c"])
+    assert sr.ids == ["a", "b", "c"]

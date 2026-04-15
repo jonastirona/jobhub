@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../hooks/useProfile';
+import { useSkills } from '../hooks/useSkills';
 import { EMPTY_PROFILE, REQUIRED_PROFILE_FIELDS } from '../models/profile';
+import { EMPTY_SKILL, PROFICIENCY_LEVELS } from '../models/skill';
 import './ProfilePage.css';
 
 function asText(value) {
@@ -45,9 +47,23 @@ export default function ProfilePage() {
   const { session, user } = useAuth();
   const accessToken = session?.access_token;
   const { profile, loading, error, saving, saveError, saveProfile } = useProfile(accessToken);
+  const {
+    skills,
+    loading: skillsLoading,
+    error: skillsError,
+    saving: skillsSaving,
+    saveError: skillsSaveError,
+    addSkill,
+    updateSkill,
+    deleteSkill,
+    reorderSkills,
+  } = useSkills(accessToken);
 
   const [formData, setFormData] = useState(EMPTY_PROFILE);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const [skillForm, setSkillForm] = useState(EMPTY_SKILL);
+  const [editingSkillId, setEditingSkillId] = useState(null);
 
   useEffect(() => {
     setFormData({
@@ -101,6 +117,61 @@ export default function ProfilePage() {
 
     const saved = await saveProfile(payload);
     if (saved) setSaveSuccess(true);
+  };
+
+  const handleSkillFormChange = (e) => {
+    const { name, value } = e.target;
+    setSkillForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSkillEdit = (skill) => {
+    setEditingSkillId(skill.id);
+    setSkillForm({
+      name: skill.name || '',
+      category: skill.category || '',
+      proficiency: skill.proficiency || '',
+    });
+  };
+
+  const handleSkillCancelEdit = () => {
+    setEditingSkillId(null);
+    setSkillForm(EMPTY_SKILL);
+  };
+
+  const handleSkillSubmit = async (e) => {
+    e.preventDefault();
+    if (skillsSaving || !skillForm.name.trim()) return;
+    const payload = {
+      name: skillForm.name.trim(),
+      category: skillForm.category.trim() || null,
+      proficiency: skillForm.proficiency || null,
+    };
+    const saved = editingSkillId
+      ? await updateSkill(editingSkillId, payload)
+      : await addSkill(payload);
+    if (saved) {
+      setSkillForm(EMPTY_SKILL);
+      setEditingSkillId(null);
+    }
+  };
+
+  const handleSkillDelete = async (id) => {
+    if (editingSkillId === id) handleSkillCancelEdit();
+    await deleteSkill(id);
+  };
+
+  const handleSkillMoveUp = async (index) => {
+    if (index === 0) return;
+    const newOrder = [...skills];
+    [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
+    await reorderSkills(newOrder.map((s) => s.id));
+  };
+
+  const handleSkillMoveDown = async (index) => {
+    if (index === skills.length - 1) return;
+    const newOrder = [...skills];
+    [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+    await reorderSkills(newOrder.map((s) => s.id));
   };
 
   if (loading) {
@@ -315,6 +386,166 @@ export default function ProfilePage() {
             </button>
           </div>
         </form>
+
+        <section className="profile-card" role="region" aria-labelledby="profile-skills-title">
+          <div className="profile-card-header">
+            <h2 id="profile-skills-title" className="profile-card-title">
+              Skills
+            </h2>
+          </div>
+
+          {skillsLoading && <p className="profile-state">Loading skills...</p>}
+
+          {skillsError && (
+            <p className="profile-state profile-state--error" role="alert">
+              {skillsError}
+            </p>
+          )}
+
+          {!skillsLoading && (
+            <>
+              {skills.length === 0 && !skillsError && (
+                <p className="skills-empty">No skills added yet.</p>
+              )}
+
+              {skills.length > 0 && (
+                <ul className="skills-list" aria-label="Skills list">
+                  {skills.map((skill, index) => (
+                    <li key={skill.id} className="skills-item">
+                      <div className="skills-item-info">
+                        <span className="skills-item-name">{skill.name}</span>
+                        {skill.category && (
+                          <span className="skills-item-category">{skill.category}</span>
+                        )}
+                        {skill.proficiency && (
+                          <span
+                            className={`skills-proficiency-badge skills-proficiency-badge--${skill.proficiency}`}
+                          >
+                            {skill.proficiency}
+                          </span>
+                        )}
+                      </div>
+                      <div className="skills-item-actions">
+                        <button
+                          type="button"
+                          className="skills-btn skills-btn--icon"
+                          onClick={() => handleSkillMoveUp(index)}
+                          disabled={index === 0 || skillsSaving}
+                          aria-label={`Move ${skill.name} up`}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          className="skills-btn skills-btn--icon"
+                          onClick={() => handleSkillMoveDown(index)}
+                          disabled={index === skills.length - 1 || skillsSaving}
+                          aria-label={`Move ${skill.name} down`}
+                        >
+                          ▼
+                        </button>
+                        <button
+                          type="button"
+                          className="skills-btn skills-btn--secondary"
+                          onClick={() => handleSkillEdit(skill)}
+                          aria-label={`Edit ${skill.name}`}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="skills-btn skills-btn--danger"
+                          onClick={() => handleSkillDelete(skill.id)}
+                          disabled={skillsSaving}
+                          aria-label={`Delete ${skill.name}`}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <form className="skills-form" onSubmit={handleSkillSubmit}>
+                <div className="skills-form-fields">
+                  <div className="profile-field">
+                    <label htmlFor="skill_name" className="profile-label">
+                      Skill name
+                    </label>
+                    <input
+                      id="skill_name"
+                      type="text"
+                      name="name"
+                      value={skillForm.name}
+                      onChange={handleSkillFormChange}
+                      className="profile-input"
+                      placeholder="e.g. React"
+                    />
+                  </div>
+
+                  <div className="profile-field">
+                    <label htmlFor="skill_category" className="profile-label">
+                      Category
+                    </label>
+                    <input
+                      id="skill_category"
+                      type="text"
+                      name="category"
+                      value={skillForm.category}
+                      onChange={handleSkillFormChange}
+                      className="profile-input"
+                      placeholder="e.g. Frontend"
+                    />
+                  </div>
+
+                  <div className="profile-field">
+                    <label htmlFor="skill_proficiency" className="profile-label">
+                      Proficiency
+                    </label>
+                    <select
+                      id="skill_proficiency"
+                      name="proficiency"
+                      value={skillForm.proficiency}
+                      onChange={handleSkillFormChange}
+                      className="profile-select"
+                    >
+                      {PROFICIENCY_LEVELS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="profile-actions">
+                  {skillsSaveError && (
+                    <p className="profile-save-error" role="alert">
+                      {skillsSaveError}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={skillsSaving || !skillForm.name.trim()}
+                    className="profile-btn-save"
+                  >
+                    {skillsSaving ? 'Saving...' : editingSkillId ? 'Update Skill' : 'Add Skill'}
+                  </button>
+                  {editingSkillId && (
+                    <button
+                      type="button"
+                      className="skills-btn skills-btn--secondary"
+                      onClick={handleSkillCancelEdit}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </form>
+            </>
+          )}
+        </section>
       </div>
     </AppShell>
   );

@@ -35,6 +35,15 @@ const SAMPLE_PROFILE = {
   summary: 'Experienced engineer.',
 };
 
+const SAMPLE_SKILL = {
+  id: 'skill-1',
+  user_id: 'user-1',
+  name: 'React',
+  category: 'Frontend',
+  proficiency: 'advanced',
+  position: 0,
+};
+
 const REQUIRED_FIELD_KEYS = [
   'full_name',
   'headline',
@@ -58,8 +67,26 @@ const COMPLETE_COMPLETION = {
   required_count: REQUIRED_FIELD_KEYS.length,
 };
 
-function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE } = {}) {
+// Mount fires GET /profile and GET /skills concurrently.
+// skills defaults to [] so the skills section loads cleanly without errors.
+function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE, skills = [] } = {}) {
   global.fetch = jest.fn((url, opts = {}) => {
+    if (url && url.includes('/skills')) {
+      if (opts.method === 'POST') {
+        const body = opts.body ? JSON.parse(opts.body) : {};
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: 'new-skill', user_id: 'user-1', position: 0, ...body }),
+        });
+      }
+      if (opts.method === 'PUT') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(skills) });
+      }
+      if (opts.method === 'DELETE') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(null) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(skills) });
+    }
     if (opts.method === 'PUT') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(saveProfile) });
     }
@@ -67,14 +94,21 @@ function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE } = {}) {
   });
 }
 
+// Skills GET succeeds so only the profile error is visible in load-error tests.
 function mockFetchGetError(status = 500, message = 'Internal Server Error') {
-  global.fetch = jest.fn(() =>
-    Promise.resolve({ ok: false, status, text: () => Promise.resolve(message) })
-  );
+  global.fetch = jest.fn((url) => {
+    if (url && url.includes('/skills')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
+    return Promise.resolve({ ok: false, status, text: () => Promise.resolve(message) });
+  });
 }
 
 function mockFetchSaveError(status = 500, text = 'Server Error') {
   global.fetch = jest.fn((url, opts = {}) => {
+    if (url && url.includes('/skills')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
     if (opts.method === 'PUT') {
       return Promise.resolve({ ok: false, status, text: () => Promise.resolve(text) });
     }
@@ -82,8 +116,14 @@ function mockFetchSaveError(status = 500, text = 'Server Error') {
   });
 }
 
+// Skills GET succeeds so only the profile network error is visible.
 function mockFetchNetworkError(message = 'Network error') {
-  global.fetch = jest.fn(() => Promise.reject(new Error(message)));
+  global.fetch = jest.fn((url) => {
+    if (url && url.includes('/skills')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
+    return Promise.reject(new Error(message));
+  });
 }
 
 function makePendingSave() {
@@ -92,6 +132,9 @@ function makePendingSave() {
     resolve = res;
   });
   global.fetch = jest.fn((url, opts = {}) => {
+    if (url && url.includes('/skills')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
     if (opts.method === 'PUT') return promise;
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
   });
@@ -451,8 +494,15 @@ describe('save — success', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const [url, opts] = global.fetch.mock.calls[1];
+    await waitFor(() => {
+      const call = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      );
+      expect(call).toBeDefined();
+    });
+    const [url, opts] = global.fetch.mock.calls.find(
+      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+    );
     expect(url).toBe(`${BACKEND}/profile`);
     expect(opts.method).toBe('PUT');
     const body = JSON.parse(opts.body);
@@ -464,8 +514,15 @@ describe('save — success', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const [, opts] = global.fetch.mock.calls[1];
+    await waitFor(() => {
+      const call = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      );
+      expect(call).toBeDefined();
+    });
+    const [, opts] = global.fetch.mock.calls.find(
+      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+    );
     expect(opts.headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
   });
 
@@ -495,8 +552,17 @@ describe('save — success', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     await userEvent.type(screen.getByLabelText(/full name/i), '   ');
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const body = JSON.parse(global.fetch.mock.calls[1][1].body);
+    await waitFor(() => {
+      const call = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      );
+      expect(call).toBeDefined();
+    });
+    const body = JSON.parse(
+      global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      )[1].body
+    );
     expect(body.full_name).toBeNull();
   });
 
@@ -551,6 +617,9 @@ describe('save — error', () => {
 
   test('shows network error message when fetch rejects on save', async () => {
     global.fetch = jest.fn((url, opts = {}) => {
+      if (url && url.includes('/skills')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
       if (opts.method === 'PUT') return Promise.reject(new Error('Connection refused'));
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
@@ -577,6 +646,9 @@ describe('save — error', () => {
     // First save succeeds, second fails
     let callCount = 0;
     global.fetch = jest.fn((url, opts = {}) => {
+      if (url && url.includes('/skills')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
       if (opts.method === 'PUT') {
         callCount++;
         if (callCount === 1) {
@@ -646,7 +718,9 @@ describe('saving state', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /save profile/i })).toBeInTheDocument()
     );
-    const putCalls = global.fetch.mock.calls.filter(([, opts = {}]) => opts.method === 'PUT');
+    const putCalls = global.fetch.mock.calls.filter(
+      ([u, opts = {}]) => u === `${BACKEND}/profile` && opts.method === 'PUT'
+    );
     expect(putCalls).toHaveLength(1);
   });
 });
@@ -716,8 +790,17 @@ describe('fetch payload', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const body = JSON.parse(global.fetch.mock.calls[1][1].body);
+    await waitFor(() => {
+      const call = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      );
+      expect(call).toBeDefined();
+    });
+    const body = JSON.parse(
+      global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      )[1].body
+    );
     for (const field of [
       'full_name',
       'headline',
@@ -734,8 +817,11 @@ describe('fetch payload', () => {
 
   test('GET /profile is called with Authorization header', async () => {
     renderPage();
-    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    const [url, opts] = global.fetch.mock.calls[0];
+    await waitFor(() => {
+      const call = global.fetch.mock.calls.find(([u]) => u === `${BACKEND}/profile`);
+      expect(call).toBeDefined();
+    });
+    const [url, opts] = global.fetch.mock.calls.find(([u]) => u === `${BACKEND}/profile`);
     expect(url).toBe(`${BACKEND}/profile`);
     expect(opts.headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
   });
@@ -745,9 +831,262 @@ describe('fetch payload', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const body = JSON.parse(global.fetch.mock.calls[1][1].body);
+    await waitFor(() => {
+      const call = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      );
+      expect(call).toBeDefined();
+    });
+    const body = JSON.parse(
+      global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      )[1].body
+    );
     expect(body.full_name).toBeNull();
     expect(body.summary).toBeNull();
+  });
+});
+
+// ─── Skills section ───────────────────────────────────────────────────────────
+
+describe('skills section', () => {
+  test('renders "Skills" heading', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /^skills$/i })).toBeInTheDocument();
+    });
+  });
+
+  test('renders skill name input and Add Skill button', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/skill name/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /add skill/i })).toBeInTheDocument();
+    });
+  });
+
+  test('Add Skill button is disabled when skill name is empty', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /add skill/i })).toBeDisabled();
+    });
+  });
+
+  test('shows "No skills added yet." when skills list is empty', async () => {
+    mockFetch({ skills: [] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/no skills added yet/i)).toBeInTheDocument();
+    });
+  });
+
+  test('renders loaded skill name in list', async () => {
+    mockFetch({ skills: [SAMPLE_SKILL] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('React')).toBeInTheDocument();
+    });
+  });
+
+  test('renders skill category chip', async () => {
+    mockFetch({ skills: [SAMPLE_SKILL] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Frontend')).toBeInTheDocument();
+    });
+  });
+
+  test('renders skill proficiency badge', async () => {
+    mockFetch({ skills: [SAMPLE_SKILL] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('advanced')).toBeInTheDocument();
+    });
+  });
+
+  test('Add Skill button is enabled after typing a skill name', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/skill name/i)).toBeInTheDocument());
+    await userEvent.type(screen.getByLabelText(/skill name/i), 'TypeScript');
+    expect(screen.getByRole('button', { name: /add skill/i })).not.toBeDisabled();
+  });
+
+  test('adds a skill by POSTing to /skills', async () => {
+    const newSkill = {
+      id: 'new-1',
+      user_id: 'user-1',
+      name: 'TypeScript',
+      category: null,
+      proficiency: null,
+      position: 0,
+    };
+    global.fetch = jest.fn((url, opts = {}) => {
+      if (url && url.includes('/skills')) {
+        if (opts.method === 'POST') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(newSkill) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/skill name/i)).toBeInTheDocument());
+
+    await userEvent.type(screen.getByLabelText(/skill name/i), 'TypeScript');
+    fireEvent.click(screen.getByRole('button', { name: /add skill/i }));
+
+    await waitFor(() => {
+      const postCall = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/skills` && o.method === 'POST'
+      );
+      expect(postCall).toBeDefined();
+      const body = JSON.parse(postCall[1].body);
+      expect(body.name).toBe('TypeScript');
+    });
+  });
+
+  test('edit button populates form with skill data', async () => {
+    mockFetch({ skills: [SAMPLE_SKILL] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('React')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /edit react/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/skill name/i)).toHaveValue('React');
+    });
+    expect(screen.getByLabelText(/category/i)).toHaveValue('Frontend');
+  });
+
+  test('edit shows Update Skill and Cancel buttons', async () => {
+    mockFetch({ skills: [SAMPLE_SKILL] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('React')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /edit react/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /update skill/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+    });
+  });
+
+  test('cancel edit resets form to empty', async () => {
+    mockFetch({ skills: [SAMPLE_SKILL] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('React')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /edit react/i }));
+    await waitFor(() => expect(screen.getByLabelText(/skill name/i)).toHaveValue('React'));
+
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+    await waitFor(() => expect(screen.getByLabelText(/skill name/i)).toHaveValue(''));
+    expect(screen.queryByRole('button', { name: /update skill/i })).not.toBeInTheDocument();
+  });
+
+  test('update skill sends PUT /skills/:id', async () => {
+    const updated = { ...SAMPLE_SKILL, name: 'React 18' };
+    global.fetch = jest.fn((url, opts = {}) => {
+      if (url && url.includes('/skills')) {
+        if (opts.method === 'PUT' && !url.includes('reorder')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(updated) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([SAMPLE_SKILL]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('React')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /edit react/i }));
+    await waitFor(() => expect(screen.getByLabelText(/skill name/i)).toHaveValue('React'));
+
+    await userEvent.clear(screen.getByLabelText(/skill name/i));
+    await userEvent.type(screen.getByLabelText(/skill name/i), 'React 18');
+    fireEvent.click(screen.getByRole('button', { name: /update skill/i }));
+
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/skills/${SAMPLE_SKILL.id}` && o.method === 'PUT'
+      );
+      expect(putCall).toBeDefined();
+    });
+  });
+
+  test('delete button sends DELETE /skills/:id', async () => {
+    mockFetch({ skills: [SAMPLE_SKILL] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('React')).toBeInTheDocument());
+
+    global.fetch = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(null) }));
+
+    fireEvent.click(screen.getByRole('button', { name: /delete react/i }));
+
+    await waitFor(() => {
+      const deleteCall = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/skills/${SAMPLE_SKILL.id}` && o.method === 'DELETE'
+      );
+      expect(deleteCall).toBeDefined();
+    });
+  });
+
+  test('move up button calls PUT /skills/reorder', async () => {
+    const skill2 = { ...SAMPLE_SKILL, id: 'skill-2', name: 'Python', position: 1 };
+    global.fetch = jest.fn((url, opts = {}) => {
+      if (url && url.includes('/skills')) {
+        if (opts.method === 'PUT') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve([skill2, SAMPLE_SKILL]),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([SAMPLE_SKILL, skill2]),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Python')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /move python up/i }));
+
+    await waitFor(() => {
+      const reorderCall = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/skills/reorder` && o.method === 'PUT'
+      );
+      expect(reorderCall).toBeDefined();
+    });
+  });
+
+  test('shows save error when addSkill fails', async () => {
+    global.fetch = jest.fn((url, opts = {}) => {
+      if (url && url.includes('/skills')) {
+        if (opts.method === 'POST') {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            text: () => Promise.resolve('Skill save failed'),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/skill name/i)).toBeInTheDocument());
+
+    await userEvent.type(screen.getByLabelText(/skill name/i), 'React');
+    fireEvent.click(screen.getByRole('button', { name: /add skill/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Skill save failed')).toBeInTheDocument();
+    });
   });
 });
