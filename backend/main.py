@@ -328,6 +328,10 @@ def update_education(
     payload = entry.model_dump(exclude_unset=True)
     if not payload:
         raise HTTPException(status_code=400, detail="No fields to update")
+    _EDUCATION_REQUIRED_FIELDS = ("institution", "degree", "field_of_study", "start_year")
+    for field in _EDUCATION_REQUIRED_FIELDS:
+        if field in payload and payload[field] is None:
+            raise HTTPException(status_code=422, detail=f"{field} cannot be null")
     existing_resp = (
         sb.table("education").select("*").eq("id", entry_id).eq("user_id", user_id).execute()
     )

@@ -123,8 +123,9 @@ export default function ProfilePage() {
   };
 
   const _parseYear = (value) => {
-    const n = parseInt(String(value ?? '').trim(), 10);
-    return Number.isFinite(n) && Number.isInteger(n) ? n : null;
+    const trimmed = String(value ?? '').trim();
+    if (!/^\d+$/.test(trimmed)) return null;
+    return Number(trimmed);
   };
   const _startYear = _parseYear(educationForm.start_year);
   const _endYear = _parseYear(educationForm.end_year);

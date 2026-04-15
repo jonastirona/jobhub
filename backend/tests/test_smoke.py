@@ -1081,6 +1081,19 @@ def test_update_education_empty_body_returns_400():
     assert response.status_code == 400
 
 
+def test_update_education_required_field_null_returns_422():
+    """Explicitly setting a required field to null must return 422, not 500."""
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/education/{SAMPLE_EDUCATION['id']}",
+            json={"institution": None},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "institution" in response.json()["detail"]
+
+
 def test_update_education_end_year_before_start_year_returns_422():
     mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
     with patch("main.get_supabase", return_value=mock_sb):
