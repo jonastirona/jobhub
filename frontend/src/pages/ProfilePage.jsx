@@ -131,9 +131,9 @@ export default function ProfilePage() {
   const _endYear = _parseYear(educationForm.end_year);
   const _hasEndYear = String(educationForm.end_year ?? '').trim() !== '';
   const isEducationFormValid =
-    educationForm.institution.trim() &&
-    educationForm.degree.trim() &&
-    educationForm.field_of_study.trim() &&
+    educationForm.institution.trim().length > 0 &&
+    educationForm.degree.trim().length > 0 &&
+    educationForm.field_of_study.trim().length > 0 &&
     _startYear !== null &&
     _startYear >= 1900 &&
     (!_hasEndYear || (_endYear !== null && _endYear >= _startYear));
@@ -553,6 +553,7 @@ export default function ProfilePage() {
                       placeholder="e.g. 3.8"
                       step="0.01"
                       min="0"
+                      max="9.99"
                     />
                   </div>
 
