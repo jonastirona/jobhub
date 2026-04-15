@@ -793,9 +793,11 @@ describe('fetch payload', () => {
 
   test('GET /profile is called with Authorization header', async () => {
     renderPage();
-    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    const profileCall = global.fetch.mock.calls.find(([u]) => u === `${BACKEND}/profile`);
-    const [url, opts] = profileCall;
+    await waitFor(() => {
+      const profileCall = global.fetch.mock.calls.find(([u]) => u === `${BACKEND}/profile`);
+      expect(profileCall).toBeDefined();
+    });
+    const [url, opts] = global.fetch.mock.calls.find(([u]) => u === `${BACKEND}/profile`);
     expect(url).toBe(`${BACKEND}/profile`);
     expect(opts.headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
   });

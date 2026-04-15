@@ -311,6 +311,10 @@ def upsert_career_preferences(
                 .eq("user_id", user_id)
                 .execute()
             )
+            if existing_resp.data is None:
+                raise HTTPException(
+                    status_code=500, detail="Failed to load existing career preferences"
+                )
             existing_salary = existing_resp.data[0] if existing_resp.data else {}
         effective_min = (
             payload["salary_min"] if "salary_min" in payload else existing_salary.get("salary_min")
