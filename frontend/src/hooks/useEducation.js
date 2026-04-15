@@ -64,6 +64,7 @@ export function useEducation(accessToken) {
   useEffect(() => {
     return () => {
       pendingSaveRef.current?.abort();
+      pendingSaveRef.current = null;
     };
   }, []);
 
@@ -107,6 +108,7 @@ export function useEducation(accessToken) {
         return false;
       } finally {
         if (!controller.signal.aborted) setSaving(false);
+        if (pendingSaveRef.current === controller) pendingSaveRef.current = null;
       }
     },
     [accessToken]
@@ -152,6 +154,7 @@ export function useEducation(accessToken) {
         return false;
       } finally {
         if (!controller.signal.aborted) setSaving(false);
+        if (pendingSaveRef.current === controller) pendingSaveRef.current = null;
       }
     },
     [accessToken]
@@ -192,6 +195,7 @@ export function useEducation(accessToken) {
         return false;
       } finally {
         if (!controller.signal.aborted) setSaving(false);
+        if (pendingSaveRef.current === controller) pendingSaveRef.current = null;
       }
     },
     [accessToken]
