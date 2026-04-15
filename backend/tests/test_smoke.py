@@ -1021,6 +1021,18 @@ def test_create_skill_missing_name_returns_422():
     assert response.status_code == 422
 
 
+def test_create_skill_blank_name_returns_422():
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/skills",
+            json={"name": "   "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "name" in response.json()["detail"]
+
+
 def test_create_skill_db_failure_returns_500():
     # insert returns empty data
     mock_sb, _ = _make_mock_sb_with_side_effects([], [])
@@ -1111,6 +1123,18 @@ def test_update_skill_empty_body_returns_400():
             headers={"authorization": AUTH_HEADER},
         )
     assert response.status_code == 400
+
+
+def test_update_skill_blank_name_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            json={"name": "   "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "name" in response.json()["detail"]
 
 
 def test_update_skill_invalid_proficiency_returns_422():

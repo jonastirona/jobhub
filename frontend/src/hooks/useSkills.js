@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+async function extractErrorMessage(res) {
+  const contentType = res.headers?.get?.('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    const body = await res.json().catch(() => null);
+    if (typeof body?.detail === 'string') return body.detail;
+    if (body?.detail != null) return JSON.stringify(body.detail);
+    if (body != null) return JSON.stringify(body);
+  }
+  return res.text().catch(() => '');
+}
+
 export function useSkills(accessToken) {
   const [skills, setSkills] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -81,8 +92,8 @@ export function useSkills(accessToken) {
           signal: controller.signal,
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Failed to add skill (${res.status})`);
+          const message = await extractErrorMessage(res);
+          throw new Error(message || `Failed to add skill (${res.status})`);
         }
         const created = await res.json();
         if (controller.signal.aborted) return false;
@@ -126,8 +137,8 @@ export function useSkills(accessToken) {
           signal: controller.signal,
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Failed to update skill (${res.status})`);
+          const message = await extractErrorMessage(res);
+          throw new Error(message || `Failed to update skill (${res.status})`);
         }
         const updated = await res.json();
         if (controller.signal.aborted) return false;
@@ -167,8 +178,8 @@ export function useSkills(accessToken) {
           signal: controller.signal,
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Failed to delete skill (${res.status})`);
+          const message = await extractErrorMessage(res);
+          throw new Error(message || `Failed to delete skill (${res.status})`);
         }
         if (controller.signal.aborted) return false;
         setSkills((prev) => prev.filter((s) => s.id !== id));
@@ -211,8 +222,8 @@ export function useSkills(accessToken) {
           signal: controller.signal,
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Failed to reorder skills (${res.status})`);
+          const message = await extractErrorMessage(res);
+          throw new Error(message || `Failed to reorder skills (${res.status})`);
         }
         const reordered = await res.json();
         if (controller.signal.aborted) return false;

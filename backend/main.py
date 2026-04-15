@@ -294,6 +294,8 @@ def list_skills(authorization: Optional[str] = Header(default=None)):
 def create_skill(skill: SkillCreate, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
     sb = get_supabase()
+    if not skill.name.strip():
+        raise HTTPException(status_code=422, detail="name must not be blank")
     if skill.proficiency is not None and skill.proficiency not in VALID_PROFICIENCY_LEVELS:
         raise HTTPException(
             status_code=422,
@@ -352,6 +354,8 @@ def update_skill(
     payload = skill.model_dump(exclude_unset=True)
     if not payload:
         raise HTTPException(status_code=400, detail="No fields to update")
+    if "name" in payload and not (payload["name"] or "").strip():
+        raise HTTPException(status_code=422, detail="name must not be blank")
     if (
         "proficiency" in payload
         and payload["proficiency"] is not None
