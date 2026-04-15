@@ -122,6 +122,33 @@ class ProfileUpsert(BaseModel):
     summary: Optional[str] = None
 
 
+class EducationCreate(BaseModel):
+    institution: str
+    degree: str
+    field_of_study: str
+    start_year: int
+    end_year: Optional[int] = None
+    gpa: Optional[float] = None
+    description: Optional[str] = None
+
+
+class EducationUpdate(BaseModel):
+    institution: Optional[str] = None
+    degree: Optional[str] = None
+    field_of_study: Optional[str] = None
+    start_year: Optional[int] = None
+    end_year: Optional[int] = None
+    gpa: Optional[float] = None
+    description: Optional[str] = None
+
+
+def _validate_education_years(start_year: Optional[int], end_year: Optional[int]) -> None:
+    if start_year is not None and start_year < 1900:
+        raise HTTPException(status_code=422, detail="start_year must be 1900 or later")
+    if start_year is not None and end_year is not None and end_year < start_year:
+        raise HTTPException(status_code=422, detail="end_year must be >= start_year")
+
+
 # --- Routes ---
 
 
@@ -256,3 +283,65 @@ def upsert_profile(profile: ProfileUpsert, authorization: Optional[str] = Header
         raise HTTPException(status_code=500, detail="Failed to save profile")
     saved_profile = response.data[0]
     return {"profile": saved_profile, "completion": get_profile_completion(saved_profile)}
+
+
+# --- Education routes ---
+
+
+@app.get("/education")
+def list_education(authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = (
+        sb.table("education")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("start_year", desc=True)
+        .execute()
+    )
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch education")
+    return response.data
+
+
+@app.post("/education", status_code=201)
+def create_education(entry: EducationCreate, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    _validate_education_years(entry.start_year, entry.end_year)
+    payload = entry.model_dump(exclude_none=True)
+    payload["user_id"] = user_id
+    response = sb.table("education").insert(payload).execute()
+    if not response.data:
+        raise HTTPException(status_code=500, detail="Failed to create education entry")
+    return response.data[0]
+
+
+@app.put("/education/{entry_id}")
+def update_education(
+    entry_id: str,
+    entry: EducationUpdate,
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    payload = entry.model_dump(exclude_unset=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    _validate_education_years(payload.get("start_year"), payload.get("end_year"))
+    response = (
+        sb.table("education").update(payload).eq("id", entry_id).eq("user_id", user_id).execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Education entry not found")
+    return response.data[0]
+
+
+@app.delete("/education/{entry_id}")
+def delete_education(entry_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = sb.table("education").delete().eq("id", entry_id).eq("user_id", user_id).execute()
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Education entry not found")
+    return Response(status_code=204)

@@ -58,8 +58,42 @@ const COMPLETE_COMPLETION = {
   required_count: REQUIRED_FIELD_KEYS.length,
 };
 
-function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE } = {}) {
+const SAMPLE_EDUCATION = {
+  id: 'edu-1',
+  user_id: 'user-1',
+  institution: 'NJIT',
+  degree: 'Bachelor of Science',
+  field_of_study: 'Computer Science',
+  start_year: 2022,
+  end_year: 2026,
+  gpa: 3.8,
+  description: null,
+};
+
+// Mount fires GET /profile and GET /education concurrently.
+// education defaults to [] so the education section loads cleanly without errors.
+function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE, education = [] } = {}) {
   global.fetch = jest.fn((url, opts = {}) => {
+    if (url && url.includes('/education')) {
+      if (opts.method === 'POST') {
+        const body = opts.body ? JSON.parse(opts.body) : {};
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: 'new-edu', user_id: 'user-1', ...body }),
+        });
+      }
+      if (opts.method === 'PUT') {
+        const body = opts.body ? JSON.parse(opts.body) : {};
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: 'edu-1', user_id: 'user-1', ...body }),
+        });
+      }
+      if (opts.method === 'DELETE') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(null) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(education) });
+    }
     if (opts.method === 'PUT') {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(saveProfile) });
     }
@@ -67,14 +101,21 @@ function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE } = {}) {
   });
 }
 
+// Education GET succeeds so only the profile error is visible in load-error tests.
 function mockFetchGetError(status = 500, message = 'Internal Server Error') {
-  global.fetch = jest.fn(() =>
-    Promise.resolve({ ok: false, status, text: () => Promise.resolve(message) })
-  );
+  global.fetch = jest.fn((url) => {
+    if (url && url.includes('/education')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
+    return Promise.resolve({ ok: false, status, text: () => Promise.resolve(message) });
+  });
 }
 
 function mockFetchSaveError(status = 500, text = 'Server Error') {
   global.fetch = jest.fn((url, opts = {}) => {
+    if (url && url.includes('/education')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
     if (opts.method === 'PUT') {
       return Promise.resolve({ ok: false, status, text: () => Promise.resolve(text) });
     }
@@ -82,8 +123,14 @@ function mockFetchSaveError(status = 500, text = 'Server Error') {
   });
 }
 
+// Education GET succeeds so only the profile network error is visible.
 function mockFetchNetworkError(message = 'Network error') {
-  global.fetch = jest.fn(() => Promise.reject(new Error(message)));
+  global.fetch = jest.fn((url) => {
+    if (url && url.includes('/education')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
+    return Promise.reject(new Error(message));
+  });
 }
 
 function makePendingSave() {
@@ -92,6 +139,9 @@ function makePendingSave() {
     resolve = res;
   });
   global.fetch = jest.fn((url, opts = {}) => {
+    if (url && url.includes('/education')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
     if (opts.method === 'PUT') return promise;
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
   });
@@ -451,8 +501,15 @@ describe('save — success', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const [url, opts] = global.fetch.mock.calls[1];
+    await waitFor(() => {
+      const call = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      );
+      expect(call).toBeDefined();
+    });
+    const [url, opts] = global.fetch.mock.calls.find(
+      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+    );
     expect(url).toBe(`${BACKEND}/profile`);
     expect(opts.method).toBe('PUT');
     const body = JSON.parse(opts.body);
@@ -464,8 +521,15 @@ describe('save — success', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const [, opts] = global.fetch.mock.calls[1];
+    await waitFor(() => {
+      const call = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      );
+      expect(call).toBeDefined();
+    });
+    const [, opts] = global.fetch.mock.calls.find(
+      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+    );
     expect(opts.headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
   });
 
@@ -495,8 +559,17 @@ describe('save — success', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     await userEvent.type(screen.getByLabelText(/full name/i), '   ');
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const body = JSON.parse(global.fetch.mock.calls[1][1].body);
+    await waitFor(() => {
+      const call = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      );
+      expect(call).toBeDefined();
+    });
+    const body = JSON.parse(
+      global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      )[1].body
+    );
     expect(body.full_name).toBeNull();
   });
 
@@ -716,8 +789,17 @@ describe('fetch payload', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const body = JSON.parse(global.fetch.mock.calls[1][1].body);
+    await waitFor(() => {
+      const call = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      );
+      expect(call).toBeDefined();
+    });
+    const body = JSON.parse(
+      global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      )[1].body
+    );
     for (const field of [
       'full_name',
       'headline',
@@ -734,8 +816,11 @@ describe('fetch payload', () => {
 
   test('GET /profile is called with Authorization header', async () => {
     renderPage();
-    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    const [url, opts] = global.fetch.mock.calls[0];
+    await waitFor(() => {
+      const call = global.fetch.mock.calls.find(([u]) => u === `${BACKEND}/profile`);
+      expect(call).toBeDefined();
+    });
+    const [url, opts] = global.fetch.mock.calls.find(([u]) => u === `${BACKEND}/profile`);
     expect(url).toBe(`${BACKEND}/profile`);
     expect(opts.headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
   });
@@ -745,9 +830,247 @@ describe('fetch payload', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
-    const body = JSON.parse(global.fetch.mock.calls[1][1].body);
+    await waitFor(() => {
+      const call = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      );
+      expect(call).toBeDefined();
+    });
+    const body = JSON.parse(
+      global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+      )[1].body
+    );
     expect(body.full_name).toBeNull();
     expect(body.summary).toBeNull();
+  });
+});
+
+// ─── Education section ────────────────────────────────────────────────────────
+
+describe('education section', () => {
+  test('renders "Education" heading', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /^education$/i })).toBeInTheDocument();
+    });
+  });
+
+  test('renders institution input and Add Education button', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/institution/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /add education/i })).toBeInTheDocument();
+    });
+  });
+
+  test('Add Education button is disabled when required fields are empty', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /add education/i })).toBeDisabled();
+    });
+  });
+
+  test('shows "No education added yet." when list is empty', async () => {
+    mockFetch({ education: [] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/no education added yet/i)).toBeInTheDocument();
+    });
+  });
+
+  test('renders loaded education entry institution name', async () => {
+    mockFetch({ education: [SAMPLE_EDUCATION] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('NJIT')).toBeInTheDocument();
+    });
+  });
+
+  test('renders loaded education entry degree and field', async () => {
+    mockFetch({ education: [SAMPLE_EDUCATION] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/bachelor of science, computer science/i)).toBeInTheDocument();
+    });
+  });
+
+  test('renders loaded education year range', async () => {
+    mockFetch({ education: [SAMPLE_EDUCATION] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('2022 – 2026')).toBeInTheDocument();
+    });
+  });
+
+  test('Add Education button enabled after filling required fields', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/institution/i)).toBeInTheDocument());
+
+    await userEvent.type(screen.getByLabelText(/institution/i), 'NJIT');
+    await userEvent.type(screen.getByLabelText(/^degree$/i), 'BS');
+    await userEvent.type(screen.getByLabelText(/field of study/i), 'CS');
+    await userEvent.type(screen.getByLabelText(/start year/i), '2020');
+
+    expect(screen.getByRole('button', { name: /add education/i })).not.toBeDisabled();
+  });
+
+  test('adds education by POSTing to /education', async () => {
+    const newEntry = {
+      id: 'new-edu',
+      user_id: 'user-1',
+      institution: 'NJIT',
+      degree: 'BS',
+      field_of_study: 'CS',
+      start_year: 2020,
+      end_year: null,
+      gpa: null,
+      description: null,
+    };
+    global.fetch = jest.fn((url, opts = {}) => {
+      if (url && url.includes('/education')) {
+        if (opts.method === 'POST') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(newEntry) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/institution/i)).toBeInTheDocument());
+
+    await userEvent.type(screen.getByLabelText(/institution/i), 'NJIT');
+    await userEvent.type(screen.getByLabelText(/^degree$/i), 'BS');
+    await userEvent.type(screen.getByLabelText(/field of study/i), 'CS');
+    await userEvent.type(screen.getByLabelText(/start year/i), '2020');
+    fireEvent.click(screen.getByRole('button', { name: /add education/i }));
+
+    await waitFor(() => {
+      const postCall = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/education` && o.method === 'POST'
+      );
+      expect(postCall).toBeDefined();
+      const body = JSON.parse(postCall[1].body);
+      expect(body.institution).toBe('NJIT');
+    });
+  });
+
+  test('edit button populates form with entry data', async () => {
+    mockFetch({ education: [SAMPLE_EDUCATION] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('NJIT')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /edit njit/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/institution/i)).toHaveValue('NJIT');
+    });
+    expect(screen.getByLabelText(/^degree$/i)).toHaveValue('Bachelor of Science');
+    expect(screen.getByLabelText(/field of study/i)).toHaveValue('Computer Science');
+  });
+
+  test('edit shows Update Education and Cancel buttons', async () => {
+    mockFetch({ education: [SAMPLE_EDUCATION] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('NJIT')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /edit njit/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /update education/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+    });
+  });
+
+  test('cancel edit resets form to empty', async () => {
+    mockFetch({ education: [SAMPLE_EDUCATION] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('NJIT')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /edit njit/i }));
+    await waitFor(() => expect(screen.getByLabelText(/institution/i)).toHaveValue('NJIT'));
+
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+    await waitFor(() => expect(screen.getByLabelText(/institution/i)).toHaveValue(''));
+    expect(screen.queryByRole('button', { name: /update education/i })).not.toBeInTheDocument();
+  });
+
+  test('update education sends PUT /education/:id', async () => {
+    const updated = { ...SAMPLE_EDUCATION, institution: 'MIT' };
+    global.fetch = jest.fn((url, opts = {}) => {
+      if (url && url.includes('/education')) {
+        if (opts.method === 'PUT') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(updated) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([SAMPLE_EDUCATION]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('NJIT')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /edit njit/i }));
+    await waitFor(() => expect(screen.getByLabelText(/institution/i)).toHaveValue('NJIT'));
+
+    await userEvent.clear(screen.getByLabelText(/institution/i));
+    await userEvent.type(screen.getByLabelText(/institution/i), 'MIT');
+    fireEvent.click(screen.getByRole('button', { name: /update education/i }));
+
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/education/${SAMPLE_EDUCATION.id}` && o.method === 'PUT'
+      );
+      expect(putCall).toBeDefined();
+    });
+  });
+
+  test('delete button sends DELETE /education/:id', async () => {
+    mockFetch({ education: [SAMPLE_EDUCATION] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('NJIT')).toBeInTheDocument());
+
+    global.fetch = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(null) }));
+
+    fireEvent.click(screen.getByRole('button', { name: /delete njit/i }));
+
+    await waitFor(() => {
+      const deleteCall = global.fetch.mock.calls.find(
+        ([u, o = {}]) =>
+          u === `${BACKEND}/education/${SAMPLE_EDUCATION.id}` && o.method === 'DELETE'
+      );
+      expect(deleteCall).toBeDefined();
+    });
+  });
+
+  test('shows save error when addEducation fails', async () => {
+    global.fetch = jest.fn((url, opts = {}) => {
+      if (url && url.includes('/education')) {
+        if (opts.method === 'POST') {
+          return Promise.resolve({
+            ok: false,
+            status: 422,
+            text: () => Promise.resolve('start_year must be 1900 or later'),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/institution/i)).toBeInTheDocument());
+
+    await userEvent.type(screen.getByLabelText(/institution/i), 'NJIT');
+    await userEvent.type(screen.getByLabelText(/^degree$/i), 'BS');
+    await userEvent.type(screen.getByLabelText(/field of study/i), 'CS');
+    await userEvent.type(screen.getByLabelText(/start year/i), '1800');
+    fireEvent.click(screen.getByRole('button', { name: /add education/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('start_year must be 1900 or later')).toBeInTheDocument();
+    });
   });
 });
