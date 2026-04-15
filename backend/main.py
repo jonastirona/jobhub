@@ -301,10 +301,17 @@ def create_skill(skill: SkillCreate, authorization: Optional[str] = Header(defau
             status_code=422,
             detail=f"proficiency must be one of: {', '.join(sorted(VALID_PROFICIENCY_LEVELS))}",
         )
-    count_resp = sb.table("skills").select("position").eq("user_id", user_id).execute()
-    if count_resp.data is None:
+    position_resp = (
+        sb.table("skills")
+        .select("position")
+        .eq("user_id", user_id)
+        .order("position", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if position_resp.data is None:
         raise HTTPException(status_code=500, detail="Failed to determine skill position")
-    position = max((r["position"] for r in count_resp.data), default=-1) + 1
+    position = (position_resp.data[0]["position"] if position_resp.data else -1) + 1
     payload = skill.model_dump(exclude_none=True)
     payload["user_id"] = user_id
     payload["position"] = position

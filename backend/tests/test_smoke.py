@@ -68,7 +68,7 @@ def make_mock_sb(data=None):
     mock_result.data = data if data is not None else []
 
     mock_query = MagicMock()
-    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order"):
+    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order", "limit"):
         getattr(mock_query, method).return_value = mock_query
     mock_query.execute.return_value = mock_result
 
@@ -95,7 +95,7 @@ def _make_mock_sb_with_side_effects(*data_list):
         results.append(r)
 
     mock_query = MagicMock()
-    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order"):
+    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order", "limit"):
         getattr(mock_query, method).return_value = mock_query
     mock_query.execute.side_effect = results
 
@@ -988,9 +988,9 @@ def test_create_skill_sets_user_id():
 
 
 def test_create_skill_sets_position_from_count():
-    """position is max(existing positions) + 1."""
-    existing = [{"position": 0}, {"position": 1}]
-    mock_sb, mock_query = _make_mock_sb_with_side_effects(existing, [SAMPLE_SKILL])
+    """position is max existing position + 1, fetched via order+limit."""
+    # The query returns only the highest-position row (order desc, limit 1).
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([{"position": 1}], [SAMPLE_SKILL])
     with patch("main.get_supabase", return_value=mock_sb):
         client.post(
             "/skills",
