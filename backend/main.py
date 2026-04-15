@@ -287,7 +287,11 @@ def upsert_career_preferences(
     user_id = get_user_id(authorization)
     sb = get_supabase()
     payload = prefs.model_dump(exclude_unset=True)
-    if "work_mode" in payload and payload["work_mode"] not in VALID_WORK_MODES:
+    if (
+        "work_mode" in payload
+        and payload["work_mode"] is not None
+        and payload["work_mode"] not in VALID_WORK_MODES
+    ):
         raise HTTPException(
             status_code=422,
             detail=f"work_mode must be one of: {', '.join(sorted(VALID_WORK_MODES))}",
@@ -296,6 +300,10 @@ def upsert_career_preferences(
         raise HTTPException(status_code=422, detail="salary_min must be non-negative")
     if "salary_max" in payload and payload["salary_max"] is not None and payload["salary_max"] < 0:
         raise HTTPException(status_code=422, detail="salary_max must be non-negative")
+    salary_min = payload.get("salary_min")
+    salary_max = payload.get("salary_max")
+    if salary_min is not None and salary_max is not None and salary_min > salary_max:
+        raise HTTPException(status_code=422, detail="salary_min must not exceed salary_max")
     payload["user_id"] = user_id
     response = sb.table("career_preferences").upsert(payload, on_conflict="user_id").execute()
     if not response.data:

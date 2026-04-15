@@ -19,8 +19,8 @@ function toNullableString(value) {
 function toNullableInt(value) {
   const trimmed = asText(value).trim();
   if (trimmed === '') return null;
-  const n = parseInt(trimmed, 10);
-  return isNaN(n) ? null : n;
+  const n = Number(trimmed);
+  return Number.isInteger(n) ? n : null;
 }
 
 function getInitials(fullName, email) {
@@ -448,6 +448,7 @@ export default function ProfilePage() {
                   className="profile-input"
                   placeholder="e.g. 80000"
                   min="0"
+                  step="1"
                 />
               </div>
 
@@ -464,6 +465,7 @@ export default function ProfilePage() {
                   className="profile-input"
                   placeholder="e.g. 120000"
                   min="0"
+                  step="1"
                 />
               </div>
             </div>

@@ -462,8 +462,15 @@ describe('save — success', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
-    const [url, opts] = global.fetch.mock.calls[2];
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(
+        ([url, opts = {}]) => url === `${BACKEND}/profile` && opts.method === 'PUT'
+      );
+      expect(putCall).toBeDefined();
+    });
+    const [url, opts] = global.fetch.mock.calls.find(
+      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+    );
     expect(url).toBe(`${BACKEND}/profile`);
     expect(opts.method).toBe('PUT');
     const body = JSON.parse(opts.body);
@@ -475,8 +482,15 @@ describe('save — success', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
-    const [, opts] = global.fetch.mock.calls[2];
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(
+        ([url, opts = {}]) => url === `${BACKEND}/profile` && opts.method === 'PUT'
+      );
+      expect(putCall).toBeDefined();
+    });
+    const [, opts] = global.fetch.mock.calls.find(
+      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+    );
     expect(opts.headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
   });
 
@@ -506,8 +520,16 @@ describe('save — success', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     await userEvent.type(screen.getByLabelText(/full name/i), '   ');
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
-    const body = JSON.parse(global.fetch.mock.calls[2][1].body);
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(
+        ([url, opts = {}]) => url === `${BACKEND}/profile` && opts.method === 'PUT'
+      );
+      expect(putCall).toBeDefined();
+    });
+    const [, opts] = global.fetch.mock.calls.find(
+      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+    );
+    const body = JSON.parse(opts.body);
     expect(body.full_name).toBeNull();
   });
 
@@ -727,8 +749,16 @@ describe('fetch payload', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
-    const body = JSON.parse(global.fetch.mock.calls[2][1].body);
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(
+        ([url, opts = {}]) => url === `${BACKEND}/profile` && opts.method === 'PUT'
+      );
+      expect(putCall).toBeDefined();
+    });
+    const [, opts] = global.fetch.mock.calls.find(
+      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+    );
+    const body = JSON.parse(opts.body);
     for (const field of [
       'full_name',
       'headline',
@@ -756,8 +786,16 @@ describe('fetch payload', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
-    const body = JSON.parse(global.fetch.mock.calls[2][1].body);
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(
+        ([url, opts = {}]) => url === `${BACKEND}/profile` && opts.method === 'PUT'
+      );
+      expect(putCall).toBeDefined();
+    });
+    const [, opts] = global.fetch.mock.calls.find(
+      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
+    );
+    const body = JSON.parse(opts.body);
     expect(body.full_name).toBeNull();
     expect(body.summary).toBeNull();
   });
