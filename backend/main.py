@@ -262,7 +262,7 @@ def update_job(job_id: str, job: JobUpdate, authorization: Optional[str] = Heade
         payload["status"] = _normalize_job_status(payload["status"])
     if "applied_date" in payload and payload["applied_date"] is not None:
         payload["applied_date"] = str(payload["applied_date"])
-    existing = sb.table("jobs").select("status").eq("id", job_id).eq("user_id", user_id).execute()
+    existing = sb.table("jobs").select("*").eq("id", job_id).eq("user_id", user_id).execute()
     if not existing.data:
         raise HTTPException(status_code=404, detail="Job not found")
     old_status = existing.data[0]["status"]
