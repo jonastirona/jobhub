@@ -99,16 +99,25 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
 
   async function handleSaveInterviewEdit() {
     if (!editingInterviewId) return;
-    await updateInterview(editingInterviewId, {
-      round_type: editInterview.round_type,
-      scheduled_at: localDateTimeToUtcIso(editInterview.scheduled_at),
-      notes: editInterview.notes,
-    });
-    setEditingInterviewId(null);
+
+    try {
+      await updateInterview(editingInterviewId, {
+        round_type: editInterview.round_type,
+        scheduled_at: localDateTimeToUtcIso(editInterview.scheduled_at),
+        notes: editInterview.notes,
+      });
+      setEditingInterviewId(null);
+    } catch {
+      // The hook already updates interviewError; keep the editor open on failure.
+    }
   }
 
   async function handleDeleteInterview(interviewId) {
-    await deleteInterview(interviewId);
+    try {
+      await deleteInterview(interviewId);
+    } catch {
+      // The hook already updates interviewError; swallow to avoid an unhandled rejection.
+    }
   }
 
   const timelineEntries = [
