@@ -34,10 +34,6 @@ const sampleInterviews = [
   },
 ];
 
-function mockFetchOk(body) {
-  global.fetch = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(body) }));
-}
-
 function mockFetchError(status = 500) {
   global.fetch = jest.fn(() =>
     Promise.resolve({ ok: false, status, text: () => Promise.resolve('Server error') })
