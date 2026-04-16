@@ -160,14 +160,14 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
         </div>
 
         <div className="jh-body">
-          {loading && <p className="jh-state">Loading history...</p>}
+          {(loading || interviewLoading) && <p className="jh-state">Loading history...</p>}
           {error && <p className="jh-state jh-state--error">{error}</p>}
 
-          {!loading && !error && timelineEntries.length === 0 && (
+          {!(loading || interviewLoading) && !error && timelineEntries.length === 0 && (
             <p className="jh-state">No activity recorded yet.</p>
           )}
 
-          {!loading && !error && timelineEntries.length > 0 && (
+          {!(loading || interviewLoading) && !error && timelineEntries.length > 0 && (
             <ol className="jh-timeline">
               {timelineEntries.map((entry, index) => (
                 <li
@@ -312,7 +312,7 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
             </ol>
           )}
         </div>
-        {interviewError && (
+        {!interviewLoading && interviewError && (
           <p className="jh-state jh-state--error jh-inline-error">{interviewError}</p>
         )}
 
