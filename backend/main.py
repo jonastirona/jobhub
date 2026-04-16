@@ -166,10 +166,16 @@ def _validate_experience_years(start_year: Optional[int], end_year: Optional[int
 def _normalize_job_status(status: Optional[str]) -> Optional[str]:
     if status is None:
         return None
-    normalized = JOB_STATUS_ALIAS.get(status, status)
+    normalized = _normalize_job_status_alias(status)
     if normalized not in JOB_STATUSES:
         raise HTTPException(status_code=422, detail="status must be a supported job status")
     return normalized
+
+
+def _normalize_job_status_alias(status: Optional[str]) -> Optional[str]:
+    if status is None:
+        return None
+    return JOB_STATUS_ALIAS.get(status, status)
 
 
 # --- Routes ---
@@ -266,7 +272,7 @@ def update_job(job_id: str, job: JobUpdate, authorization: Optional[str] = Heade
     updated = response.data[0]
     new_status = updated["status"]
     if "status" in payload:
-        canonical_old_status = _normalize_job_status(old_status)
+        canonical_old_status = _normalize_job_status_alias(old_status)
         if new_status != canonical_old_status:
             sb.table("job_status_history").insert(
                 {

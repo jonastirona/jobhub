@@ -615,6 +615,20 @@ def test_update_job_no_history_when_legacy_alias_normalizes_to_same_status():
     assert "job_status_history" not in table_calls
 
 
+def test_update_job_allows_valid_status_when_existing_status_is_legacy_unknown():
+    mock_sb, mock_query = _make_mock_sb_with_status_change("legacy-foo", "offered")
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"status": "offered"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    history_payload = mock_query.insert.call_args_list[-1][0][0]
+    assert history_payload["from_status"] == "legacy-foo"
+    assert history_payload["to_status"] == "offered"
+
+
 def test_update_job_notes_does_not_validate_legacy_status():
     updated_row = {**SAMPLE_JOB, "status": "unknown-status", "notes": "updated"}
     mock_sb, mock_query = _make_mock_sb_update_without_status("unknown-status", updated_row)
