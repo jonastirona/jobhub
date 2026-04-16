@@ -17,15 +17,35 @@ create index if not exists documents_user_job_idx on documents (user_id, job_id)
 
 alter table documents enable row level security;
 
-drop policy if exists "Users can manage their own documents" on documents;
-create policy "Users can manage their own documents"
-  on documents
-  for all
-  using  (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'documents'
+      and policyname = 'Users can manage their own documents'
+  ) then
+    create policy "Users can manage their own documents"
+      on documents
+      for all
+      using (auth.uid() = user_id)
+      with check (auth.uid() = user_id);
+  end if;
+end $$;
 
 -- update_updated_at() is defined in 001_create_jobs.sql and shared across tables.
-drop trigger if exists documents_updated_at on documents;
-create trigger documents_updated_at
-  before update on documents
-  for each row execute function update_updated_at();
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'documents_updated_at'
+      and tgrelid = 'public.documents'::regclass
+      and not tgisinternal
+  ) then
+    create trigger documents_updated_at
+      before update on documents
+      for each row execute function update_updated_at();
+  end if;
+end $$;
