@@ -142,13 +142,23 @@ export default function Dashboard() {
 
   const handleDeleteModalKeyDown = useCallback(
     (e) => {
-      if (e.key !== 'Tab' || !deleteModalRef.current) return;
+      const modal = deleteModalRef.current;
+      if (e.key !== 'Tab' || !modal) return;
+
       const focusable = Array.from(
-        deleteModalRef.current.querySelectorAll(
+        modal.querySelectorAll(
           'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
         )
       );
-      if (focusable.length === 0) return;
+
+      if (focusable.length === 0) {
+        e.preventDefault();
+        if (!modal.hasAttribute('tabindex')) {
+          modal.setAttribute('tabindex', '-1');
+        }
+        modal.focus();
+        return;
+      }
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
       if (e.shiftKey) {
