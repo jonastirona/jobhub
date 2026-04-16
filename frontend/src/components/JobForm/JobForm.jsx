@@ -141,6 +141,7 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
         throw new Error(text || `Request failed (${res.status})`);
       }
       const savedJob = await res.json();
+      let interviewWarning = null;
 
       if (
         values.status === 'interviewing' &&
@@ -153,21 +154,29 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
           notes: nextInterview.notes.trim() || null,
         };
         const targetJobId = isEdit ? job.id : savedJob.id;
-        const interviewRes = await fetch(`${backendBase}/jobs/${targetJobId}/interviews`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify(interviewPayload),
-        });
-        if (!interviewRes.ok) {
-          const text = await interviewRes.text().catch(() => '');
-          throw new Error(text || `Interview request failed (${interviewRes.status})`);
+
+        try {
+          const interviewRes = await fetch(`${backendBase}/jobs/${targetJobId}/interviews`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify(interviewPayload),
+          });
+          if (!interviewRes.ok) {
+            const text = await interviewRes.text().catch(() => '');
+            throw new Error(text || `Interview request failed (${interviewRes.status})`);
+          }
+        } catch (err) {
+          interviewWarning = err instanceof Error ? err.message : String(err);
         }
       }
 
       onSaved();
+      if (interviewWarning) {
+        window.alert(`Job saved, but the interview could not be logged: ${interviewWarning}`);
+      }
       onClose();
     } catch (err) {
       setApiError(err instanceof Error ? err.message : String(err));
