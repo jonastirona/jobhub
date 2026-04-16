@@ -29,6 +29,18 @@ PROFILE_REQUIRED_FIELDS = (
     "website",
     "linkedin_url",
 )
+JOB_STATUSES = {
+    "interested",
+    "applied",
+    "interviewing",
+    "offered",
+    "accepted",
+    "declined",
+    "rejected",
+    "withdrawn",
+    "archived",
+}
+JOB_STATUS_ALIAS = {"interview": "interviewing", "offer": "offered"}
 
 
 def get_supabase():
@@ -165,6 +177,21 @@ def _validate_experience_years(start_year: Optional[int], end_year: Optional[int
         raise HTTPException(status_code=422, detail="end_year must be >= start_year")
 
 
+def _normalize_job_status(status: Optional[str]) -> Optional[str]:
+    if status is None:
+        return None
+    normalized = _normalize_job_status_alias(status)
+    if normalized not in JOB_STATUSES:
+        raise HTTPException(status_code=422, detail="status must be a supported job status")
+    return normalized
+
+
+def _normalize_job_status_alias(status: Optional[str]) -> Optional[str]:
+    if status is None:
+        return None
+    return JOB_STATUS_ALIAS.get(status, status)
+
+
 # --- Routes ---
 
 
@@ -187,6 +214,8 @@ def create_job(job: JobCreate, authorization: Optional[str] = Header(default=Non
     user_id = get_user_id(authorization)
     sb = get_supabase()
     payload = job.model_dump(exclude_none=True)
+    if "status" in payload:
+        payload["status"] = _normalize_job_status(payload["status"])
     payload["user_id"] = user_id
     if "applied_date" in payload and payload["applied_date"] is not None:
         payload["applied_date"] = str(payload["applied_date"])
@@ -243,24 +272,37 @@ def update_job(job_id: str, job: JobUpdate, authorization: Optional[str] = Heade
     payload = job.model_dump(exclude_none=True)
     if not payload:
         raise HTTPException(status_code=400, detail="No fields to update")
+    if "status" in payload:
+        payload["status"] = _normalize_job_status(payload["status"])
     if "applied_date" in payload and payload["applied_date"] is not None:
         payload["applied_date"] = str(payload["applied_date"])
-    existing = sb.table("jobs").select("status").eq("id", job_id).eq("user_id", user_id).execute()
+    existing = sb.table("jobs").select("*").eq("id", job_id).eq("user_id", user_id).execute()
     if not existing.data:
         raise HTTPException(status_code=404, detail="Job not found")
     old_status = existing.data[0]["status"]
+    canonical_old_status = _normalize_job_status_alias(old_status)
+    should_insert_status_history = False
+    if "status" in payload:
+        if payload["status"] == canonical_old_status:
+            # Alias-to-canonical transitions should be treated as no-op status updates.
+            payload.pop("status")
+        else:
+            should_insert_status_history = True
+
+    if not payload:
+        return existing.data[0]
+
     response = sb.table("jobs").update(payload).eq("id", job_id).eq("user_id", user_id).execute()
     if not response.data:
         raise HTTPException(status_code=404, detail="Job not found")
     updated = response.data[0]
-    new_status = updated["status"]
-    if "status" in payload and new_status != old_status:
+    if should_insert_status_history:
         sb.table("job_status_history").insert(
             {
                 "job_id": job_id,
                 "user_id": user_id,
-                "from_status": old_status,
-                "to_status": new_status,
+                "from_status": canonical_old_status,
+                "to_status": updated["status"],
             }
         ).execute()
     return updated

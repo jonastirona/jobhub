@@ -76,7 +76,9 @@ export default function Dashboard() {
   const interviews = jobs.filter(
     (j) => j.status === 'interviewing' || j.status === 'interview'
   ).length;
-  const offers = jobs.filter((j) => j.status === 'offered' || j.status === 'offer').length;
+  const offers = jobs.filter(
+    (j) => j.status === 'offered' || j.status === 'offer' || j.status === 'accepted'
+  ).length;
 
   const statCards = [
     {
