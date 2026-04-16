@@ -150,6 +150,20 @@
   min-height: 80px;
 }
 
+.jf-interview-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  background: var(--bg-page);
+}
+
+.jf-interview-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
 .jf-error-msg {
   font-size: 12px;
   color: var(--red, #ef4444);

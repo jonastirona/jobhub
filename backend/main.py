@@ -351,6 +351,25 @@ def update_interview_event(
     return response.data[0]
 
 
+@app.delete("/jobs/{job_id}/interviews/{event_id}")
+def delete_interview_event(
+    job_id: str, event_id: str, authorization: Optional[str] = Header(default=None)
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = (
+        sb.table("interview_events")
+        .delete()
+        .eq("id", event_id)
+        .eq("job_id", job_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Interview event not found")
+    return Response(status_code=204)
+
+
 @app.put("/jobs/{job_id}")
 def update_job(job_id: str, job: JobUpdate, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)

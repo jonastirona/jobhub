@@ -85,9 +85,9 @@ test('renders job title and company in header', () => {
   expect(screen.getByText('Software Engineer — Acme Corp')).toBeInTheDocument();
 });
 
-test('renders Stage History title', () => {
+test('renders Activity Timeline title', () => {
   render(<JobHistory {...baseProps} />);
-  expect(screen.getByText('Stage History')).toBeInTheDocument();
+  expect(screen.getByText('Activity Timeline')).toBeInTheDocument();
 });
 
 test('shows loading state initially', () => {
@@ -126,9 +126,7 @@ test('shows empty state when no history', async () => {
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
   });
   render(<JobHistory {...baseProps} />);
-  await waitFor(() =>
-    expect(screen.getByText('No stage history recorded yet.')).toBeInTheDocument()
-  );
+  await waitFor(() => expect(screen.getByText('No activity recorded yet.')).toBeInTheDocument());
 });
 
 test('shows error state on failed fetch', async () => {
@@ -203,27 +201,27 @@ test('calls onClose when overlay is clicked', () => {
   expect(baseProps.onClose).toHaveBeenCalled();
 });
 
-test('renders interview events section and existing interview', async () => {
+test('renders interview in timeline and expands on click', async () => {
   render(<JobHistory {...baseProps} />);
-  await waitFor(() => expect(screen.getByText('Interview Events')).toBeInTheDocument());
-  expect(screen.getByText('Phone Screen')).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText('Phone Screen')).toBeInTheDocument());
+  expect(screen.queryByText('Bring resume')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Phone Screen' }));
   expect(screen.getByText('Bring resume')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument();
 });
 
-test('can add interview event', async () => {
+test('can delete interview event', async () => {
   mockFetchOk();
-  const { container } = render(<JobHistory {...baseProps} />);
-  await waitFor(() => expect(screen.getByText('Interview Events')).toBeInTheDocument());
-  fireEvent.change(screen.getByPlaceholderText(/round type/i), {
-    target: { value: 'Onsite' },
-  });
-  const dateInput = container.querySelector('input[type="datetime-local"]');
-  fireEvent.change(dateInput, { target: { value: '2026-04-20T10:30' } });
-  fireEvent.click(screen.getByRole('button', { name: /add interview event/i }));
+  render(<JobHistory {...baseProps} />);
+  await waitFor(() => expect(screen.getByText('Phone Screen')).toBeInTheDocument());
+  expect(screen.queryByText('Log Interview')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Phone Screen' }));
+  fireEvent.click(screen.getByRole('button', { name: /delete/i }));
   await waitFor(() => {
     expect(global.fetch).toHaveBeenCalledWith(
-      `${BACKEND}/jobs/${sampleJob.id}/interviews`,
-      expect.objectContaining({ method: 'POST' })
+      `${BACKEND}/jobs/${sampleJob.id}/interviews/i1`,
+      expect.objectContaining({ method: 'DELETE' })
     );
   });
 });

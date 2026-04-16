@@ -15,12 +15,24 @@ function toFormValues(job) {
   };
 }
 
+function localDateTimeToUtcIso(value) {
+  if (!value) return value;
+  const parsed = new Date(value);
+  if (isNaN(parsed.getTime())) return value;
+  return parsed.toISOString();
+}
+
 export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
   const isEdit = mode === 'edit';
   const [values, setValues] = useState(() => (isEdit && job ? toFormValues(job) : EMPTY_JOB));
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [nextInterview, setNextInterview] = useState({
+    round_type: '',
+    scheduled_at: '',
+    notes: '',
+  });
   const overlayRef = useRef(null);
   const modalRef = useRef(null);
   const firstInputRef = useRef(null);
@@ -126,6 +138,34 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
         const text = await res.text().catch(() => '');
         throw new Error(text || `Request failed (${res.status})`);
       }
+      const savedJob = await res.json();
+
+      if (
+        values.status === 'interviewing' &&
+        nextInterview.round_type.trim() &&
+        nextInterview.scheduled_at
+      ) {
+        const interviewPayload = {
+          round_type: nextInterview.round_type.trim(),
+          scheduled_at: localDateTimeToUtcIso(nextInterview.scheduled_at),
+          notes: nextInterview.notes.trim() || null,
+        };
+        const targetJobId = isEdit ? job.id : savedJob.id;
+        const interviewUrl = `${backendBase}/jobs/${targetJobId}/interviews`;
+        const interviewMethod = 'POST';
+        const interviewRes = await fetch(interviewUrl, {
+          method: interviewMethod,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(interviewPayload),
+        });
+        if (!interviewRes.ok) {
+          const text = await interviewRes.text().catch(() => '');
+          throw new Error(text || `Interview request failed (${interviewRes.status})`);
+        }
+      }
 
       onSaved();
       onClose();
@@ -214,6 +254,60 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
               )}
             </div>
           </div>
+
+          {values.status === 'interviewing' && (
+            <div className="jf-interview-block">
+              <div className="jf-interview-title">Log an Interview</div>
+              <div className="jf-row jf-row--two">
+                <div className="jf-field">
+                  <label className="jf-label" htmlFor="jf-next-round-input">
+                    Round Type
+                  </label>
+                  <input
+                    id="jf-next-round-input"
+                    className="jf-input"
+                    type="text"
+                    value={nextInterview.round_type}
+                    onChange={(e) =>
+                      setNextInterview((prev) => ({ ...prev, round_type: e.target.value }))
+                    }
+                    placeholder="e.g. Phone Screen"
+                  />
+                </div>
+                <div className="jf-field">
+                  <label className="jf-label" htmlFor="jf-next-scheduled-input">
+                    Date & Time
+                  </label>
+                  <input
+                    id="jf-next-scheduled-input"
+                    className="jf-input"
+                    type="datetime-local"
+                    value={nextInterview.scheduled_at}
+                    onChange={(e) =>
+                      setNextInterview((prev) => ({ ...prev, scheduled_at: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+              <div className="jf-row">
+                <div className="jf-field">
+                  <label className="jf-label" htmlFor="jf-next-notes-input">
+                    Interview Notes
+                  </label>
+                  <textarea
+                    id="jf-next-notes-input"
+                    className="jf-textarea"
+                    rows={2}
+                    value={nextInterview.notes}
+                    onChange={(e) =>
+                      setNextInterview((prev) => ({ ...prev, notes: e.target.value }))
+                    }
+                    placeholder="Prep notes, interviewer context, reminders..."
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="jf-row jf-row--two">
             <div className="jf-field">

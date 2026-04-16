@@ -517,6 +517,11 @@ def test_update_interview_requires_auth():
     assert response.status_code == 401
 
 
+def test_delete_interview_requires_auth():
+    response = client.delete(f"/jobs/{SAMPLE_JOB['id']}/interviews/ie-1")
+    assert response.status_code == 401
+
+
 def test_get_interviews_success():
     mock_sb, _, _ = make_mock_sb(data=[SAMPLE_INTERVIEW_EVENT])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -610,6 +615,16 @@ def test_update_interview_blank_round_type_returns_422():
             headers={"authorization": AUTH_HEADER},
         )
     assert response.status_code == 422
+
+
+def test_delete_interview_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_INTERVIEW_EVENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            f"/jobs/{SAMPLE_JOB['id']}/interviews/{SAMPLE_INTERVIEW_EVENT['id']}",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 204
 
 
 # ---------------------------------------------------------------------------

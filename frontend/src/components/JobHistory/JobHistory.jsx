@@ -3,6 +3,8 @@ import { useJobHistory } from '../../hooks/useJobHistory';
 import StatusBadge from '../common/StatusBadge';
 import './JobHistory.css';
 
+const USER_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
 function formatDateTime(isoString) {
   const d = new Date(isoString);
   if (isNaN(d.getTime())) return '—';
@@ -12,6 +14,8 @@ function formatDateTime(isoString) {
     year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
+    timeZone: USER_TIME_ZONE,
+    timeZoneName: 'short',
   });
 }
 
@@ -23,6 +27,13 @@ function toDateTimeLocalValue(value) {
   return new Date(d.getTime() - tzOffsetMs).toISOString().slice(0, 16);
 }
 
+function localDateTimeToUtcIso(value) {
+  if (!value) return value;
+  const parsed = new Date(value);
+  if (isNaN(parsed.getTime())) return value;
+  return parsed.toISOString();
+}
+
 export default function JobHistory({ job, accessToken, onClose, onSaved }) {
   const {
     history,
@@ -31,20 +42,15 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
     error,
     savingInterview,
     interviewError,
-    createInterview,
     updateInterview,
+    deleteInterview,
   } = useJobHistory(job.id, accessToken);
   const [notes, setNotes] = useState(job.notes ?? '');
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesError, setNotesError] = useState(null);
   const [notesSaved, setNotesSaved] = useState(false);
-  const [interviewSaved, setInterviewSaved] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState(null);
-  const [newInterview, setNewInterview] = useState({
-    round_type: '',
-    scheduled_at: '',
-    notes: '',
-  });
+  const [expandedInterviewId, setExpandedInterviewId] = useState(null);
   const [editInterview, setEditInterview] = useState({
     round_type: '',
     scheduled_at: '',
@@ -81,18 +87,8 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
     }
   }
 
-  async function handleCreateInterview() {
-    setInterviewSaved(false);
-    await createInterview({
-      round_type: newInterview.round_type,
-      scheduled_at: newInterview.scheduled_at,
-      notes: newInterview.notes,
-    });
-    setNewInterview({ round_type: '', scheduled_at: '', notes: '' });
-    setInterviewSaved(true);
-  }
-
   function startEditingInterview(interview) {
+    setExpandedInterviewId(interview.id);
     setEditingInterviewId(interview.id);
     setEditInterview({
       round_type: interview.round_type ?? '',
@@ -103,15 +99,32 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
 
   async function handleSaveInterviewEdit() {
     if (!editingInterviewId) return;
-    setInterviewSaved(false);
     await updateInterview(editingInterviewId, {
       round_type: editInterview.round_type,
-      scheduled_at: editInterview.scheduled_at,
+      scheduled_at: localDateTimeToUtcIso(editInterview.scheduled_at),
       notes: editInterview.notes,
     });
     setEditingInterviewId(null);
-    setInterviewSaved(true);
   }
+
+  async function handleDeleteInterview(interviewId) {
+    await deleteInterview(interviewId);
+  }
+
+  const timelineEntries = [
+    ...history.map((entry) => ({
+      id: `status-${entry.id}`,
+      type: 'status',
+      happened_at: entry.changed_at,
+      payload: entry,
+    })),
+    ...interviews.map((entry) => ({
+      id: `interview-${entry.id}`,
+      type: 'interview',
+      happened_at: entry.scheduled_at,
+      payload: entry,
+    })),
+  ].sort((a, b) => new Date(a.happened_at) - new Date(b.happened_at));
 
   return (
     <div className="jh-overlay" onClick={onClose} role="presentation">
@@ -125,11 +138,12 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
         <div className="jh-header">
           <div>
             <h2 className="jh-title" id="jh-title">
-              Stage History
+              Activity Timeline
             </h2>
             <p className="jh-subtitle">
               {job.title} — {job.company}
             </p>
+            <p className="jh-timezone-note">Times shown in {USER_TIME_ZONE}</p>
           </div>
           <button type="button" className="jh-close" onClick={onClose} aria-label="Close">
             ✕
@@ -140,174 +154,151 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
           {loading && <p className="jh-state">Loading history...</p>}
           {error && <p className="jh-state jh-state--error">{error}</p>}
 
-          {!loading && !error && history.length === 0 && (
-            <p className="jh-state">No stage history recorded yet.</p>
+          {!loading && !error && timelineEntries.length === 0 && (
+            <p className="jh-state">No activity recorded yet.</p>
           )}
 
-          {!loading && !error && history.length > 0 && (
+          {!loading && !error && timelineEntries.length > 0 && (
             <ol className="jh-timeline">
-              {history.map((entry, index) => (
-                <li key={entry.id} className="jh-entry">
+              {timelineEntries.map((entry, index) => (
+                <li
+                  key={entry.id}
+                  className={`jh-entry${entry.type === 'interview' ? ' jh-entry--interview' : ''}`}
+                >
                   <div className="jh-entry-line">
                     <div
-                      className={`jh-dot${index === history.length - 1 ? ' jh-dot--current' : ''}`}
+                      className={`jh-dot${index === timelineEntries.length - 1 ? ' jh-dot--current' : ''}`}
                     />
-                    {index < history.length - 1 && <div className="jh-connector" />}
+                    {index < timelineEntries.length - 1 && <div className="jh-connector" />}
                   </div>
                   <div className="jh-entry-content">
-                    <div className="jh-entry-badges">
-                      {entry.from_status ? (
-                        <>
-                          <StatusBadge status={entry.from_status} />
-                          <span className="jh-arrow">→</span>
-                        </>
-                      ) : (
-                        <span className="jh-created-label">Created as</span>
-                      )}
-                      <StatusBadge status={entry.to_status} />
-                    </div>
-                    <time className="jh-time" dateTime={entry.changed_at}>
-                      {formatDateTime(entry.changed_at)}
-                    </time>
+                    {entry.type === 'status' ? (
+                      <>
+                        <div className="jh-entry-badges">
+                          {entry.payload.from_status ? (
+                            <>
+                              <StatusBadge status={entry.payload.from_status} />
+                              <span className="jh-arrow">→</span>
+                            </>
+                          ) : (
+                            <span className="jh-created-label">Created as</span>
+                          )}
+                          <StatusBadge status={entry.payload.to_status} />
+                        </div>
+                        <time className="jh-time" dateTime={entry.payload.changed_at}>
+                          {formatDateTime(entry.payload.changed_at)}
+                        </time>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="jh-interview-toggle"
+                          onClick={() =>
+                            setExpandedInterviewId((prev) =>
+                              prev === entry.payload.id ? null : entry.payload.id
+                            )
+                          }
+                        >
+                          {entry.payload.round_type}
+                        </button>
+                        <time className="jh-time" dateTime={entry.payload.scheduled_at}>
+                          {formatDateTime(entry.payload.scheduled_at)}
+                        </time>
+                        {expandedInterviewId === entry.payload.id && (
+                          <div className="jh-interview-expanded">
+                            {editingInterviewId === entry.payload.id ? (
+                              <>
+                                <div className="jh-interview-grid">
+                                  <input
+                                    className="jh-input"
+                                    value={editInterview.round_type}
+                                    onChange={(e) =>
+                                      setEditInterview((prev) => ({
+                                        ...prev,
+                                        round_type: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="Round type"
+                                  />
+                                  <input
+                                    className="jh-input"
+                                    type="datetime-local"
+                                    value={editInterview.scheduled_at}
+                                    onChange={(e) =>
+                                      setEditInterview((prev) => ({
+                                        ...prev,
+                                        scheduled_at: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                </div>
+                                <textarea
+                                  className="jh-notes-textarea"
+                                  rows={2}
+                                  value={editInterview.notes}
+                                  onChange={(e) =>
+                                    setEditInterview((prev) => ({ ...prev, notes: e.target.value }))
+                                  }
+                                  placeholder="Interview notes"
+                                />
+                                <div className="jh-interview-actions">
+                                  <button
+                                    type="button"
+                                    className="jh-interview-btn jh-interview-btn--ghost"
+                                    onClick={() => setEditingInterviewId(null)}
+                                    disabled={savingInterview}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="jh-interview-btn jh-interview-btn--primary"
+                                    onClick={handleSaveInterviewEdit}
+                                    disabled={savingInterview}
+                                  >
+                                    {savingInterview ? 'Saving...' : 'Save'}
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                {entry.payload.notes && (
+                                  <p className="jh-interview-notes">{entry.payload.notes}</p>
+                                )}
+                                <div className="jh-interview-actions">
+                                  <button
+                                    type="button"
+                                    className="jh-interview-btn jh-interview-btn--ghost"
+                                    onClick={() => startEditingInterview(entry.payload)}
+                                    disabled={savingInterview}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="jh-interview-btn jh-interview-btn--danger"
+                                    onClick={() => handleDeleteInterview(entry.payload.id)}
+                                    disabled={savingInterview}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </li>
               ))}
             </ol>
           )}
         </div>
-
-        <div className="jh-interviews">
-          <div className="jh-interviews-header">
-            <h3 className="jh-interviews-title">Interview Events</h3>
-            {interviewSaved && <span className="jh-notes-saved">Saved</span>}
-          </div>
-          {interviewError && <p className="jh-state jh-state--error">{interviewError}</p>}
-
-          {interviews.length === 0 ? (
-            <p className="jh-state">No interview events yet.</p>
-          ) : (
-            <ul className="jh-interviews-list">
-              {interviews.map((interview) => {
-                const isEditing = editingInterviewId === interview.id;
-                return (
-                  <li key={interview.id} className="jh-interview-item">
-                    {isEditing ? (
-                      <>
-                        <div className="jh-interview-grid">
-                          <input
-                            className="jh-input"
-                            value={editInterview.round_type}
-                            onChange={(e) =>
-                              setEditInterview((prev) => ({ ...prev, round_type: e.target.value }))
-                            }
-                            placeholder="Round type"
-                          />
-                          <input
-                            className="jh-input"
-                            type="datetime-local"
-                            value={editInterview.scheduled_at}
-                            onChange={(e) =>
-                              setEditInterview((prev) => ({
-                                ...prev,
-                                scheduled_at: e.target.value,
-                              }))
-                            }
-                          />
-                        </div>
-                        <textarea
-                          className="jh-notes-textarea"
-                          rows={2}
-                          value={editInterview.notes}
-                          onChange={(e) =>
-                            setEditInterview((prev) => ({ ...prev, notes: e.target.value }))
-                          }
-                          placeholder="Interview notes"
-                        />
-                        <div className="jh-interview-actions">
-                          <button
-                            type="button"
-                            className="jh-notes-btn jh-notes-btn--muted"
-                            onClick={() => setEditingInterviewId(null)}
-                            disabled={savingInterview}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            className="jh-notes-btn"
-                            onClick={handleSaveInterviewEdit}
-                            disabled={savingInterview}
-                          >
-                            {savingInterview ? 'Saving...' : 'Save'}
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="jh-interview-item-head">
-                          <strong>{interview.round_type}</strong>
-                          <span className="jh-time">{formatDateTime(interview.scheduled_at)}</span>
-                        </div>
-                        {interview.notes && <p className="jh-interview-notes">{interview.notes}</p>}
-                        <div className="jh-interview-actions">
-                          <button
-                            type="button"
-                            className="jh-notes-btn jh-notes-btn--muted"
-                            onClick={() => startEditingInterview(interview)}
-                            disabled={savingInterview}
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-
-          <div className="jh-interview-create">
-            <h4 className="jh-interviews-subtitle">Add Interview Event</h4>
-            <div className="jh-interview-grid">
-              <input
-                className="jh-input"
-                value={newInterview.round_type}
-                onChange={(e) =>
-                  setNewInterview((prev) => ({ ...prev, round_type: e.target.value }))
-                }
-                placeholder="Round type (e.g. Phone Screen)"
-              />
-              <input
-                className="jh-input"
-                type="datetime-local"
-                value={newInterview.scheduled_at}
-                onChange={(e) =>
-                  setNewInterview((prev) => ({ ...prev, scheduled_at: e.target.value }))
-                }
-              />
-            </div>
-            <textarea
-              className="jh-notes-textarea"
-              rows={2}
-              value={newInterview.notes}
-              onChange={(e) => setNewInterview((prev) => ({ ...prev, notes: e.target.value }))}
-              placeholder="Interview notes"
-            />
-            <div className="jh-interview-actions">
-              <button
-                type="button"
-                className="jh-notes-btn"
-                onClick={handleCreateInterview}
-                disabled={
-                  savingInterview || !newInterview.round_type.trim() || !newInterview.scheduled_at
-                }
-              >
-                {savingInterview ? 'Saving...' : 'Add Interview Event'}
-              </button>
-            </div>
-          </div>
-        </div>
+        {interviewError && (
+          <p className="jh-state jh-state--error jh-inline-error">{interviewError}</p>
+        )}
 
         <div className="jh-notes">
           <label className="jh-notes-label" htmlFor="jh-notes-input">

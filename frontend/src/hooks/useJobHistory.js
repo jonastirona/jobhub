@@ -111,6 +111,33 @@ export function useJobHistory(jobId, accessToken) {
     [jobId, accessToken, getBackendBase, fetchInterviews]
   );
 
+  const deleteInterview = useCallback(
+    async (interviewId) => {
+      const backendBase = getBackendBase();
+      if (!jobId || !accessToken || !backendBase) throw new Error('Missing configuration');
+      setSavingInterview(true);
+      setInterviewError(null);
+      try {
+        const res = await fetch(`${backendBase}/jobs/${jobId}/interviews/${interviewId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(text || `Request failed (${res.status})`);
+        }
+        await fetchInterviews();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setInterviewError(msg);
+        throw err;
+      } finally {
+        setSavingInterview(false);
+      }
+    },
+    [jobId, accessToken, getBackendBase, fetchInterviews]
+  );
+
   useEffect(() => {
     fetchHistory();
     fetchInterviews();
@@ -125,5 +152,6 @@ export function useJobHistory(jobId, accessToken) {
     interviewError,
     createInterview,
     updateInterview,
+    deleteInterview,
   };
 }

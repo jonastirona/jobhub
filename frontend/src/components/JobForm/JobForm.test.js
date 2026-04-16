@@ -13,6 +13,17 @@ const baseProps = {
   onSaved: jest.fn(),
 };
 
+function getJobMutationCall() {
+  return global.fetch.mock.calls.find(([url, options]) => {
+    const requestUrl = String(url);
+    return (
+      (options?.method === 'POST' || options?.method === 'PUT') &&
+      requestUrl.includes('/jobs') &&
+      !requestUrl.includes('/interviews')
+    );
+  });
+}
+
 const sampleJob = {
   id: 'job-99',
   title: 'Software Engineer',
@@ -134,12 +145,24 @@ describe('rendering - edit mode', () => {
     render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
     expect(screen.getByLabelText(/location/i)).toHaveValue('New York, NY');
     expect(screen.getByLabelText(/job description/i)).toHaveValue('Build great products.');
-    expect(screen.getByLabelText(/notes/i)).toHaveValue('Call on Monday.');
+    expect(screen.getByLabelText(/^notes$/i)).toHaveValue('Call on Monday.');
   });
 
   test('pre-fills status dropdown', () => {
     render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
     expect(screen.getByLabelText(/status/i)).toHaveValue('interviewing');
+  });
+
+  test('shows next interview fields when status is interviewing', () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+    expect(screen.getByText('Log an Interview')).toBeInTheDocument();
+    expect(screen.getByLabelText(/round type/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/date & time/i)).toBeInTheDocument();
+  });
+
+  test('hides next interview fields when status is not interviewing', () => {
+    render(<JobForm {...baseProps} mode="edit" job={{ ...sampleJob, status: 'applied' }} />);
+    expect(screen.queryByText('Log an Interview')).not.toBeInTheDocument();
   });
 
   test('pre-fills applied date', () => {
@@ -470,7 +493,8 @@ describe('edit mode - form submission', () => {
     render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    expect(global.fetch.mock.calls[0][1].method).toBe('PUT');
+    const mutationCall = getJobMutationCall();
+    expect(mutationCall?.[1]?.method).toBe('PUT');
   });
 
   test('sends updated title when changed', async () => {
@@ -480,7 +504,7 @@ describe('edit mode - form submission', () => {
     await userEvent.type(titleInput, 'Staff Engineer');
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = JSON.parse(getJobMutationCall()[1].body);
     expect(body.title).toBe('Staff Engineer');
   });
 
@@ -489,7 +513,7 @@ describe('edit mode - form submission', () => {
     fireEvent.change(screen.getByLabelText(/status/i), { target: { value: 'accepted' } });
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = JSON.parse(getJobMutationCall()[1].body);
     expect(body.status).toBe('accepted');
   });
 
@@ -498,7 +522,7 @@ describe('edit mode - form submission', () => {
     await userEvent.clear(screen.getByLabelText(/location/i));
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = JSON.parse(getJobMutationCall()[1].body);
     expect(body.location).toBeNull();
   });
 
@@ -506,7 +530,7 @@ describe('edit mode - form submission', () => {
     render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = JSON.parse(getJobMutationCall()[1].body);
     expect(body.location).toBe('New York, NY');
     expect(body.description).toBe('Build great products.');
     expect(body.notes).toBe('Call on Monday.');
