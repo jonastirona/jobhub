@@ -416,11 +416,7 @@ def update_document(
     if "job_id" in payload and payload["job_id"] is not None:
         _assert_linked_job_exists_for_user(sb, user_id, payload["job_id"])
     response = (
-        sb.table("documents")
-        .update(payload)
-        .eq("id", document_id)
-        .eq("user_id", user_id)
-        .execute()
+        sb.table("documents").update(payload).eq("id", document_id).eq("user_id", user_id).execute()
     )
     if not response.data:
         raise HTTPException(status_code=404, detail="Document not found")
