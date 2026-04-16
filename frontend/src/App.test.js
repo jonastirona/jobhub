@@ -1033,7 +1033,9 @@ test('saves draft from job context with linked job_id', async () => {
 
   fireEvent.click(screen.getByRole('button', { name: /save draft for backend engineer/i }));
   await waitFor(() => {
-    expect(screen.getByRole('heading', { name: /save draft from job context/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: /save draft from job context/i })
+    ).toBeInTheDocument();
   });
 
   fireEvent.change(screen.getByLabelText(/draft content/i), {
@@ -1065,6 +1067,8 @@ test('saves draft from job context with linked job_id', async () => {
   });
 
   await waitFor(() => {
-    expect(screen.queryByRole('heading', { name: /save draft from job context/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: /save draft from job context/i })
+    ).not.toBeInTheDocument();
   });
 });

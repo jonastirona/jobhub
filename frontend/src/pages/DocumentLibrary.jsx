@@ -85,14 +85,26 @@ export default function DocumentLibrary() {
                   <td>{doc.doc_type || 'Draft'}</td>
                   <td>{getLinkedJobLabel(doc)}</td>
                   <td>
-                    <span className="date-text">{formatDocumentDate(doc.updated_at || doc.created_at)}</span>
+                    <span className="date-text">
+                      {formatDocumentDate(doc.updated_at || doc.created_at)}
+                    </span>
                   </td>
                   <td>
                     <div className="actions-cell">
-                      <button type="button" className="action-btn" aria-label="View document" disabled>
+                      <button
+                        type="button"
+                        className="action-btn"
+                        aria-label="View document"
+                        disabled
+                      >
                         👁
                       </button>
-                      <button type="button" className="action-btn" aria-label="Edit document" disabled>
+                      <button
+                        type="button"
+                        className="action-btn"
+                        aria-label="Edit document"
+                        disabled
+                      >
                         ✏️
                       </button>
                     </div>
