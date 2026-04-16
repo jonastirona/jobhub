@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useJobs } from '../hooks/useJobs';
 import AppShell from '../components/layout/AppShell';
@@ -71,6 +71,12 @@ export default function Dashboard() {
   const { jobs, loading, error, refetch } = useJobs(session?.access_token);
   const [formState, setFormState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', job }
   const [historyJob, setHistoryJob] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [deletingJobId, setDeletingJobId] = useState(null);
+  const [jobPendingDelete, setJobPendingDelete] = useState(null);
+  const deleteOverlayRef = useRef(null);
+  const deleteModalRef = useRef(null);
+  const deleteCancelButtonRef = useRef(null);
 
   const totalApplications = jobs.length;
   const interviews = jobs.filter(
@@ -126,6 +132,101 @@ export default function Dashboard() {
     refetch();
   }
 
+  function requestDelete(job) {
+    setDeleteError('');
+    setJobPendingDelete(job);
+  }
+
+  const cancelDelete = useCallback(() => {
+    if (deletingJobId) return;
+    setJobPendingDelete(null);
+  }, [deletingJobId]);
+
+  const handleDeleteModalKeyDown = useCallback(
+    (e) => {
+      const modal = deleteModalRef.current;
+      if (e.key !== 'Tab' || !modal) return;
+
+      const focusable = Array.from(
+        modal.querySelectorAll('button:not([disabled]), [tabindex]:not([tabindex="-1"])')
+      );
+
+      if (focusable.length === 0) {
+        e.preventDefault();
+        if (!modal.hasAttribute('tabindex')) {
+          modal.setAttribute('tabindex', '-1');
+        }
+        modal.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    },
+    [deleteModalRef]
+  );
+
+  function handleDeleteOverlayClick(e) {
+    if (e.target === deleteOverlayRef.current) {
+      cancelDelete();
+    }
+  }
+
+  useEffect(() => {
+    if (!jobPendingDelete) return undefined;
+    deleteCancelButtonRef.current?.focus();
+    function handleEscape(e) {
+      if (e.key === 'Escape') {
+        cancelDelete();
+      }
+    }
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [jobPendingDelete, cancelDelete]);
+
+  useEffect(() => {
+    if (jobPendingDelete && deletingJobId) {
+      deleteModalRef.current?.focus();
+    }
+  }, [jobPendingDelete, deletingJobId]);
+
+  async function confirmDelete() {
+    if (!jobPendingDelete || deletingJobId) return;
+    const jobId = jobPendingDelete.id;
+    const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '');
+    if (!backendBase || !session?.access_token) {
+      setDeleteError('Unable to delete application right now. Please refresh and try again.');
+      return;
+    }
+
+    setDeleteError('');
+    setDeletingJobId(jobId);
+
+    try {
+      const res = await fetch(`${backendBase}/jobs/${jobId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to delete application (${res.status})`);
+      }
+      await refetch();
+      setJobPendingDelete(null);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete application.');
+    } finally {
+      setDeletingJobId(null);
+    }
+  }
+
   return (
     <AppShell title="My Dashboard" notificationCount={0}>
       <div className="dashboard-content">
@@ -145,6 +246,9 @@ export default function Dashboard() {
 
           {loading && <p className="table-state">Loading jobs...</p>}
           {error && <p className="table-state table-state--error">{error}</p>}
+          {!error && deleteError && !jobPendingDelete && (
+            <p className="table-state table-state--error">{deleteError}</p>
+          )}
 
           {!loading && !error && (
             <table className="jobs-table">
@@ -198,6 +302,7 @@ export default function Dashboard() {
                             className="action-btn"
                             aria-label="View stage history"
                             onClick={() => setHistoryJob(job)}
+                            disabled={deletingJobId === job.id}
                           >
                             👁
                           </button>
@@ -206,15 +311,18 @@ export default function Dashboard() {
                             className="action-btn"
                             aria-label="Edit application"
                             onClick={() => openEdit(job)}
+                            disabled={deletingJobId === job.id}
                           >
                             ✏️
                           </button>
                           <button
                             type="button"
                             className="action-btn"
-                            aria-label="Archive application"
+                            aria-label={`Delete application ${job.title}`}
+                            onClick={() => requestDelete(job)}
+                            disabled={deletingJobId === job.id}
                           >
-                            🗂
+                            {deletingJobId === job.id ? '…' : '🗑'}
                           </button>
                         </div>
                       </td>
@@ -277,6 +385,62 @@ export default function Dashboard() {
           onClose={() => setHistoryJob(null)}
           onSaved={handleSaved}
         />
+      )}
+
+      {jobPendingDelete && (
+        <div
+          className="delete-modal-overlay"
+          role="presentation"
+          ref={deleteOverlayRef}
+          onClick={handleDeleteOverlayClick}
+          data-testid="delete-modal-overlay"
+        >
+          <div
+            className="delete-modal"
+            ref={deleteModalRef}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={handleDeleteModalKeyDown}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-modal-title"
+            aria-describedby="delete-modal-text"
+            aria-busy={Boolean(deletingJobId)}
+            tabIndex={-1}
+          >
+            <h2 className="delete-modal-title" id="delete-modal-title">
+              Delete application?
+            </h2>
+            <p className="delete-modal-text" id="delete-modal-text">
+              You are about to delete <strong>{jobPendingDelete.title}</strong> at{' '}
+              <strong>{jobPendingDelete.company}</strong>. This action cannot be undone.
+            </p>
+            {deleteError && (
+              <p className="delete-modal-error" role="alert" aria-live="assertive">
+                {deleteError}
+              </p>
+            )}
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="delete-modal-btn delete-modal-btn--cancel"
+                onClick={cancelDelete}
+                ref={deleteCancelButtonRef}
+                disabled={Boolean(deletingJobId)}
+                aria-disabled={Boolean(deletingJobId)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="delete-modal-btn delete-modal-btn--danger"
+                onClick={confirmDelete}
+                disabled={Boolean(deletingJobId)}
+              >
+                {deletingJobId ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </AppShell>
   );
