@@ -1,0 +1,104 @@
+﻿Data and Security Guardrails Context Document
+Project: Null Pointers ATS / Job Application Tracker
+Status: Based on the preliminary tech specification document
+Context: CS490 Planning Document - Null Pointers
+
+
+Overview: This document outlines the security, data protection, ownership, and implementation guardrails our team agreed to follow for the job tracker application. It covers authentication, authorization, data access, file handling, AI usage, input validation, error handling, deployment configuration, and quality checks needed to build the project safely and consistently.
+In-Scope Assets
+The following assets are in scope:
+* user accounts and auth sessions
+* profile records
+* job records and job activities
+* notes and timeline events
+* company references
+* document roots and version history
+* job-document link records
+* stored PDFs
+* dashboard analytics
+* AI-generated cover letters
+* backend secrets
+* storage credentials
+Authentication
+* We use Supabase Auth for all login, registration, and session management. No custom auth.
+* All API routes that return or change user data require a valid Supabase JWT token, checked on every request.
+* User identity is always read from the verified token, never from the request body or URL parameters.
+* Passwords are managed entirely by Supabase. 
+* Frontend route guards are required for authenticated pages, but backend authorization remains the source of truth.
+* Auth and session behavior must be covered by unit tests.
+
+
+Data Access & Isolation
+* Every user-scoped entity stores owner identity directly or through a parent record.
+* Row-Level Security (RLS) is enabled on every Supabase table that holds user data. Users can only read and modify their own records, even if there is a bug in our API code.
+* The API must check ownership before any read, update, delete, upload, or link action.
+* Tables covered: jobs, profiles, job_activities, documents, document_versions, skills, education, experience, professional_links, and any user-owned linked records added later.
+* The company's table is shared, any logged-in user can read and create company records, but no one can edit or delete them in v1.
+* Cross-user access attempts must be rejected with the correct status code.
+* Before processing any update or delete, the API checks that the record belongs to the current user. If not, it returns 403 Forbidden.
+* Linked records must keep referential integrity.
+* When a user deletes their account, their profile, jobs, job activities, documents, and document metadata are deleted or made inaccessible in the live application.
+File Storage
+* User files are stored under a user-specific folder: ex. documents/{user_id}/...
+* Files are never served via a permanent public URL. The backend generates a signed URL with a 15-minute expiry for each download.
+* Only PDF files are accepted.[a] The server checks the actual file type, not just the extension. Max size is 10 MB.
+* Document versions must always stay tied to an owned parent document.
+* Upload, download, versioning, and job-link rules must be tested.
+AI / Claude API Usage
+* The Anthropic API key is stored only in environment variables, never in the React frontend or any API response (not publicly available)
+* AI requests must come from an explicit user action.
+* AI inputs must be tied to the correct user profile and job context.
+* User-supplied content (job descriptions, resume text) is kept separate from our system instructions to prevent prompt injection attacks.
+* The cover letter generation endpoint is rate-limited to 10 requests per user per hour.
+* AI output is a draft. The user must be able to edit it before saving.
+* Saved AI-generated content must be stored as a document version with ownership.
+* AI-generated text is sanitized before displaying in the browser. Make sure the output is safe so that the output cannot do anything harmful (ex. hidden HTML, malicious links/code)
+* If the AI fails, the app must return a safe error and not save partial or broken output.
+* Only minimal, safe AI failure metadata is logged.
+
+
+Input Validation
+* All incoming data is validated using Pydantic models in FastAPI before touching the database.
+* We use parameterized queries only. No raw SQL string formatting anywhere in the codebase.
+* The job status field only accepts a fixed set of values: Wishlist, Applied, Interviewing, Offer, Rejected.
+* Validation errors should identify the field that failed when possible.
+* Validation, edge cases, and invalid cross-user inputs must be tested.
+Transport & Configuration
+* All traffic uses HTTPS
+* CORS allows requests only from our Vercel domain and localhost:3000. Wildcard origins are not permitted.
+* Secret keys live in Vercel environment variables and are never committed to the repository.
+* Database changes must use version-controlled migrations.
+* AI provider, storage, and auth config must stay in environment settings.
+Error Handling & Privacy
+* API errors return a generic message only. Stack traces and database details are never sent to the client.
+* APIs should return clear status codes for validation, auth, forbidden, not found, and server errors.
+* Backend error handling should be centralized where practical.
+* Server logs record route, status code, and user ID only. Request bodies, document content, and salary data are not logged.
+Pre-Submission Checklist
+Verify each item before the final project submission.
+
+
+* RLS enabled on all user-owned tables
+* JWT validation on every protected route
+* Frontend route guards on authenticated pages
+* Ownership checks on all protected operations
+* Ownership rules cover documents, versions, jobs, notes, timeline events, and linked records
+* Storage bucket policy enforces user folder paths
+* Signed URLs used for file downloads
+* PDF-only validation on upload
+* Anthropic API key not in frontend code or repo
+* AI outputs editable before save
+* AI-generated artifacts saved as owned document versions
+* Safe fallback behavior for AI failures
+* CORS whitelist configured (no wildcard)
+* No stack traces returned to client
+* Pydantic validation on all POST and PATCH routes
+* Rate limit on cover letter generation endpoint
+* CI runs lint, build, and unit tests on pull requests, and failing checks block merge
+
+
+
+
+
+
+[a]can expand this to include .docx, any other thoughts?
