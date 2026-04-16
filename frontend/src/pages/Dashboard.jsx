@@ -189,7 +189,7 @@ export default function Dashboard() {
   }, [jobPendingDelete, deletingJobId]);
 
   async function confirmDelete() {
-    if (!jobPendingDelete) return;
+    if (!jobPendingDelete || deletingJobId) return;
     const jobId = jobPendingDelete.id;
     const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '');
     if (!backendBase || !session?.access_token) {
@@ -415,6 +415,7 @@ export default function Dashboard() {
                 className="delete-modal-btn delete-modal-btn--cancel"
                 onClick={cancelDelete}
                 ref={deleteCancelButtonRef}
+                disabled={Boolean(deletingJobId)}
                 aria-disabled={Boolean(deletingJobId)}
               >
                 Cancel
