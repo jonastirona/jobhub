@@ -134,8 +134,8 @@ class ReminderUpdate(BaseModel):
     notes: Optional[str] = None
     due_date: Optional[str] = None
     completed_at: Optional[str] = None
-      
-      
+
+
 class ExperienceCreate(BaseModel):
     title: str
     company: str
@@ -354,8 +354,8 @@ def update_reminder(
     if not response.data:
         raise HTTPException(status_code=404, detail="Reminder not found")
     return response.data[0]
-  
-  
+
+
 @app.delete("/reminders/{reminder_id}")
 def delete_reminder(reminder_id: str, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
@@ -364,8 +364,8 @@ def delete_reminder(reminder_id: str, authorization: Optional[str] = Header(defa
     if not response.data:
         raise HTTPException(status_code=404, detail="Reminder not found")
     return Response(status_code=204)
-  
-  
+
+
 # --- Experience routes ---
 
 
@@ -471,6 +471,7 @@ def reorder_experience(
     if response.data is None:
         raise HTTPException(status_code=500, detail="Failed to fetch reordered experience")
     return response.data
+
 
 @app.put("/experience/{entry_id}")
 def update_experience(

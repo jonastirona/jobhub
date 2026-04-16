@@ -132,14 +132,15 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
         </div>
 
         <div className="rp-body">
-          {pending.length === 0 && (
-            <p className="rp-empty">No upcoming reminders.</p>
-          )}
+          {pending.length === 0 && <p className="rp-empty">No upcoming reminders.</p>}
 
           {pending.length > 0 && (
             <ul className="rp-list">
               {pending.map((r) => (
-                <li key={r.id} className={`rp-item${isToday(r.due_date) ? ' rp-item--due' : isPastDue(r.due_date) ? ' rp-item--overdue' : ''}`}>
+                <li
+                  key={r.id}
+                  className={`rp-item${isToday(r.due_date) ? ' rp-item--due' : isPastDue(r.due_date) ? ' rp-item--overdue' : ''}`}
+                >
                   <div className="rp-item-main">
                     <span className="rp-item-title">{r.title}</span>
                     <span className="rp-item-job">
@@ -147,7 +148,11 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
                     </span>
                     {r.notes && <span className="rp-item-notes">{r.notes}</span>}
                     <span className="rp-item-date">
-                      {isToday(r.due_date) ? 'Due today' : isPastDue(r.due_date) ? `Overdue · ${formatDate(r.due_date)}` : formatDate(r.due_date)}
+                      {isToday(r.due_date)
+                        ? 'Due today'
+                        : isPastDue(r.due_date)
+                          ? `Overdue · ${formatDate(r.due_date)}`
+                          : formatDate(r.due_date)}
                     </span>
                   </div>
                   <div className="rp-item-actions">
@@ -177,9 +182,7 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
 
           {completed.length > 0 && (
             <details className="rp-completed">
-              <summary className="rp-completed-summary">
-                Completed ({completed.length})
-              </summary>
+              <summary className="rp-completed-summary">Completed ({completed.length})</summary>
               <ul className="rp-list rp-list--completed">
                 {completed.map((r) => (
                   <li key={r.id} className="rp-item rp-item--completed">
