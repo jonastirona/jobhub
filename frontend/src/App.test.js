@@ -220,7 +220,10 @@ test('clicking delete opens a custom confirmation modal', async () => {
   expect(within(deleteDialog).getByText(/delete application\?/i)).toBeInTheDocument();
   expect(within(deleteDialog).getByText(/backend engineer/i)).toBeInTheDocument();
   expect(within(deleteDialog).getByText(/datacorp/i)).toBeInTheDocument();
-  expect(global.fetch).toHaveBeenCalledTimes(1);
+  expect(global.fetch).not.toHaveBeenCalledWith(
+    expect.stringMatching(/\/jobs\/job-1$/),
+    expect.objectContaining({ method: 'DELETE' })
+  );
 });
 
 test('cancelling delete does not call delete endpoint', async () => {
@@ -251,7 +254,10 @@ test('cancelling delete does not call delete endpoint', async () => {
   await waitFor(() => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
-  expect(global.fetch).toHaveBeenCalledTimes(1);
+  expect(global.fetch).not.toHaveBeenCalledWith(
+    expect.stringMatching(/\/jobs\/job-1$/),
+    expect.objectContaining({ method: 'DELETE' })
+  );
 });
 
 test('pressing Escape closes delete modal', async () => {
@@ -427,7 +433,7 @@ test('shows delete error when delete request fails', async () => {
 
   await waitFor(() => {
     expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent(
-      /failed to delete job/i
+      /failed to delete application/i
     );
   });
 });

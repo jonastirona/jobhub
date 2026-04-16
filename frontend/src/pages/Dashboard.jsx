@@ -182,12 +182,18 @@ export default function Dashboard() {
     return () => document.removeEventListener('keydown', handleEscape);
   }, [jobPendingDelete, cancelDelete]);
 
+  useEffect(() => {
+    if (jobPendingDelete && deletingJobId) {
+      deleteModalRef.current?.focus();
+    }
+  }, [jobPendingDelete, deletingJobId]);
+
   async function confirmDelete() {
     if (!jobPendingDelete) return;
     const jobId = jobPendingDelete.id;
     const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '');
     if (!backendBase || !session?.access_token) {
-      setDeleteError('Unable to delete job right now. Please refresh and try again.');
+      setDeleteError('Unable to delete application right now. Please refresh and try again.');
       return;
     }
 
@@ -200,12 +206,12 @@ export default function Dashboard() {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (!res.ok) {
-        throw new Error(`Failed to delete job (${res.status})`);
+        throw new Error(`Failed to delete application (${res.status})`);
       }
       await refetch();
       setJobPendingDelete(null);
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Failed to delete job.');
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete application.');
     } finally {
       setDeletingJobId(null);
     }
@@ -388,6 +394,8 @@ export default function Dashboard() {
             aria-modal="true"
             aria-labelledby="delete-modal-title"
             aria-describedby="delete-modal-text"
+            aria-busy={Boolean(deletingJobId)}
+            tabIndex={-1}
           >
             <h2 className="delete-modal-title" id="delete-modal-title">
               Delete application?
@@ -406,8 +414,8 @@ export default function Dashboard() {
                 type="button"
                 className="delete-modal-btn delete-modal-btn--cancel"
                 onClick={cancelDelete}
-                disabled={Boolean(deletingJobId)}
                 ref={deleteCancelButtonRef}
+                aria-disabled={Boolean(deletingJobId)}
               >
                 Cancel
               </button>
