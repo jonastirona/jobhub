@@ -29,6 +29,18 @@ PROFILE_REQUIRED_FIELDS = (
     "website",
     "linkedin_url",
 )
+JOB_STATUSES = {
+    "interested",
+    "applied",
+    "interviewing",
+    "offered",
+    "accepted",
+    "declined",
+    "rejected",
+    "withdrawn",
+    "archived",
+}
+JOB_STATUS_ALIAS = {"interview": "interviewing", "offer": "offered"}
 
 
 def get_supabase():
@@ -151,6 +163,15 @@ def _validate_experience_years(start_year: Optional[int], end_year: Optional[int
         raise HTTPException(status_code=422, detail="end_year must be >= start_year")
 
 
+def _normalize_job_status(status: Optional[str]) -> Optional[str]:
+    if status is None:
+        return None
+    normalized = JOB_STATUS_ALIAS.get(status, status)
+    if normalized not in JOB_STATUSES:
+        raise HTTPException(status_code=422, detail="status must be a supported job status")
+    return normalized
+
+
 # --- Routes ---
 
 
@@ -173,6 +194,8 @@ def create_job(job: JobCreate, authorization: Optional[str] = Header(default=Non
     user_id = get_user_id(authorization)
     sb = get_supabase()
     payload = job.model_dump(exclude_none=True)
+    if "status" in payload:
+        payload["status"] = _normalize_job_status(payload["status"])
     payload["user_id"] = user_id
     if "applied_date" in payload and payload["applied_date"] is not None:
         payload["applied_date"] = str(payload["applied_date"])
@@ -229,6 +252,8 @@ def update_job(job_id: str, job: JobUpdate, authorization: Optional[str] = Heade
     payload = job.model_dump(exclude_none=True)
     if not payload:
         raise HTTPException(status_code=400, detail="No fields to update")
+    if "status" in payload:
+        payload["status"] = _normalize_job_status(payload["status"])
     if "applied_date" in payload and payload["applied_date"] is not None:
         payload["applied_date"] = str(payload["applied_date"])
     existing = sb.table("jobs").select("status").eq("id", job_id).eq("user_id", user_id).execute()

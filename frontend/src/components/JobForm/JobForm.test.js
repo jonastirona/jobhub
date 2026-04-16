@@ -196,7 +196,7 @@ describe('rendering - edit mode', () => {
 });
 
 describe('status dropdown options', () => {
-  test('contains all six status options', () => {
+  test('contains all supported status options', () => {
     render(<JobForm {...baseProps} />);
     const select = screen.getByLabelText(/status/i);
     const values = Array.from(select.options).map((o) => o.value);
@@ -206,7 +206,10 @@ describe('status dropdown options', () => {
         'applied',
         'interviewing',
         'offered',
+        'accepted',
+        'declined',
         'rejected',
+        'withdrawn',
         'archived',
       ])
     );
@@ -222,15 +225,18 @@ describe('status dropdown options', () => {
         'Applied',
         'Interviewing',
         'Offered',
+        'Accepted',
+        'Declined',
         'Rejected',
+        'Withdrawn',
         'Archived',
       ])
     );
   });
 
-  test('has exactly six options', () => {
+  test('has exactly nine options', () => {
     render(<JobForm {...baseProps} />);
-    expect(screen.getByLabelText(/status/i).options).toHaveLength(6);
+    expect(screen.getByLabelText(/status/i).options).toHaveLength(9);
   });
 });
 
@@ -482,11 +488,11 @@ describe('edit mode - form submission', () => {
 
   test('sends updated status when changed', async () => {
     render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
-    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: 'offered' } });
+    fireEvent.change(screen.getByLabelText(/status/i), { target: { value: 'accepted' } });
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
     const body = JSON.parse(global.fetch.mock.calls[0][1].body);
-    expect(body.status).toBe('offered');
+    expect(body.status).toBe('accepted');
   });
 
   test('sends null for cleared optional fields', async () => {

@@ -7,7 +7,10 @@ const STATUS_CONFIG = {
   interviewing: { label: 'Interviewing', className: 'interview' },
   offer: { label: 'Offer', className: 'offer' },
   offered: { label: 'Offered', className: 'offer' },
+  accepted: { label: 'Accepted', className: 'offer' },
+  declined: { label: 'Declined', className: 'rejected' },
   rejected: { label: 'Rejected', className: 'rejected' },
+  withdrawn: { label: 'Withdrawn', className: 'archived' },
   archived: { label: 'Archived', className: 'archived' },
 };
 

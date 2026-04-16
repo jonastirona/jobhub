@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from main import (
+    JOB_STATUSES,
     PROFILE_REQUIRED_FIELDS,
     ExperienceCreate,
     ExperienceReorder,
@@ -240,6 +241,31 @@ def test_create_job_db_failure_returns_500():
     assert response.status_code == 500
 
 
+def test_create_job_accepts_new_final_outcome_status():
+    accepted_job = {**SAMPLE_JOB, "status": "accepted"}
+    mock_sb, _, _ = make_mock_sb(data=[accepted_job])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/jobs",
+            json={"title": "Engineer", "company": "Acme", "status": "accepted"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    assert response.json()["status"] == "accepted"
+
+
+def test_create_job_rejects_unknown_status():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/jobs",
+            json={"title": "Engineer", "company": "Acme", "status": "unknown-status"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "supported job status" in response.json()["detail"]
+
+
 # ---------------------------------------------------------------------------
 # GET /jobs/{job_id}
 # ---------------------------------------------------------------------------
@@ -325,6 +351,31 @@ def test_update_job_partial_fields():
     update_payload = mock_query.update.call_args[0][0]
     assert update_payload == {"title": "Staff Engineer"}
     assert "company" not in update_payload
+
+
+def test_update_job_accepts_new_final_outcome_status():
+    updated = {**SAMPLE_JOB, "status": "withdrawn"}
+    mock_sb, _ = _make_mock_sb_with_status_change("applied", "withdrawn")
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"status": "withdrawn"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["status"] == updated["status"]
+
+
+def test_update_job_rejects_unknown_status():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"status": "unknown-status"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "supported job status" in response.json()["detail"]
 
 
 # ---------------------------------------------------------------------------
@@ -598,6 +649,16 @@ def test_job_create_all_fields():
     )
     assert job.status == "interviewing"
     assert job.location == "Remote"
+
+
+def test_job_create_accepts_final_outcome_statuses():
+    for status in ("accepted", "declined", "withdrawn"):
+        job = JobCreate(title="Backend Engineer", company="TechCorp", status=status)
+        assert job.status == status
+
+
+def test_job_statuses_constant_includes_new_final_outcomes():
+    assert {"accepted", "declined", "withdrawn"}.issubset(JOB_STATUSES)
 
 
 def test_job_update_all_optional():

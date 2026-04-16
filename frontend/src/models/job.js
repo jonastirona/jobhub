@@ -3,7 +3,10 @@ export const JOB_STATUSES = [
   { value: 'applied', label: 'Applied' },
   { value: 'interviewing', label: 'Interviewing' },
   { value: 'offered', label: 'Offered' },
+  { value: 'accepted', label: 'Accepted' },
+  { value: 'declined', label: 'Declined' },
   { value: 'rejected', label: 'Rejected' },
+  { value: 'withdrawn', label: 'Withdrawn' },
   { value: 'archived', label: 'Archived' },
 ];
 
