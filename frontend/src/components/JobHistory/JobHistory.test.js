@@ -111,14 +111,14 @@ test('shows error state on failed fetch', async () => {
 
 // ─── Notes ────────────────────────────────────────────────────────────────────
 
-test('pre-fills outcome notes textarea with job notes', () => {
+test('pre-fills notes textarea with job notes', () => {
   render(<JobHistory {...baseProps} />);
-  expect(screen.getByRole('textbox', { name: /outcome notes/i })).toHaveValue('Call on Monday.');
+  expect(screen.getByRole('textbox', { name: /notes/i })).toHaveValue('Call on Monday.');
 });
 
-test('pre-fills outcome notes as empty when job has no notes', () => {
+test('pre-fills notes as empty when job has no notes', () => {
   render(<JobHistory {...baseProps} job={{ ...sampleJob, notes: null }} />);
-  expect(screen.getByRole('textbox', { name: /outcome notes/i })).toHaveValue('');
+  expect(screen.getByRole('textbox', { name: /notes/i })).toHaveValue('');
 });
 
 test('shows Saved confirmation after successful notes save', async () => {
@@ -126,7 +126,7 @@ test('shows Saved confirmation after successful notes save', async () => {
   await waitFor(() => expect(screen.queryByText('Loading history...')).not.toBeInTheDocument());
 
   mockFetchOk({ ...sampleJob, notes: 'Updated note' });
-  fireEvent.click(screen.getByRole('button', { name: /save outcome notes/i }));
+  fireEvent.click(screen.getByRole('button', { name: /save notes/i }));
 
   await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
 });
@@ -136,7 +136,7 @@ test('calls onSaved after successful notes save', async () => {
   await waitFor(() => expect(screen.queryByText('Loading history...')).not.toBeInTheDocument());
 
   mockFetchOk({ ...sampleJob, notes: 'Updated note' });
-  fireEvent.click(screen.getByRole('button', { name: /save outcome notes/i }));
+  fireEvent.click(screen.getByRole('button', { name: /save notes/i }));
 
   await waitFor(() => expect(baseProps.onSaved).toHaveBeenCalled());
 });
@@ -146,7 +146,7 @@ test('shows error when notes save fails', async () => {
   await waitFor(() => expect(screen.queryByText('Loading history...')).not.toBeInTheDocument());
 
   mockFetchError(500);
-  fireEvent.click(screen.getByRole('button', { name: /save outcome notes/i }));
+  fireEvent.click(screen.getByRole('button', { name: /save notes/i }));
 
   await waitFor(() => expect(screen.getByText('Server error')).toBeInTheDocument());
 });

@@ -288,7 +288,7 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
           <div className="jf-row">
             <div className="jf-field">
               <label className="jf-label" htmlFor="jf-notes-input">
-                Outcome Notes
+                Notes
               </label>
               <textarea
                 id="jf-notes-input"
@@ -296,7 +296,7 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
                 name="notes"
                 value={values.notes}
                 onChange={handleChange}
-                placeholder="Outcome details, contacts, follow-up reminders..."
+                placeholder="Interview notes, contacts, follow-up reminders..."
                 rows={3}
               />
             </div>

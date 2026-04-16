@@ -219,19 +219,17 @@ describe('status dropdown options', () => {
     render(<JobForm {...baseProps} />);
     const select = screen.getByLabelText(/status/i);
     const labels = Array.from(select.options).map((o) => o.text);
-    expect(labels).toEqual(
-      expect.arrayContaining([
-        'Interested',
-        'Applied',
-        'Interviewing',
-        'Offered',
-        'Accepted',
-        'Declined',
-        'Rejected',
-        'Withdrawn',
-        'Archived',
-      ])
-    );
+    expect(labels).toEqual([
+      'Applied',
+      'Interviewing',
+      'Interested',
+      'Offered',
+      'Rejected',
+      'Accepted',
+      'Declined',
+      'Withdrawn',
+      'Archived',
+    ]);
   });
 
   test('has exactly nine options', () => {

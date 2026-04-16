@@ -117,7 +117,7 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
 
         <div className="jh-notes">
           <label className="jh-notes-label" htmlFor="jh-notes-input">
-            Outcome Notes
+            Notes
           </label>
           <textarea
             id="jh-notes-input"
@@ -127,7 +127,7 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
               setNotes(e.target.value);
               setNotesSaved(false);
             }}
-            placeholder="Outcome details, contacts, follow-up reminders..."
+            placeholder="Interview notes, contacts, follow-up reminders..."
             rows={4}
           />
           {notesError && <p className="jh-state jh-state--error">{notesError}</p>}
@@ -139,7 +139,7 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
               onClick={handleSaveNotes}
               disabled={savingNotes}
             >
-              {savingNotes ? 'Saving...' : 'Save Outcome Notes'}
+              {savingNotes ? 'Saving...' : 'Save Notes'}
             </button>
           </div>
         </div>
