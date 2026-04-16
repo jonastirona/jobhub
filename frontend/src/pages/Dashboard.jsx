@@ -146,9 +146,7 @@ export default function Dashboard() {
       if (e.key !== 'Tab' || !modal) return;
 
       const focusable = Array.from(
-        modal.querySelectorAll(
-          'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        )
+        modal.querySelectorAll('button:not([disabled]), [tabindex]:not([tabindex="-1"])')
       );
 
       if (focusable.length === 0) {
