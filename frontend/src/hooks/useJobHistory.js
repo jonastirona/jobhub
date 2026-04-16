@@ -37,6 +37,7 @@ export function useJobHistory(jobId, accessToken) {
   const fetchInterviews = useCallback(async () => {
     const backendBase = getBackendBase();
     if (!jobId || !accessToken || !backendBase) return;
+    setInterviewError(null);
     try {
       const res = await fetch(`${backendBase}/jobs/${jobId}/interviews`, {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -44,6 +45,7 @@ export function useJobHistory(jobId, accessToken) {
       if (!res.ok) throw new Error(`Failed to load interviews (${res.status})`);
       const data = await res.json();
       setInterviews(data);
+      setInterviewError(null);
     } catch (err) {
       setInterviewError(err instanceof Error ? err.message : String(err));
     }
