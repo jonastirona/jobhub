@@ -356,6 +356,12 @@
   line-height: 1.55;
 }
 
+.delete-modal-error {
+  margin: 12px 0 0;
+  color: var(--red);
+  font-size: 14px;
+}
+
 .delete-modal-actions {
   margin-top: 20px;
   display: flex;

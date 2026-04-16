@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useJobs } from '../hooks/useJobs';
 import AppShell from '../components/layout/AppShell';
@@ -74,6 +74,9 @@ export default function Dashboard() {
   const [deleteError, setDeleteError] = useState('');
   const [deletingJobId, setDeletingJobId] = useState(null);
   const [jobPendingDelete, setJobPendingDelete] = useState(null);
+  const deleteOverlayRef = useRef(null);
+  const deleteModalRef = useRef(null);
+  const deleteCancelButtonRef = useRef(null);
 
   const totalApplications = jobs.length;
   const interviews = jobs.filter(
@@ -137,6 +140,48 @@ export default function Dashboard() {
     setJobPendingDelete(null);
   }
 
+  const handleDeleteModalKeyDown = useCallback(
+    (e) => {
+      if (e.key !== 'Tab' || !deleteModalRef.current) return;
+      const focusable = Array.from(
+        deleteModalRef.current.querySelectorAll(
+          'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    },
+    [deleteModalRef]
+  );
+
+  function handleDeleteOverlayClick(e) {
+    if (e.target === deleteOverlayRef.current) {
+      cancelDelete();
+    }
+  }
+
+  useEffect(() => {
+    if (!jobPendingDelete) return undefined;
+    deleteCancelButtonRef.current?.focus();
+    function handleEscape(e) {
+      if (e.key === 'Escape') {
+        cancelDelete();
+      }
+    }
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [jobPendingDelete, deletingJobId]);
+
   async function confirmDelete() {
     if (!jobPendingDelete) return;
     const jobId = jobPendingDelete.id;
@@ -185,7 +230,9 @@ export default function Dashboard() {
 
           {loading && <p className="table-state">Loading jobs...</p>}
           {error && <p className="table-state table-state--error">{error}</p>}
-          {!error && deleteError && <p className="table-state table-state--error">{deleteError}</p>}
+          {!error && deleteError && !jobPendingDelete && (
+            <p className="table-state table-state--error">{deleteError}</p>
+          )}
 
           {!loading && !error && (
             <table className="jobs-table">
@@ -325,26 +372,42 @@ export default function Dashboard() {
       )}
 
       {jobPendingDelete && (
-        <div className="delete-modal-overlay" role="presentation">
+        <div
+          className="delete-modal-overlay"
+          role="presentation"
+          ref={deleteOverlayRef}
+          onClick={handleDeleteOverlayClick}
+          data-testid="delete-modal-overlay"
+        >
           <div
             className="delete-modal"
+            ref={deleteModalRef}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={handleDeleteModalKeyDown}
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-modal-title"
+            aria-describedby="delete-modal-text"
           >
             <h2 className="delete-modal-title" id="delete-modal-title">
               Delete application?
             </h2>
-            <p className="delete-modal-text">
+            <p className="delete-modal-text" id="delete-modal-text">
               You are about to delete <strong>{jobPendingDelete.title}</strong> at{' '}
               <strong>{jobPendingDelete.company}</strong>. This action cannot be undone.
             </p>
+            {deleteError && (
+              <p className="delete-modal-error" role="alert" aria-live="assertive">
+                {deleteError}
+              </p>
+            )}
             <div className="delete-modal-actions">
               <button
                 type="button"
                 className="delete-modal-btn delete-modal-btn--cancel"
                 onClick={cancelDelete}
                 disabled={Boolean(deletingJobId)}
+                ref={deleteCancelButtonRef}
               >
                 Cancel
               </button>
