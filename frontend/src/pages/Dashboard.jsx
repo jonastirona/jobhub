@@ -135,10 +135,10 @@ export default function Dashboard() {
     setJobPendingDelete(job);
   }
 
-  function cancelDelete() {
+  const cancelDelete = useCallback(() => {
     if (deletingJobId) return;
     setJobPendingDelete(null);
-  }
+  }, [deletingJobId]);
 
   const handleDeleteModalKeyDown = useCallback(
     (e) => {
@@ -180,7 +180,7 @@ export default function Dashboard() {
     }
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [jobPendingDelete, deletingJobId]);
+  }, [jobPendingDelete, cancelDelete]);
 
   async function confirmDelete() {
     if (!jobPendingDelete) return;
