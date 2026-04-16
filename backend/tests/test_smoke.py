@@ -19,6 +19,8 @@ from main import (
     JobCreate,
     JobUpdate,
     ProfileUpsert,
+    ReminderCreate,
+    ReminderUpdate,
     _normalize_profile_value,
     app,
     get_profile_completion,
@@ -1019,6 +1021,7 @@ def test_profile_upsert_all_fields():
 # Experience fixtures
 # ---------------------------------------------------------------------------
 
+
 SAMPLE_EXPERIENCE = {
     "id": "exp-uuid-1111",
     "user_id": MOCK_USER_ID,
@@ -1467,3 +1470,281 @@ def test_experience_update_all_optional():
 def test_experience_reorder_has_ids():
     reorder = ExperienceReorder(ids=["a", "b"])
     assert reorder.ids == ["a", "b"]
+
+
+# ---------------------------------------------------------------------------
+# Reminder fixtures
+# ---------------------------------------------------------------------------
+
+SAMPLE_REMINDER = {
+    "id": "reminder-uuid-1111",
+    "job_id": SAMPLE_JOB["id"],
+    "user_id": MOCK_USER_ID,
+    "title": "Follow up on offer",
+    "notes": "Ask about start date",
+    "due_date": "2026-04-20T09:00:00+00:00",
+    "completed_at": None,
+    "created_at": "2026-04-14T00:00:00+00:00",
+    "jobs": {"title": "Backend Engineer", "company": "TechCorp"},
+}
+
+
+# ---------------------------------------------------------------------------
+# Auth guard — reminder routes must reject requests with no token
+# ---------------------------------------------------------------------------
+
+
+def test_list_reminders_requires_auth():
+    response = client.get("/reminders")
+    assert response.status_code == 401
+
+
+def test_create_reminder_requires_auth():
+    response = client.post(
+        "/reminders",
+        json={"job_id": SAMPLE_JOB["id"], "title": "Follow up", "due_date": "2026-04-20"},
+    )
+    assert response.status_code == 401
+
+
+def test_update_reminder_requires_auth():
+    response = client.put("/reminders/some-uuid", json={"title": "Updated"})
+    assert response.status_code == 401
+
+
+def test_delete_reminder_requires_auth():
+    response = client.delete("/reminders/some-uuid")
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# GET /reminders
+# ---------------------------------------------------------------------------
+
+
+def test_list_reminders_returns_user_reminders():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_REMINDER])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/reminders", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == SAMPLE_REMINDER["id"]
+    assert body[0]["title"] == "Follow up on offer"
+
+
+def test_list_reminders_empty():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/reminders", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_reminders_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_REMINDER])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get("/reminders", headers={"authorization": AUTH_HEADER})
+    mock_query.eq.assert_any_call("user_id", MOCK_USER_ID)
+
+
+# ---------------------------------------------------------------------------
+# POST /reminders
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_sb_for_reminder_create(reminder_data=None, job_exists=True):
+    mock_sb = MagicMock()
+    mock_user_resp = MagicMock()
+    mock_user_resp.user.id = MOCK_USER_ID
+    mock_sb.auth.get_user.return_value = mock_user_resp
+
+    job_result = MagicMock()
+    job_result.data = [SAMPLE_JOB] if job_exists else []
+
+    insert_result = MagicMock()
+    insert_result.data = [reminder_data] if reminder_data else []
+
+    mock_query = MagicMock()
+    for method in ("select", "insert", "update", "delete", "eq", "order"):
+        getattr(mock_query, method).return_value = mock_query
+    mock_query.execute.side_effect = [job_result, insert_result]
+
+    mock_sb.table.return_value = mock_query
+    return mock_sb, mock_query
+
+
+def test_create_reminder_success():
+    mock_sb, _ = _make_mock_sb_for_reminder_create(reminder_data=SAMPLE_REMINDER)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/reminders",
+            json={
+                "job_id": SAMPLE_JOB["id"],
+                "title": "Follow up on offer",
+                "due_date": "2026-04-20T09:00:00+00:00",
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    assert response.json()["title"] == "Follow up on offer"
+
+
+def test_create_reminder_job_not_found_returns_404():
+    mock_sb, _ = _make_mock_sb_for_reminder_create(job_exists=False)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/reminders",
+            json={
+                "job_id": "nonexistent-job-id",
+                "title": "Follow up",
+                "due_date": "2026-04-20T09:00:00+00:00",
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_create_reminder_missing_title_returns_422():
+    response = client.post(
+        "/reminders",
+        json={"job_id": SAMPLE_JOB["id"], "due_date": "2026-04-20"},
+        headers={"authorization": AUTH_HEADER},
+    )
+    assert response.status_code == 422
+
+
+def test_create_reminder_missing_due_date_returns_422():
+    response = client.post(
+        "/reminders",
+        json={"job_id": SAMPLE_JOB["id"], "title": "Follow up"},
+        headers={"authorization": AUTH_HEADER},
+    )
+    assert response.status_code == 422
+
+
+def test_create_reminder_sets_user_id():
+    mock_sb, mock_query = _make_mock_sb_for_reminder_create(reminder_data=SAMPLE_REMINDER)
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/reminders",
+            json={
+                "job_id": SAMPLE_JOB["id"],
+                "title": "Follow up",
+                "due_date": "2026-04-20T09:00:00+00:00",
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    insert_payload = mock_query.insert.call_args[0][0]
+    assert insert_payload["user_id"] == MOCK_USER_ID
+
+
+# ---------------------------------------------------------------------------
+# PUT /reminders/{id}
+# ---------------------------------------------------------------------------
+
+
+def test_update_reminder_success():
+    updated = {**SAMPLE_REMINDER, "title": "Updated title"}
+    mock_sb, _, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/reminders/{SAMPLE_REMINDER['id']}",
+            json={"title": "Updated title"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["title"] == "Updated title"
+
+
+def test_update_reminder_not_found():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/reminders/nonexistent-id",
+            json={"title": "Updated"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_update_reminder_empty_body_returns_400():
+    mock_sb, _, _ = make_mock_sb()
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/reminders/{SAMPLE_REMINDER['id']}",
+            json={},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 400
+
+
+def test_update_reminder_mark_complete():
+    completed = {**SAMPLE_REMINDER, "completed_at": "2026-04-14T10:00:00+00:00"}
+    mock_sb, mock_query, _ = make_mock_sb(data=[completed])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/reminders/{SAMPLE_REMINDER['id']}",
+            json={"completed_at": "2026-04-14T10:00:00+00:00"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["completed_at"] == "2026-04-14T10:00:00+00:00"
+
+
+# ---------------------------------------------------------------------------
+# DELETE /reminders/{id}
+# ---------------------------------------------------------------------------
+
+
+def test_delete_reminder_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_REMINDER])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            f"/reminders/{SAMPLE_REMINDER['id']}",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 204
+
+
+def test_delete_reminder_not_found():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            "/reminders/nonexistent-id",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_delete_reminder_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_REMINDER])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.delete(
+            f"/reminders/{SAMPLE_REMINDER['id']}",
+            headers={"authorization": AUTH_HEADER},
+        )
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+# ---------------------------------------------------------------------------
+# ReminderCreate / ReminderUpdate schema validation
+# ---------------------------------------------------------------------------
+
+
+def test_reminder_create_requires_job_id_title_due_date():
+    reminder = ReminderCreate(
+        job_id=SAMPLE_JOB["id"], title="Follow up", due_date="2026-04-20T09:00:00+00:00"
+    )
+    assert reminder.job_id == SAMPLE_JOB["id"]
+    assert reminder.title == "Follow up"
+    assert reminder.notes is None
+
+
+def test_reminder_update_all_optional():
+    reminder = ReminderUpdate()
+    assert reminder.title is None
+    assert reminder.notes is None
+    assert reminder.due_date is None
+    assert reminder.completed_at is None
