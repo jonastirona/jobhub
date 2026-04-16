@@ -207,7 +207,10 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
                             type="datetime-local"
                             value={editInterview.scheduled_at}
                             onChange={(e) =>
-                              setEditInterview((prev) => ({ ...prev, scheduled_at: e.target.value }))
+                              setEditInterview((prev) => ({
+                                ...prev,
+                                scheduled_at: e.target.value,
+                              }))
                             }
                           />
                         </div>

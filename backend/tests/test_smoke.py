@@ -538,7 +538,9 @@ def test_get_interviews_scoped_to_user_and_job():
 
 
 def test_create_interview_success():
-    mock_sb, _ = _make_mock_sb_for_interview_create(event_data=SAMPLE_INTERVIEW_EVENT, job_exists=True)
+    mock_sb, _ = _make_mock_sb_for_interview_create(
+        event_data=SAMPLE_INTERVIEW_EVENT, job_exists=True
+    )
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             f"/jobs/{SAMPLE_JOB['id']}/interviews",
@@ -550,7 +552,9 @@ def test_create_interview_success():
 
 
 def test_create_interview_job_not_found():
-    mock_sb, _ = _make_mock_sb_for_interview_create(event_data=SAMPLE_INTERVIEW_EVENT, job_exists=False)
+    mock_sb, _ = _make_mock_sb_for_interview_create(
+        event_data=SAMPLE_INTERVIEW_EVENT, job_exists=False
+    )
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             f"/jobs/{SAMPLE_JOB['id']}/interviews",
@@ -561,7 +565,9 @@ def test_create_interview_job_not_found():
 
 
 def test_create_interview_blank_round_type_returns_422():
-    mock_sb, _ = _make_mock_sb_for_interview_create(event_data=SAMPLE_INTERVIEW_EVENT, job_exists=True)
+    mock_sb, _ = _make_mock_sb_for_interview_create(
+        event_data=SAMPLE_INTERVIEW_EVENT, job_exists=True
+    )
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             f"/jobs/{SAMPLE_JOB['id']}/interviews",

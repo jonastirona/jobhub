@@ -48,7 +48,10 @@ function mockFetchOk() {
     if (String(url).includes('/interviews')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(sampleInterviews) });
     }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({ ...sampleJob, notes: 'Updated' }) });
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ ...sampleJob, notes: 'Updated' }),
+    });
   });
 }
 
@@ -131,7 +134,11 @@ test('shows empty state when no history', async () => {
 test('shows error state on failed fetch', async () => {
   global.fetch = jest.fn((url) => {
     if (String(url).includes('/history')) {
-      return Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve('Server error') });
+      return Promise.resolve({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve('Server error'),
+      });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
   });

@@ -1,5 +1,4 @@
 -- 006_create_interview_events
--- Run once in the Supabase SQL editor.
 
 create table if not exists interview_events (
   id           uuid primary key default gen_random_uuid(),
