@@ -122,6 +122,20 @@ class ProfileUpsert(BaseModel):
     summary: Optional[str] = None
 
 
+class ReminderCreate(BaseModel):
+    job_id: str
+    title: str
+    notes: Optional[str] = None
+    due_date: str
+
+
+class ReminderUpdate(BaseModel):
+    title: Optional[str] = None
+    notes: Optional[str] = None
+    due_date: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
 class ExperienceCreate(BaseModel):
     title: str
     company: str
@@ -285,6 +299,71 @@ def upsert_profile(profile: ProfileUpsert, authorization: Optional[str] = Header
         raise HTTPException(status_code=500, detail="Failed to save profile")
     saved_profile = response.data[0]
     return {"profile": saved_profile, "completion": get_profile_completion(saved_profile)}
+
+
+# --- Reminder routes ---
+
+
+@app.get("/reminders")
+def list_reminders(authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = (
+        sb.table("reminders")
+        .select("*, jobs(title, company)")
+        .eq("user_id", user_id)
+        .order("due_date", desc=False)
+        .execute()
+    )
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch reminders")
+    return response.data or []
+
+
+@app.post("/reminders", status_code=201)
+def create_reminder(reminder: ReminderCreate, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    job_check = (
+        sb.table("jobs").select("id").eq("id", reminder.job_id).eq("user_id", user_id).execute()
+    )
+    if not job_check.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    payload = reminder.model_dump(exclude_none=True)
+    payload["user_id"] = user_id
+    response = sb.table("reminders").insert(payload).execute()
+    if not response.data:
+        raise HTTPException(status_code=500, detail="Failed to create reminder")
+    return response.data[0]
+
+
+@app.put("/reminders/{reminder_id}")
+def update_reminder(
+    reminder_id: str,
+    reminder: ReminderUpdate,
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    payload = reminder.model_dump(exclude_unset=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    response = (
+        sb.table("reminders").update(payload).eq("id", reminder_id).eq("user_id", user_id).execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+    return response.data[0]
+
+
+@app.delete("/reminders/{reminder_id}")
+def delete_reminder(reminder_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = sb.table("reminders").delete().eq("id", reminder_id).eq("user_id", user_id).execute()
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+    return Response(status_code=204)
 
 
 # --- Experience routes ---
