@@ -541,6 +541,27 @@ def _make_mock_sb_with_status_change(old_status, new_status):
     return mock_sb, mock_query
 
 
+def _make_mock_sb_update_without_status(existing_status: str, updated_row: dict):
+    mock_sb = MagicMock()
+    mock_user_resp = MagicMock()
+    mock_user_resp.user.id = MOCK_USER_ID
+    mock_sb.auth.get_user.return_value = mock_user_resp
+
+    select_result = MagicMock()
+    select_result.data = [{**SAMPLE_JOB, "status": existing_status}]
+
+    update_result = MagicMock()
+    update_result.data = [updated_row]
+
+    mock_query = MagicMock()
+    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order"):
+        getattr(mock_query, method).return_value = mock_query
+    mock_query.execute.side_effect = [select_result, update_result]
+
+    mock_sb.table.return_value = mock_query
+    return mock_sb, mock_query
+
+
 def test_update_job_inserts_history_on_status_change():
     mock_sb, mock_query = _make_mock_sb_with_status_change("applied", "interviewing")
     with patch("main.get_supabase", return_value=mock_sb):
@@ -592,6 +613,23 @@ def test_update_job_no_history_when_legacy_alias_normalizes_to_same_status():
     assert response.status_code == 200
     table_calls = [call[0][0] for call in mock_sb.table.call_args_list]
     assert "job_status_history" not in table_calls
+
+
+def test_update_job_notes_does_not_validate_legacy_status():
+    updated_row = {**SAMPLE_JOB, "status": "unknown-status", "notes": "updated"}
+    mock_sb, mock_query = _make_mock_sb_update_without_status("unknown-status", updated_row)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"notes": "updated"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["notes"] == "updated"
+    table_calls = [call[0][0] for call in mock_sb.table.call_args_list]
+    assert "job_status_history" not in table_calls
+    update_payload = mock_query.update.call_args[0][0]
+    assert update_payload == {"notes": "updated"}
 
 
 def test_update_job_no_history_when_status_not_in_payload():
