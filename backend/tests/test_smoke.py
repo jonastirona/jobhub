@@ -581,6 +581,19 @@ def test_update_job_no_history_when_status_unchanged():
     assert "job_status_history" not in table_calls
 
 
+def test_update_job_no_history_when_legacy_alias_normalizes_to_same_status():
+    mock_sb, mock_query = _make_mock_sb_with_status_change("offer", "offered")
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"status": "offered"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    table_calls = [call[0][0] for call in mock_sb.table.call_args_list]
+    assert "job_status_history" not in table_calls
+
+
 def test_update_job_no_history_when_status_not_in_payload():
     mock_sb, mock_query = _make_mock_sb_with_status_change("applied", "applied")
     with patch("main.get_supabase", return_value=mock_sb):
