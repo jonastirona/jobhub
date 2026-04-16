@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 
 const mockAuthValue = {
@@ -188,5 +188,252 @@ test('edit form modal closes when Cancel is clicked', async () => {
   fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
   await waitFor(() => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+test('clicking delete opens a custom confirmation modal', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Backend Engineer',
+              company: 'DataCorp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: true, status: 204 });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Backend Engineer'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application backend engineer/i }));
+
+  const deleteDialog = screen.getByRole('dialog');
+  expect(deleteDialog).toBeInTheDocument();
+  expect(within(deleteDialog).getByText(/delete application\?/i)).toBeInTheDocument();
+  expect(within(deleteDialog).getByText(/backend engineer/i)).toBeInTheDocument();
+  expect(within(deleteDialog).getByText(/datacorp/i)).toBeInTheDocument();
+  expect(global.fetch).not.toHaveBeenCalledWith(
+    expect.stringMatching(/\/jobs\/job-1$/),
+    expect.objectContaining({ method: 'DELETE' })
+  );
+});
+
+test('cancelling delete does not call delete endpoint', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Frontend Engineer',
+              company: 'UI Corp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: true, status: 204 });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Frontend Engineer'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application frontend engineer/i }));
+  fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+  expect(global.fetch).not.toHaveBeenCalledWith(
+    expect.stringMatching(/\/jobs\/job-1$/),
+    expect.objectContaining({ method: 'DELETE' })
+  );
+});
+
+test('pressing Escape closes delete modal', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Escape Close',
+              company: 'UI Corp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: true, status: 204 });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Escape Close'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application escape close/i }));
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+test('clicking modal overlay closes delete modal', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Overlay Close',
+              company: 'UI Corp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: true, status: 204 });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Overlay Close'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application overlay close/i }));
+  fireEvent.click(screen.getByTestId('delete-modal-overlay'));
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+test('delete modal traps focus within its action buttons', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Focus Trap',
+              company: 'UI Corp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: true, status: 204 });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Focus Trap'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application focus trap/i }));
+
+  const cancelButton = screen.getByRole('button', { name: /^cancel$/i });
+  const deleteButton = screen.getByRole('button', { name: /^delete$/i });
+  expect(cancelButton).toHaveFocus();
+
+  deleteButton.focus();
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Tab' });
+  expect(cancelButton).toHaveFocus();
+
+  cancelButton.focus();
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Tab', shiftKey: true });
+  expect(deleteButton).toHaveFocus();
+});
+
+test('confirming delete calls endpoint and refetches jobs', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      if (url === 'http://localhost:8000/jobs') {
+        getJobsCallCount += 1;
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => {
+          if (getJobsCallCount === 1) {
+            return Promise.resolve([
+              {
+                id: 'job-1',
+                title: 'Delete Me',
+                company: 'DataCorp',
+                status: 'applied',
+                applied_date: null,
+              },
+            ]);
+          }
+          return Promise.resolve([]);
+        },
+      });
+    }
+    if (options.method === 'DELETE') {
+      return Promise.resolve({ ok: true, status: 204 });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+  });
+  let getJobsCallCount = 0;
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Delete Me'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application delete me/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/jobs/job-1',
+      expect.objectContaining({
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer test-token' },
+      })
+    );
+  });
+  await waitFor(() => {
+    expect(screen.queryByText('Delete Me')).not.toBeInTheDocument();
+  });
+});
+
+test('shows delete error when delete request fails', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Delete Failure',
+              company: 'FailCorp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: false, status: 500 });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Delete Failure'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application delete failure/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+  await waitFor(() => {
+    expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent(
+      /failed to delete application/i
+    );
   });
 });
