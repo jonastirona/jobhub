@@ -221,6 +221,7 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
                                 <div className="jh-interview-grid">
                                   <input
                                     className="jh-input"
+                                    aria-label="Interview round type"
                                     value={editInterview.round_type}
                                     onChange={(e) =>
                                       setEditInterview((prev) => ({
@@ -232,6 +233,7 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
                                   />
                                   <input
                                     className="jh-input"
+                                    aria-label="Interview scheduled date and time"
                                     type="datetime-local"
                                     value={editInterview.scheduled_at}
                                     onChange={(e) =>
