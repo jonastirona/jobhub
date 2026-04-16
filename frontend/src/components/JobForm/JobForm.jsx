@@ -315,7 +315,7 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
             </div>
           </div>
 
-          {values.status === 'interviewing' && (
+          {isEdit && values.status === 'interviewing' && (
             <div className="jf-interview-block">
               <div className="jf-interview-title">Log an Interview</div>
               <div className="jf-row jf-row--two">
