@@ -437,3 +437,78 @@ test('shows delete error when delete request fails', async () => {
     );
   });
 });
+
+test('saves draft from job context with linked job_id', async () => {
+  const job = {
+    id: 'job-ctx-1',
+    title: 'Backend Engineer',
+    company: 'Datadog',
+    status: 'applied',
+    applied_date: null,
+  };
+
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve([job]),
+      });
+    }
+
+    if (options.method === 'POST' && url === 'http://localhost:8000/documents') {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 'doc-1',
+            name: 'Datadog_Backend_Engineer_Draft',
+            doc_type: 'Cover Letter Draft',
+            content: 'Generated draft body',
+            job_id: 'job-ctx-1',
+          }),
+      });
+    }
+
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Backend Engineer'));
+
+  fireEvent.click(screen.getByRole('button', { name: /save draft for backend engineer/i }));
+  await waitFor(() => {
+    expect(screen.getByRole('heading', { name: /save draft from job context/i })).toBeInTheDocument();
+  });
+
+  fireEvent.change(screen.getByLabelText(/draft content/i), {
+    target: { value: 'Generated draft body' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: /save to documents/i }));
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/documents',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+        body: expect.any(String),
+      })
+    );
+  });
+
+  const saveCall = global.fetch.mock.calls.find(
+    ([url, options]) => url === 'http://localhost:8000/documents' && options?.method === 'POST'
+  );
+  expect(saveCall).toBeDefined();
+  const [, saveOptions] = saveCall;
+  expect(JSON.parse(saveOptions.body)).toMatchObject({
+    name: 'Datadog_Backend_Engineer_Draft',
+    doc_type: 'Cover Letter Draft',
+    content: 'Generated draft body',
+    job_id: 'job-ctx-1',
+  });
+
+  await waitFor(() => {
+    expect(screen.queryByRole('heading', { name: /save draft from job context/i })).not.toBeInTheDocument();
+  });
+});

@@ -769,6 +769,26 @@ def test_create_document_success():
     assert response.json()["job_id"] == SAMPLE_JOB["id"]
 
 
+def test_create_document_from_job_context_inserts_linked_job_id():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([SAMPLE_JOB], [SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            json={
+                "name": "Datadog_Backend_Engineer_Draft",
+                "doc_type": "Cover Letter Draft",
+                "content": "Draft content",
+                "job_id": SAMPLE_JOB["id"],
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+
+    assert response.status_code == 201
+    inserted_payload = mock_query.insert.call_args[0][0]
+    assert inserted_payload["job_id"] == SAMPLE_JOB["id"]
+    assert inserted_payload["user_id"] == MOCK_USER_ID
+
+
 def test_create_document_sets_user_id():
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
     with patch("main.get_supabase", return_value=mock_sb):
