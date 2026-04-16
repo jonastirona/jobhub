@@ -11,10 +11,10 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from main import (
-    DocumentCreate,
-    DocumentUpdate,
     JOB_STATUSES,
     PROFILE_REQUIRED_FIELDS,
+    DocumentCreate,
+    DocumentUpdate,
     ExperienceCreate,
     ExperienceReorder,
     ExperienceUpdate,
