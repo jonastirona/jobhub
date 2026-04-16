@@ -334,7 +334,9 @@ def update_interview_event(
         payload["round_type"] = (payload["round_type"] or "").strip()
         if not payload["round_type"]:
             raise HTTPException(status_code=422, detail="round_type must not be blank")
-    if "scheduled_at" in payload and payload["scheduled_at"] is not None:
+    if "scheduled_at" in payload:
+        if payload["scheduled_at"] is None:
+            raise HTTPException(status_code=422, detail="scheduled_at must not be null")
         payload["scheduled_at"] = payload["scheduled_at"].isoformat()
     if "notes" in payload:
         payload["notes"] = (payload["notes"] or "").strip() or None
