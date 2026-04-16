@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 
 const mockAuthValue = {
@@ -191,7 +191,7 @@ test('edit form modal closes when Cancel is clicked', async () => {
   });
 });
 
-test('clicking delete asks for confirmation', async () => {
+test('clicking delete opens a custom confirmation modal', async () => {
   global.fetch = jest.fn((url, options = {}) => {
     if (!options.method) {
       return Promise.resolve({
@@ -210,15 +210,17 @@ test('clicking delete asks for confirmation', async () => {
     }
     return Promise.resolve({ ok: true, status: 204 });
   });
-  const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
 
   render(<App />);
   await waitFor(() => screen.getByText('Backend Engineer'));
   fireEvent.click(screen.getByRole('button', { name: /delete application backend engineer/i }));
 
-  expect(confirmSpy).toHaveBeenCalled();
+  const deleteDialog = screen.getByRole('dialog');
+  expect(deleteDialog).toBeInTheDocument();
+  expect(within(deleteDialog).getByText(/delete application\?/i)).toBeInTheDocument();
+  expect(within(deleteDialog).getByText(/backend engineer/i)).toBeInTheDocument();
+  expect(within(deleteDialog).getByText(/datacorp/i)).toBeInTheDocument();
   expect(global.fetch).toHaveBeenCalledTimes(1);
-  confirmSpy.mockRestore();
 });
 
 test('cancelling delete does not call delete endpoint', async () => {
@@ -240,31 +242,40 @@ test('cancelling delete does not call delete endpoint', async () => {
     }
     return Promise.resolve({ ok: true, status: 204 });
   });
-  const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
 
   render(<App />);
   await waitFor(() => screen.getByText('Frontend Engineer'));
   fireEvent.click(screen.getByRole('button', { name: /delete application frontend engineer/i }));
+  fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
 
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
   expect(global.fetch).toHaveBeenCalledTimes(1);
-  confirmSpy.mockRestore();
 });
 
 test('confirming delete calls endpoint and refetches jobs', async () => {
   global.fetch = jest.fn((url, options = {}) => {
     if (!options.method) {
+      if (url === 'http://localhost:8000/jobs') {
+        getJobsCallCount += 1;
+      }
       return Promise.resolve({
         ok: true,
-        json: () =>
-          Promise.resolve([
-            {
-              id: 'job-1',
-              title: 'Delete Me',
-              company: 'DataCorp',
-              status: 'applied',
-              applied_date: null,
-            },
-          ]),
+        json: () => {
+          if (getJobsCallCount === 1) {
+            return Promise.resolve([
+              {
+                id: 'job-1',
+                title: 'Delete Me',
+                company: 'DataCorp',
+                status: 'applied',
+                applied_date: null,
+              },
+            ]);
+          }
+          return Promise.resolve([]);
+        },
       });
     }
     if (options.method === 'DELETE') {
@@ -272,11 +283,12 @@ test('confirming delete calls endpoint and refetches jobs', async () => {
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
   });
-  const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+  let getJobsCallCount = 0;
 
   render(<App />);
   await waitFor(() => screen.getByText('Delete Me'));
   fireEvent.click(screen.getByRole('button', { name: /delete application delete me/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
 
   await waitFor(() => {
     expect(global.fetch).toHaveBeenCalledWith(
@@ -287,8 +299,9 @@ test('confirming delete calls endpoint and refetches jobs', async () => {
       })
     );
   });
-  expect(global.fetch).toHaveBeenCalledTimes(3);
-  confirmSpy.mockRestore();
+  await waitFor(() => {
+    expect(screen.queryByText('Delete Me')).not.toBeInTheDocument();
+  });
 });
 
 test('shows delete error when delete request fails', async () => {
@@ -310,14 +323,13 @@ test('shows delete error when delete request fails', async () => {
     }
     return Promise.resolve({ ok: false, status: 500 });
   });
-  const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
 
   render(<App />);
   await waitFor(() => screen.getByText('Delete Failure'));
   fireEvent.click(screen.getByRole('button', { name: /delete application delete failure/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
 
   await waitFor(() => {
     expect(screen.getByText(/failed to delete job/i)).toBeInTheDocument();
   });
-  confirmSpy.mockRestore();
 });

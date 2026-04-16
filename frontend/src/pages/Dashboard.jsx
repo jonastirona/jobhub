@@ -73,6 +73,7 @@ export default function Dashboard() {
   const [historyJob, setHistoryJob] = useState(null);
   const [deleteError, setDeleteError] = useState('');
   const [deletingJobId, setDeletingJobId] = useState(null);
+  const [jobPendingDelete, setJobPendingDelete] = useState(null);
 
   const totalApplications = jobs.length;
   const interviews = jobs.filter(
@@ -126,12 +127,19 @@ export default function Dashboard() {
     refetch();
   }
 
-  async function handleDelete(job) {
-    const shouldDelete = window.confirm(
-      `Delete "${job.title}" at ${job.company}? This action cannot be undone.`
-    );
-    if (!shouldDelete) return;
+  function requestDelete(job) {
+    setDeleteError('');
+    setJobPendingDelete(job);
+  }
 
+  function cancelDelete() {
+    if (deletingJobId) return;
+    setJobPendingDelete(null);
+  }
+
+  async function confirmDelete() {
+    if (!jobPendingDelete) return;
+    const jobId = jobPendingDelete.id;
     const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '');
     if (!backendBase || !session?.access_token) {
       setDeleteError('Unable to delete job right now. Please refresh and try again.');
@@ -139,10 +147,10 @@ export default function Dashboard() {
     }
 
     setDeleteError('');
-    setDeletingJobId(job.id);
+    setDeletingJobId(jobId);
 
     try {
-      const res = await fetch(`${backendBase}/jobs/${job.id}`, {
+      const res = await fetch(`${backendBase}/jobs/${jobId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
@@ -150,6 +158,7 @@ export default function Dashboard() {
         throw new Error(`Failed to delete job (${res.status})`);
       }
       await refetch();
+      setJobPendingDelete(null);
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete job.');
     } finally {
@@ -247,7 +256,7 @@ export default function Dashboard() {
                             type="button"
                             className="action-btn"
                             aria-label={`Delete application ${job.title}`}
-                            onClick={() => handleDelete(job)}
+                            onClick={() => requestDelete(job)}
                             disabled={deletingJobId === job.id}
                           >
                             {deletingJobId === job.id ? '…' : '🗑'}
@@ -313,6 +322,43 @@ export default function Dashboard() {
           onClose={() => setHistoryJob(null)}
           onSaved={handleSaved}
         />
+      )}
+
+      {jobPendingDelete && (
+        <div className="delete-modal-overlay" role="presentation">
+          <div
+            className="delete-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-modal-title"
+          >
+            <h2 className="delete-modal-title" id="delete-modal-title">
+              Delete application?
+            </h2>
+            <p className="delete-modal-text">
+              You are about to delete <strong>{jobPendingDelete.title}</strong> at{' '}
+              <strong>{jobPendingDelete.company}</strong>. This action cannot be undone.
+            </p>
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="delete-modal-btn delete-modal-btn--cancel"
+                onClick={cancelDelete}
+                disabled={Boolean(deletingJobId)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="delete-modal-btn delete-modal-btn--danger"
+                onClick={confirmDelete}
+                disabled={Boolean(deletingJobId)}
+              >
+                {deletingJobId ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </AppShell>
   );
