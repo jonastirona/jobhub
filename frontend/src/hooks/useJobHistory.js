@@ -4,6 +4,7 @@ export function useJobHistory(jobId, accessToken) {
   const [history, setHistory] = useState([]);
   const [interviews, setInterviews] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [interviewLoading, setInterviewLoading] = useState(false);
   const [error, setError] = useState(null);
   const [savingInterview, setSavingInterview] = useState(false);
   const [interviewError, setInterviewError] = useState(null);
@@ -37,6 +38,7 @@ export function useJobHistory(jobId, accessToken) {
   const fetchInterviews = useCallback(async () => {
     const backendBase = getBackendBase();
     if (!jobId || !accessToken || !backendBase) return;
+    setInterviewLoading(true);
     setInterviewError(null);
     try {
       const res = await fetch(`${backendBase}/jobs/${jobId}/interviews`, {
@@ -48,6 +50,8 @@ export function useJobHistory(jobId, accessToken) {
       setInterviewError(null);
     } catch (err) {
       setInterviewError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setInterviewLoading(false);
     }
   }, [jobId, accessToken, getBackendBase]);
 
@@ -154,6 +158,7 @@ export function useJobHistory(jobId, accessToken) {
     history,
     interviews,
     loading,
+    interviewLoading,
     error,
     savingInterview,
     interviewError,

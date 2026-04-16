@@ -39,6 +39,7 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
     history,
     interviews,
     loading,
+    interviewLoading,
     error,
     savingInterview,
     interviewError,
