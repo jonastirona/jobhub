@@ -203,6 +203,8 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
                         <button
                           type="button"
                           className="jh-interview-toggle"
+                          aria-expanded={expandedInterviewId === entry.payload.id}
+                          aria-controls={`jh-interview-expanded-${entry.payload.id}`}
                           onClick={() =>
                             setExpandedInterviewId((prev) =>
                               prev === entry.payload.id ? null : entry.payload.id
@@ -215,7 +217,10 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
                           {formatDateTime(entry.payload.scheduled_at)}
                         </time>
                         {expandedInterviewId === entry.payload.id && (
-                          <div className="jh-interview-expanded">
+                          <div
+                            id={`jh-interview-expanded-${entry.payload.id}`}
+                            className="jh-interview-expanded"
+                          >
                             {editingInterviewId === entry.payload.id ? (
                               <>
                                 <div className="jh-interview-grid">
