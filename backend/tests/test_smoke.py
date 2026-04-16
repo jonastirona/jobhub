@@ -295,6 +295,28 @@ def test_list_jobs_q_month_year_day_tokens_and_notes():
     assert len(apr_resp.json()) == 1
     assert apr_resp.json()[0]["id"] == "job-april-deadline"
 
+    july_day4 = {
+        **SAMPLE_JOB,
+        "id": "job-jul-4",
+        "deadline": "2026-07-04",
+        "applied_date": None,
+    }
+    july_day14 = {
+        **SAMPLE_JOB,
+        "id": "job-jul-14",
+        "deadline": "2026-07-14",
+        "applied_date": None,
+    }
+    mock_jul, _, _ = make_mock_sb(data=[july_day4, july_day14])
+    with patch("main.get_supabase", return_value=mock_jul):
+        jul4_resp = client.get(
+            "/jobs?q=jul+4",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert jul4_resp.status_code == 200
+    assert len(jul4_resp.json()) == 1
+    assert jul4_resp.json()[0]["id"] == "job-jul-4"
+
     year_2027 = {
         **SAMPLE_JOB,
         "id": "job-2027",

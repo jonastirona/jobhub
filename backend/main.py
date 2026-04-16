@@ -173,8 +173,14 @@ def _date_search_fragments(d: date) -> list[str]:
     abbr = calendar.month_abbr[d.month].lower()
     if full:
         parts.append(full)
+        # Unpadded day (e.g. "july 4") to align with en-US toLocaleDateString and user queries;
+        # strftime("%d") uses zero-padded days ("04") which "jul 4" would not match.
+        parts.append(f"{full} {d.day}, {d.year}")
+        parts.append(f"{full} {d.day}")
     if abbr:
         parts.append(abbr)
+        parts.append(f"{abbr} {d.day}, {d.year}")
+        parts.append(f"{abbr} {d.day}")
     parts.append(d.strftime("%b %d, %Y").lower())
     parts.append(d.strftime("%B %d, %Y").lower())
     return parts
