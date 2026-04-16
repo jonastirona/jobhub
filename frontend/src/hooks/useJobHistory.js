@@ -2,11 +2,20 @@ import { useCallback, useEffect, useState } from 'react';
 
 export function useJobHistory(jobId, accessToken) {
   const [history, setHistory] = useState([]);
+  const [interviews, setInterviews] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [interviewLoading, setInterviewLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [savingInterview, setSavingInterview] = useState(false);
+  const [interviewError, setInterviewError] = useState(null);
+
+  const getBackendBase = useCallback(
+    () => (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null,
+    []
+  );
 
   const fetchHistory = useCallback(async () => {
-    const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
+    const backendBase = getBackendBase();
     if (!jobId || !accessToken || !backendBase) return;
 
     setLoading(true);
@@ -24,11 +33,137 @@ export function useJobHistory(jobId, accessToken) {
     } finally {
       setLoading(false);
     }
-  }, [jobId, accessToken]);
+  }, [jobId, accessToken, getBackendBase]);
+
+  const fetchInterviews = useCallback(async () => {
+    const backendBase = getBackendBase();
+    if (!jobId || !accessToken || !backendBase) return;
+    setInterviewLoading(true);
+    setInterviewError(null);
+    try {
+      const res = await fetch(`${backendBase}/jobs/${jobId}/interviews`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) throw new Error(`Failed to load interviews (${res.status})`);
+      const data = await res.json();
+      setInterviews(data);
+      setInterviewError(null);
+    } catch (err) {
+      setInterviewError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setInterviewLoading(false);
+    }
+  }, [jobId, accessToken, getBackendBase]);
+
+  const createInterview = useCallback(
+    async (payload) => {
+      const backendBase = getBackendBase();
+      if (!jobId || !accessToken || !backendBase) throw new Error('Missing configuration');
+      setSavingInterview(true);
+      setInterviewError(null);
+      try {
+        const res = await fetch(`${backendBase}/jobs/${jobId}/interviews`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(text || `Request failed (${res.status})`);
+        }
+        await fetchInterviews();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setInterviewError(msg);
+        throw err;
+      } finally {
+        setSavingInterview(false);
+      }
+    },
+    [jobId, accessToken, getBackendBase, fetchInterviews]
+  );
+
+  const updateInterview = useCallback(
+    async (interviewId, payload) => {
+      const backendBase = getBackendBase();
+      if (!jobId || !accessToken || !backendBase) throw new Error('Missing configuration');
+      setSavingInterview(true);
+      setInterviewError(null);
+      try {
+        const res = await fetch(`${backendBase}/jobs/${jobId}/interviews/${interviewId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(text || `Request failed (${res.status})`);
+        }
+        await fetchInterviews();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setInterviewError(msg);
+        throw err;
+      } finally {
+        setSavingInterview(false);
+      }
+    },
+    [jobId, accessToken, getBackendBase, fetchInterviews]
+  );
+
+  const deleteInterview = useCallback(
+    async (interviewId) => {
+      const backendBase = getBackendBase();
+      if (!jobId || !accessToken || !backendBase) throw new Error('Missing configuration');
+      setSavingInterview(true);
+      setInterviewError(null);
+      try {
+        const res = await fetch(`${backendBase}/jobs/${jobId}/interviews/${interviewId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(text || `Request failed (${res.status})`);
+        }
+        await fetchInterviews();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setInterviewError(msg);
+        throw err;
+      } finally {
+        setSavingInterview(false);
+      }
+    },
+    [jobId, accessToken, getBackendBase, fetchInterviews]
+  );
 
   useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
+    fetchHistory().catch((err) => {
+      throw err;
+    });
 
-  return { history, loading, error };
+    fetchInterviews().catch((err) => {
+      throw err;
+    });
+  }, [fetchHistory, fetchInterviews]);
+
+  return {
+    history,
+    interviews,
+    loading,
+    interviewLoading,
+    error,
+    savingInterview,
+    interviewError,
+    createInterview,
+    updateInterview,
+    deleteInterview,
+  };
 }

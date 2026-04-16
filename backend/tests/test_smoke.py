@@ -16,6 +16,8 @@ from main import (
     ExperienceCreate,
     ExperienceReorder,
     ExperienceUpdate,
+    InterviewEventCreate,
+    InterviewEventUpdate,
     JobCreate,
     JobUpdate,
     ProfileUpsert,
@@ -403,6 +405,17 @@ SAMPLE_HISTORY = [
     },
 ]
 
+SAMPLE_INTERVIEW_EVENT = {
+    "id": "ie-1",
+    "job_id": SAMPLE_JOB["id"],
+    "user_id": MOCK_USER_ID,
+    "round_type": "Phone Screen",
+    "scheduled_at": "2026-05-10T15:00:00+00:00",
+    "notes": "Discuss system design basics",
+    "created_at": "2026-05-01T00:00:00+00:00",
+    "updated_at": "2026-05-01T00:00:00+00:00",
+}
+
 
 def test_get_job_history_requires_auth():
     response = client.get(f"/jobs/{SAMPLE_JOB['id']}/history")
@@ -455,6 +468,163 @@ def test_get_job_history_scoped_to_job():
         )
     eq_calls = [call[0] for call in mock_query.eq.call_args_list]
     assert ("job_id", SAMPLE_JOB["id"]) in eq_calls
+
+
+# ---------------------------------------------------------------------------
+# /jobs/{job_id}/interviews
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_sb_for_interview_create(event_data=None, job_exists=True):
+    mock_sb = MagicMock()
+    mock_user_resp = MagicMock()
+    mock_user_resp.user.id = MOCK_USER_ID
+    mock_sb.auth.get_user.return_value = mock_user_resp
+
+    job_result = MagicMock()
+    job_result.data = [{"id": SAMPLE_JOB["id"]}] if job_exists else []
+
+    insert_result = MagicMock()
+    insert_result.data = [event_data] if event_data else []
+
+    mock_query = MagicMock()
+    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order", "limit"):
+        getattr(mock_query, method).return_value = mock_query
+    mock_query.execute.side_effect = [job_result, insert_result]
+
+    mock_sb.table.return_value = mock_query
+    return mock_sb, mock_query
+
+
+def test_get_interviews_requires_auth():
+    response = client.get(f"/jobs/{SAMPLE_JOB['id']}/interviews")
+    assert response.status_code == 401
+
+
+def test_create_interview_requires_auth():
+    response = client.post(
+        f"/jobs/{SAMPLE_JOB['id']}/interviews",
+        json={"round_type": "Phone Screen", "scheduled_at": "2026-05-10T15:00:00+00:00"},
+    )
+    assert response.status_code == 401
+
+
+def test_update_interview_requires_auth():
+    response = client.put(
+        f"/jobs/{SAMPLE_JOB['id']}/interviews/ie-1",
+        json={"notes": "Updated"},
+    )
+    assert response.status_code == 401
+
+
+def test_delete_interview_requires_auth():
+    response = client.delete(f"/jobs/{SAMPLE_JOB['id']}/interviews/ie-1")
+    assert response.status_code == 401
+
+
+def test_get_interviews_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_INTERVIEW_EVENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            f"/jobs/{SAMPLE_JOB['id']}/interviews",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()[0]["round_type"] == "Phone Screen"
+
+
+def test_get_interviews_scoped_to_user_and_job():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_INTERVIEW_EVENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get(f"/jobs/{SAMPLE_JOB['id']}/interviews", headers={"authorization": AUTH_HEADER})
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+    assert ("job_id", SAMPLE_JOB["id"]) in eq_calls
+
+
+def test_create_interview_success():
+    mock_sb, _ = _make_mock_sb_for_interview_create(
+        event_data=SAMPLE_INTERVIEW_EVENT, job_exists=True
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            f"/jobs/{SAMPLE_JOB['id']}/interviews",
+            json={"round_type": "Phone Screen", "scheduled_at": "2026-05-10T15:00:00+00:00"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    assert response.json()["round_type"] == "Phone Screen"
+
+
+def test_create_interview_job_not_found():
+    mock_sb, _ = _make_mock_sb_for_interview_create(
+        event_data=SAMPLE_INTERVIEW_EVENT, job_exists=False
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            f"/jobs/{SAMPLE_JOB['id']}/interviews",
+            json={"round_type": "Phone Screen", "scheduled_at": "2026-05-10T15:00:00+00:00"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_create_interview_blank_round_type_returns_422():
+    mock_sb, _ = _make_mock_sb_for_interview_create(
+        event_data=SAMPLE_INTERVIEW_EVENT, job_exists=True
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            f"/jobs/{SAMPLE_JOB['id']}/interviews",
+            json={"round_type": "   ", "scheduled_at": "2026-05-10T15:00:00+00:00"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_update_interview_success():
+    updated_event = {**SAMPLE_INTERVIEW_EVENT, "notes": "Bring architecture examples"}
+    mock_sb, _, _ = make_mock_sb(data=[updated_event])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}/interviews/{SAMPLE_INTERVIEW_EVENT['id']}",
+            json={"notes": "Bring architecture examples"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["notes"] == "Bring architecture examples"
+
+
+def test_update_interview_not_found_returns_404():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}/interviews/missing-event",
+            json={"notes": "Updated"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_update_interview_blank_round_type_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_INTERVIEW_EVENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}/interviews/{SAMPLE_INTERVIEW_EVENT['id']}",
+            json={"round_type": "   "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_delete_interview_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_INTERVIEW_EVENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            f"/jobs/{SAMPLE_JOB['id']}/interviews/{SAMPLE_INTERVIEW_EVENT['id']}",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 204
 
 
 # ---------------------------------------------------------------------------
@@ -749,6 +919,21 @@ def test_job_update_all_optional():
     assert job.company is None
     assert job.status is None
     assert job.location is None
+
+
+def test_interview_event_create_requires_round_type_and_datetime():
+    event = InterviewEventCreate(
+        round_type="Phone Screen", scheduled_at="2026-05-10T15:00:00+00:00"
+    )
+    assert event.round_type == "Phone Screen"
+    assert event.notes is None
+
+
+def test_interview_event_update_all_optional():
+    event = InterviewEventUpdate()
+    assert event.round_type is None
+    assert event.scheduled_at is None
+    assert event.notes is None
 
 
 # ---------------------------------------------------------------------------

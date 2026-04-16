@@ -1,5 +1,5 @@
 import os
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -148,6 +148,18 @@ class ReminderUpdate(BaseModel):
     completed_at: Optional[str] = None
 
 
+class InterviewEventCreate(BaseModel):
+    round_type: str
+    scheduled_at: datetime
+    notes: Optional[str] = None
+
+
+class InterviewEventUpdate(BaseModel):
+    round_type: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+    notes: Optional[str] = None
+
+
 class ExperienceCreate(BaseModel):
     title: str
     company: str
@@ -263,6 +275,101 @@ def get_job_history(job_id: str, authorization: Optional[str] = Header(default=N
     if response.data is None:
         raise HTTPException(status_code=500, detail="Failed to fetch job history")
     return response.data or []
+
+
+@app.get("/jobs/{job_id}/interviews")
+def list_interview_events(job_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = (
+        sb.table("interview_events")
+        .select("*")
+        .eq("job_id", job_id)
+        .eq("user_id", user_id)
+        .order("scheduled_at", desc=False)
+        .execute()
+    )
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch interview events")
+    return response.data or []
+
+
+@app.post("/jobs/{job_id}/interviews", status_code=201)
+def create_interview_event(
+    job_id: str, event: InterviewEventCreate, authorization: Optional[str] = Header(default=None)
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    job_exists = sb.table("jobs").select("id").eq("id", job_id).eq("user_id", user_id).execute()
+    if not job_exists.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not event.round_type.strip():
+        raise HTTPException(status_code=422, detail="round_type must not be blank")
+    payload = event.model_dump(exclude_none=True)
+    payload["job_id"] = job_id
+    payload["user_id"] = user_id
+    payload["round_type"] = event.round_type.strip()
+    payload["scheduled_at"] = event.scheduled_at.isoformat()
+    if "notes" in payload:
+        payload["notes"] = event.notes.strip() or None
+    response = sb.table("interview_events").insert(payload).execute()
+    if not response.data:
+        raise HTTPException(status_code=500, detail="Failed to create interview event")
+    return response.data[0]
+
+
+@app.put("/jobs/{job_id}/interviews/{event_id}")
+def update_interview_event(
+    job_id: str,
+    event_id: str,
+    event: InterviewEventUpdate,
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    payload = event.model_dump(exclude_unset=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    if "round_type" in payload:
+        payload["round_type"] = (payload["round_type"] or "").strip()
+        if not payload["round_type"]:
+            raise HTTPException(status_code=422, detail="round_type must not be blank")
+    if "scheduled_at" in payload:
+        if payload["scheduled_at"] is None:
+            raise HTTPException(status_code=422, detail="scheduled_at must not be null")
+        payload["scheduled_at"] = payload["scheduled_at"].isoformat()
+    if "notes" in payload:
+        payload["notes"] = (payload["notes"] or "").strip() or None
+    response = (
+        sb.table("interview_events")
+        .update(payload)
+        .eq("id", event_id)
+        .eq("job_id", job_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Interview event not found")
+    return response.data[0]
+
+
+@app.delete("/jobs/{job_id}/interviews/{event_id}")
+def delete_interview_event(
+    job_id: str, event_id: str, authorization: Optional[str] = Header(default=None)
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = (
+        sb.table("interview_events")
+        .delete()
+        .eq("id", event_id)
+        .eq("job_id", job_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Interview event not found")
+    return Response(status_code=204)
 
 
 @app.put("/jobs/{job_id}")

@@ -15,12 +15,26 @@ function toFormValues(job) {
   };
 }
 
+function localDateTimeToUtcIso(value) {
+  if (!value) return value;
+  const parsed = new Date(value);
+  if (isNaN(parsed.getTime())) return value;
+  return parsed.toISOString();
+}
+
 export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
   const isEdit = mode === 'edit';
   const [values, setValues] = useState(() => (isEdit && job ? toFormValues(job) : EMPTY_JOB));
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [nextInterview, setNextInterview] = useState({
+    round_type: '',
+    scheduled_at: '',
+    notes: '',
+  });
+  const [loggingInterview, setLoggingInterview] = useState(false);
+  const [interviewLogMessage, setInterviewLogMessage] = useState(null);
   const overlayRef = useRef(null);
   const modalRef = useRef(null);
   const firstInputRef = useRef(null);
@@ -126,8 +140,43 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
         const text = await res.text().catch(() => '');
         throw new Error(text || `Request failed (${res.status})`);
       }
+      const savedJob = await res.json();
+      let interviewWarning = null;
+
+      if (
+        values.status === 'interviewing' &&
+        nextInterview.round_type.trim() &&
+        nextInterview.scheduled_at
+      ) {
+        const interviewPayload = {
+          round_type: nextInterview.round_type.trim(),
+          scheduled_at: localDateTimeToUtcIso(nextInterview.scheduled_at),
+          notes: nextInterview.notes.trim() || null,
+        };
+        const targetJobId = isEdit ? job.id : savedJob.id;
+
+        try {
+          const interviewRes = await fetch(`${backendBase}/jobs/${targetJobId}/interviews`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify(interviewPayload),
+          });
+          if (!interviewRes.ok) {
+            const text = await interviewRes.text().catch(() => '');
+            throw new Error(text || `Interview request failed (${interviewRes.status})`);
+          }
+        } catch (err) {
+          interviewWarning = err instanceof Error ? err.message : String(err);
+        }
+      }
 
       onSaved();
+      if (interviewWarning) {
+        window.alert(`Job saved, but the interview could not be logged: ${interviewWarning}`);
+      }
       onClose();
     } catch (err) {
       setApiError(err instanceof Error ? err.message : String(err));
@@ -138,6 +187,57 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
 
   function handleOverlayClick(e) {
     if (e.target === overlayRef.current && !saving) onClose();
+  }
+
+  async function handleLogInterview() {
+    if (loggingInterview || saving) return;
+    setApiError(null);
+    setInterviewLogMessage(null);
+
+    if (!isEdit || !job?.id) {
+      setApiError('Save this application first, then log interviews.');
+      return;
+    }
+    if (!nextInterview.round_type.trim() || !nextInterview.scheduled_at) {
+      setApiError('Round type and date/time are required to log an interview.');
+      return;
+    }
+
+    const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '');
+    if (!backendBase) {
+      setApiError('Backend URL is not configured.');
+      return;
+    }
+    if (!accessToken) {
+      setApiError('You are not authenticated. Please sign in again.');
+      return;
+    }
+
+    setLoggingInterview(true);
+    try {
+      const interviewRes = await fetch(`${backendBase}/jobs/${job.id}/interviews`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          round_type: nextInterview.round_type.trim(),
+          scheduled_at: localDateTimeToUtcIso(nextInterview.scheduled_at),
+          notes: nextInterview.notes.trim() || null,
+        }),
+      });
+      if (!interviewRes.ok) {
+        const text = await interviewRes.text().catch(() => '');
+        throw new Error(text || `Interview request failed (${interviewRes.status})`);
+      }
+      setNextInterview({ round_type: '', scheduled_at: '', notes: '' });
+      setInterviewLogMessage('Interview logged.');
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoggingInterview(false);
+    }
   }
 
   return (
@@ -214,6 +314,78 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
               )}
             </div>
           </div>
+
+          {isEdit && values.status === 'interviewing' && (
+            <div className="jf-interview-block">
+              <div className="jf-interview-title">Log an Interview</div>
+              <div className="jf-row jf-row--two">
+                <div className="jf-field">
+                  <label className="jf-label" htmlFor="jf-next-round-input">
+                    Round Type
+                  </label>
+                  <input
+                    id="jf-next-round-input"
+                    className="jf-input"
+                    type="text"
+                    value={nextInterview.round_type}
+                    onChange={(e) =>
+                      setNextInterview((prev) => ({ ...prev, round_type: e.target.value }))
+                    }
+                    placeholder="e.g. Phone Screen"
+                  />
+                </div>
+                <div className="jf-field">
+                  <label className="jf-label" htmlFor="jf-next-scheduled-input">
+                    Date & Time
+                  </label>
+                  <input
+                    id="jf-next-scheduled-input"
+                    className="jf-input"
+                    type="datetime-local"
+                    value={nextInterview.scheduled_at}
+                    onChange={(e) =>
+                      setNextInterview((prev) => ({ ...prev, scheduled_at: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+              <div className="jf-row">
+                <div className="jf-field">
+                  <label className="jf-label" htmlFor="jf-next-notes-input">
+                    Interview Notes
+                  </label>
+                  <textarea
+                    id="jf-next-notes-input"
+                    className="jf-textarea"
+                    rows={2}
+                    value={nextInterview.notes}
+                    onChange={(e) =>
+                      setNextInterview((prev) => ({ ...prev, notes: e.target.value }))
+                    }
+                    placeholder="Prep notes, interviewer context, reminders..."
+                  />
+                </div>
+              </div>
+              <div className="jf-interview-actions">
+                {interviewLogMessage && (
+                  <span className="jf-interview-saved">{interviewLogMessage}</span>
+                )}
+                <button
+                  type="button"
+                  className="jf-btn jf-btn--save"
+                  onClick={handleLogInterview}
+                  disabled={
+                    saving ||
+                    loggingInterview ||
+                    !nextInterview.round_type.trim() ||
+                    !nextInterview.scheduled_at
+                  }
+                >
+                  {loggingInterview ? 'Logging...' : 'Log Interview'}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="jf-row jf-row--two">
             <div className="jf-field">
