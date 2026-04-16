@@ -190,3 +190,134 @@ test('edit form modal closes when Cancel is clicked', async () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
+
+test('clicking delete asks for confirmation', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Backend Engineer',
+              company: 'DataCorp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: true, status: 204 });
+  });
+  const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Backend Engineer'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application backend engineer/i }));
+
+  expect(confirmSpy).toHaveBeenCalled();
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+  confirmSpy.mockRestore();
+});
+
+test('cancelling delete does not call delete endpoint', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Frontend Engineer',
+              company: 'UI Corp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: true, status: 204 });
+  });
+  const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Frontend Engineer'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application frontend engineer/i }));
+
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+  confirmSpy.mockRestore();
+});
+
+test('confirming delete calls endpoint and refetches jobs', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Delete Me',
+              company: 'DataCorp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    if (options.method === 'DELETE') {
+      return Promise.resolve({ ok: true, status: 204 });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+  });
+  const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Delete Me'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application delete me/i }));
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/jobs/job-1',
+      expect.objectContaining({
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer test-token' },
+      })
+    );
+  });
+  expect(global.fetch).toHaveBeenCalledTimes(3);
+  confirmSpy.mockRestore();
+});
+
+test('shows delete error when delete request fails', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Delete Failure',
+              company: 'FailCorp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: false, status: 500 });
+  });
+  const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Delete Failure'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application delete failure/i }));
+
+  await waitFor(() => {
+    expect(screen.getByText(/failed to delete job/i)).toBeInTheDocument();
+  });
+  confirmSpy.mockRestore();
+});

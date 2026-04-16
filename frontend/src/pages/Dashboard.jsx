@@ -71,6 +71,8 @@ export default function Dashboard() {
   const { jobs, loading, error, refetch } = useJobs(session?.access_token);
   const [formState, setFormState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', job }
   const [historyJob, setHistoryJob] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [deletingJobId, setDeletingJobId] = useState(null);
 
   const totalApplications = jobs.length;
   const interviews = jobs.filter(
@@ -124,6 +126,37 @@ export default function Dashboard() {
     refetch();
   }
 
+  async function handleDelete(job) {
+    const shouldDelete = window.confirm(
+      `Delete "${job.title}" at ${job.company}? This action cannot be undone.`
+    );
+    if (!shouldDelete) return;
+
+    const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '');
+    if (!backendBase || !session?.access_token) {
+      setDeleteError('Unable to delete job right now. Please refresh and try again.');
+      return;
+    }
+
+    setDeleteError('');
+    setDeletingJobId(job.id);
+
+    try {
+      const res = await fetch(`${backendBase}/jobs/${job.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to delete job (${res.status})`);
+      }
+      await refetch();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete job.');
+    } finally {
+      setDeletingJobId(null);
+    }
+  }
+
   return (
     <AppShell title="My Dashboard" notificationCount={0}>
       <div className="dashboard-content">
@@ -143,6 +176,7 @@ export default function Dashboard() {
 
           {loading && <p className="table-state">Loading jobs...</p>}
           {error && <p className="table-state table-state--error">{error}</p>}
+          {!error && deleteError && <p className="table-state table-state--error">{deleteError}</p>}
 
           {!loading && !error && (
             <table className="jobs-table">
@@ -196,6 +230,7 @@ export default function Dashboard() {
                             className="action-btn"
                             aria-label="View stage history"
                             onClick={() => setHistoryJob(job)}
+                            disabled={deletingJobId === job.id}
                           >
                             👁
                           </button>
@@ -204,15 +239,18 @@ export default function Dashboard() {
                             className="action-btn"
                             aria-label="Edit application"
                             onClick={() => openEdit(job)}
+                            disabled={deletingJobId === job.id}
                           >
                             ✏️
                           </button>
                           <button
                             type="button"
                             className="action-btn"
-                            aria-label="Archive application"
+                            aria-label={`Delete application ${job.title}`}
+                            onClick={() => handleDelete(job)}
+                            disabled={deletingJobId === job.id}
                           >
-                            🗂
+                            {deletingJobId === job.id ? '…' : '🗑'}
                           </button>
                         </div>
                       </td>
