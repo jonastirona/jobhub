@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export function useJobHistory(jobId, accessToken) {
   const [history, setHistory] = useState([]);
@@ -7,7 +7,6 @@ export function useJobHistory(jobId, accessToken) {
   const [error, setError] = useState(null);
   const [savingInterview, setSavingInterview] = useState(false);
   const [interviewError, setInterviewError] = useState(null);
-  const requestAbortControllerRef = useRef(null);
 
   const getBackendBase = useCallback(
     () => (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null,
@@ -142,28 +141,13 @@ export function useJobHistory(jobId, accessToken) {
   );
 
   useEffect(() => {
-    requestAbortControllerRef.current?.abort();
-    const controller = new AbortController();
-    requestAbortControllerRef.current = controller;
-
-    fetchHistory(controller.signal).catch((err) => {
-      if (err?.name !== 'AbortError') {
-        throw err;
-      }
+    fetchHistory().catch((err) => {
+      throw err;
     });
 
-    fetchInterviews(controller.signal).catch((err) => {
-      if (err?.name !== 'AbortError') {
-        throw err;
-      }
+    fetchInterviews().catch((err) => {
+      throw err;
     });
-
-    return () => {
-      if (requestAbortControllerRef.current === controller) {
-        controller.abort();
-        requestAbortControllerRef.current = null;
-      }
-    };
   }, [fetchHistory, fetchInterviews]);
 
   return {
