@@ -134,6 +134,35 @@ class ReminderUpdate(BaseModel):
     notes: Optional[str] = None
     due_date: Optional[str] = None
     completed_at: Optional[str] = None
+      
+      
+class ExperienceCreate(BaseModel):
+    title: str
+    company: str
+    location: Optional[str] = None
+    start_year: int
+    end_year: Optional[int] = None
+    description: Optional[str] = None
+
+
+class ExperienceUpdate(BaseModel):
+    title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    start_year: Optional[int] = None
+    end_year: Optional[int] = None
+    description: Optional[str] = None
+
+
+class ExperienceReorder(BaseModel):
+    ids: list[str]
+
+
+def _validate_experience_years(start_year: Optional[int], end_year: Optional[int]) -> None:
+    if start_year is not None and start_year < 1900:
+        raise HTTPException(status_code=422, detail="start_year must be 1900 or later")
+    if start_year is not None and end_year is not None and end_year < start_year:
+        raise HTTPException(status_code=422, detail="end_year must be >= start_year")
 
 
 # --- Routes ---
@@ -173,7 +202,10 @@ def create_job(job: JobCreate, authorization: Optional[str] = Header(default=Non
     }
     if created.get("applied_date"):
         history_entry["changed_at"] = f"{created['applied_date']}T00:00:00+00:00"
-    sb.table("job_status_history").insert(history_entry).execute()
+    history_response = sb.table("job_status_history").insert(history_entry).execute()
+    if not history_response.data:
+        sb.table("jobs").delete().eq("id", created["id"]).eq("user_id", user_id).execute()
+        raise HTTPException(status_code=500, detail="Failed to create initial job status history")
     return created
 
 
@@ -317,28 +349,184 @@ def update_reminder(
     if not payload:
         raise HTTPException(status_code=400, detail="No fields to update")
     response = (
-        sb.table("reminders")
-        .update(payload)
-        .eq("id", reminder_id)
-        .eq("user_id", user_id)
-        .execute()
+        sb.table("reminders").update(payload).eq("id", reminder_id).eq("user_id", user_id).execute()
     )
     if not response.data:
         raise HTTPException(status_code=404, detail="Reminder not found")
     return response.data[0]
-
-
+  
+  
 @app.delete("/reminders/{reminder_id}")
 def delete_reminder(reminder_id: str, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
     sb = get_supabase()
-    response = (
-        sb.table("reminders")
-        .delete()
-        .eq("id", reminder_id)
-        .eq("user_id", user_id)
-        .execute()
-    )
+    response = sb.table("reminders").delete().eq("id", reminder_id).eq("user_id", user_id).execute()
     if not response.data:
         raise HTTPException(status_code=404, detail="Reminder not found")
+    return Response(status_code=204)
+  
+  
+# --- Experience routes ---
+
+
+@app.get("/experience")
+def list_experience(authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = sb.table("experience").select("*").eq("user_id", user_id).order("position").execute()
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch experience")
+    return response.data
+
+
+@app.post("/experience", status_code=201)
+def create_experience(entry: ExperienceCreate, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    _validate_experience_years(entry.start_year, entry.end_year)
+    if not entry.title.strip():
+        raise HTTPException(status_code=422, detail="title must not be blank")
+    if not entry.company.strip():
+        raise HTTPException(status_code=422, detail="company must not be blank")
+    payload = entry.model_dump(exclude_none=True)
+    payload["title"] = entry.title.strip()
+    payload["company"] = entry.company.strip()
+    if "location" in payload:
+        payload["location"] = entry.location.strip() or None
+    if "description" in payload:
+        payload["description"] = entry.description.strip() or None
+    payload["user_id"] = user_id
+    # Retry once on insert failure to handle the narrow race window where two
+    # concurrent creates read the same max position and collide on the UNIQUE
+    # (user_id, position) constraint.  A per-user DB sequence would eliminate
+    # the window entirely but requires a Supabase RPC.
+    for attempt in range(2):
+        position_resp = (
+            sb.table("experience")
+            .select("position")
+            .eq("user_id", user_id)
+            .order("position", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if position_resp.data is None:
+            raise HTTPException(status_code=500, detail="Failed to determine experience position")
+        payload["position"] = (position_resp.data[0]["position"] if position_resp.data else -1) + 1
+        response = sb.table("experience").insert(payload).execute()
+        if response.data:
+            return response.data[0]
+        if attempt == 0:
+            continue  # retry with a fresh position read
+    raise HTTPException(status_code=500, detail="Failed to create experience entry")
+
+
+@app.put("/experience/reorder")
+def reorder_experience(
+    data: ExperienceReorder, authorization: Optional[str] = Header(default=None)
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    existing_resp = sb.table("experience").select("id,position").eq("user_id", user_id).execute()
+    if existing_resp.data is None:
+        raise HTTPException(status_code=500, detail="Failed to validate experience for reorder")
+    existing_ids = [r["id"] for r in existing_resp.data]
+    if len(data.ids) != len(set(data.ids)):
+        raise HTTPException(status_code=400, detail="Experience ids must be unique")
+    if set(data.ids) != set(existing_ids):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "ids must contain each of the authenticated user's experience entries exactly once"
+            ),
+        )
+    if data.ids:
+        # Capture current positions for best-effort recovery if phase 2 fails.
+        original_positions = {r["id"]: r["position"] for r in existing_resp.data if "position" in r}
+        # Phase 1: shift all positions to temporary out-of-range values to avoid
+        # violating the UNIQUE (user_id, position) constraint during swaps.
+        temp_updates = [
+            {"id": entry_id, "user_id": user_id, "position": len(data.ids) + i}
+            for i, entry_id in enumerate(data.ids)
+        ]
+        temp_resp = sb.table("experience").upsert(temp_updates, on_conflict="id").execute()
+        if temp_resp.data is None:
+            raise HTTPException(status_code=500, detail="Failed to reorder experience")
+        # Phase 2: write the final 0..n-1 positions.
+        final_updates = [
+            {"id": entry_id, "user_id": user_id, "position": position}
+            for position, entry_id in enumerate(data.ids)
+        ]
+        update_resp = sb.table("experience").upsert(final_updates, on_conflict="id").execute()
+        if update_resp.data is None:
+            # Best-effort: attempt to restore original positions so rows are not
+            # left with out-of-range position values from phase 1.
+            if original_positions:
+                recovery_updates = [
+                    {"id": entry_id, "user_id": user_id, "position": pos}
+                    for entry_id, pos in original_positions.items()
+                ]
+                sb.table("experience").upsert(recovery_updates, on_conflict="id").execute()
+            raise HTTPException(status_code=500, detail="Failed to reorder experience")
+    response = sb.table("experience").select("*").eq("user_id", user_id).order("position").execute()
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch reordered experience")
+    return response.data
+
+@app.put("/experience/{entry_id}")
+def update_experience(
+    entry_id: str,
+    entry: ExperienceUpdate,
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    payload = entry.model_dump(exclude_unset=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    _EXPERIENCE_REQUIRED_FIELDS = ("title", "company", "start_year")
+    for field in _EXPERIENCE_REQUIRED_FIELDS:
+        if field in payload and payload[field] is None:
+            raise HTTPException(status_code=422, detail=f"{field} cannot be null")
+    if "title" in payload:
+        payload["title"] = (payload["title"] or "").strip()
+        if not payload["title"]:
+            raise HTTPException(status_code=422, detail="title must not be blank")
+    if "company" in payload:
+        payload["company"] = (payload["company"] or "").strip()
+        if not payload["company"]:
+            raise HTTPException(status_code=422, detail="company must not be blank")
+    if "location" in payload:
+        payload["location"] = (payload["location"] or "").strip() or None
+    if "description" in payload:
+        payload["description"] = (payload["description"] or "").strip() or None
+    existing_resp = (
+        sb.table("experience").select("*").eq("id", entry_id).eq("user_id", user_id).execute()
+    )
+    if existing_resp.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch experience entry")
+    if not existing_resp.data:
+        raise HTTPException(status_code=404, detail="Experience entry not found")
+    existing = existing_resp.data[0]
+    effective_start = payload.get("start_year", existing.get("start_year"))
+    effective_end = payload.get("end_year", existing.get("end_year"))
+    _validate_experience_years(effective_start, effective_end)
+    response = (
+        sb.table("experience").update(payload).eq("id", entry_id).eq("user_id", user_id).execute()
+    )
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to update experience entry")
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Experience entry not found")
+    return response.data[0]
+
+
+@app.delete("/experience/{entry_id}")
+def delete_experience(entry_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = sb.table("experience").delete().eq("id", entry_id).eq("user_id", user_id).execute()
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to delete experience entry")
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Experience entry not found")
     return Response(status_code=204)
