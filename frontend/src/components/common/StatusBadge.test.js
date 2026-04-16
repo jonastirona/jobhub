@@ -21,9 +21,24 @@ test('renders offered label', () => {
   expect(screen.getByText('Offered')).toBeInTheDocument();
 });
 
+test('renders accepted label', () => {
+  render(<StatusBadge status="accepted" />);
+  expect(screen.getByText('Accepted')).toBeInTheDocument();
+});
+
+test('renders declined label', () => {
+  render(<StatusBadge status="declined" />);
+  expect(screen.getByText('Declined')).toBeInTheDocument();
+});
+
 test('renders rejected label', () => {
   render(<StatusBadge status="rejected" />);
   expect(screen.getByText('Rejected')).toBeInTheDocument();
+});
+
+test('renders withdrawn label', () => {
+  render(<StatusBadge status="withdrawn" />);
+  expect(screen.getByText('Withdrawn')).toBeInTheDocument();
 });
 
 test('renders archived label', () => {

@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from main import (
+    JOB_STATUSES,
     PROFILE_REQUIRED_FIELDS,
     ExperienceCreate,
     ExperienceReorder,
@@ -244,6 +245,31 @@ def test_create_job_db_failure_returns_500():
     assert response.status_code == 500
 
 
+def test_create_job_accepts_new_final_outcome_status():
+    accepted_job = {**SAMPLE_JOB, "status": "accepted"}
+    mock_sb, _, _ = make_mock_sb(data=[accepted_job])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/jobs",
+            json={"title": "Engineer", "company": "Acme", "status": "accepted"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    assert response.json()["status"] == "accepted"
+
+
+def test_create_job_rejects_unknown_status():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/jobs",
+            json={"title": "Engineer", "company": "Acme", "status": "unknown-status"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "supported job status" in response.json()["detail"]
+
+
 # ---------------------------------------------------------------------------
 # GET /jobs/{job_id}
 # ---------------------------------------------------------------------------
@@ -329,6 +355,31 @@ def test_update_job_partial_fields():
     update_payload = mock_query.update.call_args[0][0]
     assert update_payload == {"title": "Staff Engineer"}
     assert "company" not in update_payload
+
+
+def test_update_job_accepts_new_final_outcome_status():
+    updated = {**SAMPLE_JOB, "status": "withdrawn"}
+    mock_sb, _ = _make_mock_sb_with_status_change("applied", "withdrawn")
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"status": "withdrawn"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["status"] == updated["status"]
+
+
+def test_update_job_rejects_unknown_status():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"status": "unknown-status"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "supported job status" in response.json()["detail"]
 
 
 # ---------------------------------------------------------------------------
@@ -641,6 +692,27 @@ def _make_mock_sb_with_status_change(old_status, new_status):
     return mock_sb, mock_query
 
 
+def _make_mock_sb_update_without_status(existing_status: str, updated_row: dict):
+    mock_sb = MagicMock()
+    mock_user_resp = MagicMock()
+    mock_user_resp.user.id = MOCK_USER_ID
+    mock_sb.auth.get_user.return_value = mock_user_resp
+
+    select_result = MagicMock()
+    select_result.data = [{**SAMPLE_JOB, "status": existing_status}]
+
+    update_result = MagicMock()
+    update_result.data = [updated_row]
+
+    mock_query = MagicMock()
+    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order"):
+        getattr(mock_query, method).return_value = mock_query
+    mock_query.execute.side_effect = [select_result, update_result]
+
+    mock_sb.table.return_value = mock_query
+    return mock_sb, mock_query
+
+
 def test_update_job_inserts_history_on_status_change():
     mock_sb, mock_query = _make_mock_sb_with_status_change("applied", "interviewing")
     with patch("main.get_supabase", return_value=mock_sb):
@@ -679,6 +751,65 @@ def test_update_job_no_history_when_status_unchanged():
         )
     table_calls = [call[0][0] for call in mock_sb.table.call_args_list]
     assert "job_status_history" not in table_calls
+
+
+def test_update_job_no_history_when_legacy_alias_normalizes_to_same_status():
+    mock_sb, mock_query = _make_mock_sb_with_status_change("offer", "offered")
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"status": "offered"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    table_calls = [call[0][0] for call in mock_sb.table.call_args_list]
+    assert "job_status_history" not in table_calls
+
+
+def test_update_job_alias_only_status_change_is_noop_for_jobs_table():
+    mock_sb, mock_query, _ = make_mock_sb(data=[{**SAMPLE_JOB, "status": "offer"}])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"status": "offered"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["status"] == "offer"
+    mock_query.update.assert_not_called()
+    table_calls = [call[0][0] for call in mock_sb.table.call_args_list]
+    assert "job_status_history" not in table_calls
+
+
+def test_update_job_allows_valid_status_when_existing_status_is_legacy_unknown():
+    mock_sb, mock_query = _make_mock_sb_with_status_change("legacy-foo", "offered")
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"status": "offered"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    history_payload = mock_query.insert.call_args_list[-1][0][0]
+    assert history_payload["from_status"] == "legacy-foo"
+    assert history_payload["to_status"] == "offered"
+
+
+def test_update_job_notes_does_not_validate_legacy_status():
+    updated_row = {**SAMPLE_JOB, "status": "unknown-status", "notes": "updated"}
+    mock_sb, mock_query = _make_mock_sb_update_without_status("unknown-status", updated_row)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"notes": "updated"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["notes"] == "updated"
+    table_calls = [call[0][0] for call in mock_sb.table.call_args_list]
+    assert "job_status_history" not in table_calls
+    update_payload = mock_query.update.call_args[0][0]
+    assert update_payload == {"notes": "updated"}
 
 
 def test_update_job_no_history_when_status_not_in_payload():
@@ -749,6 +880,16 @@ def test_job_create_all_fields():
     )
     assert job.status == "interviewing"
     assert job.location == "Remote"
+
+
+def test_job_create_accepts_final_outcome_statuses():
+    for status in ("accepted", "declined", "withdrawn"):
+        job = JobCreate(title="Backend Engineer", company="TechCorp", status=status)
+        assert job.status == status
+
+
+def test_job_statuses_constant_includes_new_final_outcomes():
+    assert {"accepted", "declined", "withdrawn"}.issubset(JOB_STATUSES)
 
 
 def test_job_update_all_optional():
