@@ -266,22 +266,31 @@ def update_job(job_id: str, job: JobUpdate, authorization: Optional[str] = Heade
     if not existing.data:
         raise HTTPException(status_code=404, detail="Job not found")
     old_status = existing.data[0]["status"]
+    canonical_old_status = _normalize_job_status_alias(old_status)
+    should_insert_status_history = False
+    if "status" in payload:
+        if payload["status"] == canonical_old_status:
+            # Alias-to-canonical transitions should be treated as no-op status updates.
+            payload.pop("status")
+        else:
+            should_insert_status_history = True
+
+    if not payload:
+        return existing.data[0]
+
     response = sb.table("jobs").update(payload).eq("id", job_id).eq("user_id", user_id).execute()
     if not response.data:
         raise HTTPException(status_code=404, detail="Job not found")
     updated = response.data[0]
-    new_status = updated["status"]
-    if "status" in payload:
-        canonical_old_status = _normalize_job_status_alias(old_status)
-        if new_status != canonical_old_status:
-            sb.table("job_status_history").insert(
-                {
-                    "job_id": job_id,
-                    "user_id": user_id,
-                    "from_status": canonical_old_status,
-                    "to_status": new_status,
-                }
-            ).execute()
+    if should_insert_status_history:
+        sb.table("job_status_history").insert(
+            {
+                "job_id": job_id,
+                "user_id": user_id,
+                "from_status": canonical_old_status,
+                "to_status": updated["status"],
+            }
+        ).execute()
     return updated
 
 
