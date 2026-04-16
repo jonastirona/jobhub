@@ -8,7 +8,7 @@ const USER_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 function formatDateTime(isoString) {
   const d = new Date(isoString);
   if (isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-US', {
+  return d.toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
