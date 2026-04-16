@@ -29,9 +29,27 @@ const sampleHistory = [
     changed_at: '2026-04-05T14:32:00+00:00',
   },
 ];
+const sampleInterviews = [
+  {
+    id: 'i1',
+    job_id: 'job-123',
+    user_id: 'user-1',
+    round_type: 'Phone Screen',
+    scheduled_at: '2026-04-08T15:00:00+00:00',
+    notes: 'Bring resume',
+  },
+];
 
-function mockFetchOk(body) {
-  global.fetch = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(body) }));
+function mockFetchOk() {
+  global.fetch = jest.fn((url) => {
+    if (String(url).includes('/history')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(sampleHistory) });
+    }
+    if (String(url).includes('/interviews')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(sampleInterviews) });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ ...sampleJob, notes: 'Updated' }) });
+  });
 }
 
 function mockFetchError(status = 500) {
@@ -49,7 +67,7 @@ const baseProps = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockFetchOk(sampleHistory);
+  mockFetchOk();
   process.env.REACT_APP_BACKEND_URL = BACKEND;
 });
 
@@ -95,7 +113,15 @@ test('renders arrow for transition entries', async () => {
 });
 
 test('shows empty state when no history', async () => {
-  mockFetchOk([]);
+  global.fetch = jest.fn((url) => {
+    if (String(url).includes('/history')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
+    if (String(url).includes('/interviews')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+  });
   render(<JobHistory {...baseProps} />);
   await waitFor(() =>
     expect(screen.getByText('No stage history recorded yet.')).toBeInTheDocument()
@@ -103,7 +129,12 @@ test('shows empty state when no history', async () => {
 });
 
 test('shows error state on failed fetch', async () => {
-  mockFetchError(500);
+  global.fetch = jest.fn((url) => {
+    if (String(url).includes('/history')) {
+      return Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve('Server error') });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+  });
   render(<JobHistory {...baseProps} />);
   await waitFor(() => expect(screen.queryByText('Loading history...')).not.toBeInTheDocument());
   expect(screen.getByText(/500/)).toBeInTheDocument();
@@ -125,7 +156,7 @@ test('shows Saved confirmation after successful notes save', async () => {
   render(<JobHistory {...baseProps} />);
   await waitFor(() => expect(screen.queryByText('Loading history...')).not.toBeInTheDocument());
 
-  mockFetchOk({ ...sampleJob, notes: 'Updated note' });
+  mockFetchOk();
   fireEvent.click(screen.getByRole('button', { name: /save notes/i }));
 
   await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
@@ -135,7 +166,7 @@ test('calls onSaved after successful notes save', async () => {
   render(<JobHistory {...baseProps} />);
   await waitFor(() => expect(screen.queryByText('Loading history...')).not.toBeInTheDocument());
 
-  mockFetchOk({ ...sampleJob, notes: 'Updated note' });
+  mockFetchOk();
   fireEvent.click(screen.getByRole('button', { name: /save notes/i }));
 
   await waitFor(() => expect(baseProps.onSaved).toHaveBeenCalled());
@@ -163,4 +194,29 @@ test('calls onClose when overlay is clicked', () => {
   render(<JobHistory {...baseProps} />);
   fireEvent.click(screen.getByRole('presentation'));
   expect(baseProps.onClose).toHaveBeenCalled();
+});
+
+test('renders interview events section and existing interview', async () => {
+  render(<JobHistory {...baseProps} />);
+  await waitFor(() => expect(screen.getByText('Interview Events')).toBeInTheDocument());
+  expect(screen.getByText('Phone Screen')).toBeInTheDocument();
+  expect(screen.getByText('Bring resume')).toBeInTheDocument();
+});
+
+test('can add interview event', async () => {
+  mockFetchOk();
+  const { container } = render(<JobHistory {...baseProps} />);
+  await waitFor(() => expect(screen.getByText('Interview Events')).toBeInTheDocument());
+  fireEvent.change(screen.getByPlaceholderText(/round type/i), {
+    target: { value: 'Onsite' },
+  });
+  const dateInput = container.querySelector('input[type="datetime-local"]');
+  fireEvent.change(dateInput, { target: { value: '2026-04-20T10:30' } });
+  fireEvent.click(screen.getByRole('button', { name: /add interview event/i }));
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${BACKEND}/jobs/${sampleJob.id}/interviews`,
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
 });

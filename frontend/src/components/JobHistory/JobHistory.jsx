@@ -15,12 +15,41 @@ function formatDateTime(isoString) {
   });
 }
 
+function toDateTimeLocalValue(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  const tzOffsetMs = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - tzOffsetMs).toISOString().slice(0, 16);
+}
+
 export default function JobHistory({ job, accessToken, onClose, onSaved }) {
-  const { history, loading, error } = useJobHistory(job.id, accessToken);
+  const {
+    history,
+    interviews,
+    loading,
+    error,
+    savingInterview,
+    interviewError,
+    createInterview,
+    updateInterview,
+  } = useJobHistory(job.id, accessToken);
   const [notes, setNotes] = useState(job.notes ?? '');
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesError, setNotesError] = useState(null);
   const [notesSaved, setNotesSaved] = useState(false);
+  const [interviewSaved, setInterviewSaved] = useState(false);
+  const [editingInterviewId, setEditingInterviewId] = useState(null);
+  const [newInterview, setNewInterview] = useState({
+    round_type: '',
+    scheduled_at: '',
+    notes: '',
+  });
+  const [editInterview, setEditInterview] = useState({
+    round_type: '',
+    scheduled_at: '',
+    notes: '',
+  });
 
   async function handleSaveNotes() {
     const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '');
@@ -50,6 +79,38 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
     } finally {
       setSavingNotes(false);
     }
+  }
+
+  async function handleCreateInterview() {
+    setInterviewSaved(false);
+    await createInterview({
+      round_type: newInterview.round_type,
+      scheduled_at: newInterview.scheduled_at,
+      notes: newInterview.notes,
+    });
+    setNewInterview({ round_type: '', scheduled_at: '', notes: '' });
+    setInterviewSaved(true);
+  }
+
+  function startEditingInterview(interview) {
+    setEditingInterviewId(interview.id);
+    setEditInterview({
+      round_type: interview.round_type ?? '',
+      scheduled_at: toDateTimeLocalValue(interview.scheduled_at),
+      notes: interview.notes ?? '',
+    });
+  }
+
+  async function handleSaveInterviewEdit() {
+    if (!editingInterviewId) return;
+    setInterviewSaved(false);
+    await updateInterview(editingInterviewId, {
+      round_type: editInterview.round_type,
+      scheduled_at: editInterview.scheduled_at,
+      notes: editInterview.notes,
+    });
+    setEditingInterviewId(null);
+    setInterviewSaved(true);
   }
 
   return (
@@ -113,6 +174,136 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
               ))}
             </ol>
           )}
+        </div>
+
+        <div className="jh-interviews">
+          <div className="jh-interviews-header">
+            <h3 className="jh-interviews-title">Interview Events</h3>
+            {interviewSaved && <span className="jh-notes-saved">Saved</span>}
+          </div>
+          {interviewError && <p className="jh-state jh-state--error">{interviewError}</p>}
+
+          {interviews.length === 0 ? (
+            <p className="jh-state">No interview events yet.</p>
+          ) : (
+            <ul className="jh-interviews-list">
+              {interviews.map((interview) => {
+                const isEditing = editingInterviewId === interview.id;
+                return (
+                  <li key={interview.id} className="jh-interview-item">
+                    {isEditing ? (
+                      <>
+                        <div className="jh-interview-grid">
+                          <input
+                            className="jh-input"
+                            value={editInterview.round_type}
+                            onChange={(e) =>
+                              setEditInterview((prev) => ({ ...prev, round_type: e.target.value }))
+                            }
+                            placeholder="Round type"
+                          />
+                          <input
+                            className="jh-input"
+                            type="datetime-local"
+                            value={editInterview.scheduled_at}
+                            onChange={(e) =>
+                              setEditInterview((prev) => ({ ...prev, scheduled_at: e.target.value }))
+                            }
+                          />
+                        </div>
+                        <textarea
+                          className="jh-notes-textarea"
+                          rows={2}
+                          value={editInterview.notes}
+                          onChange={(e) =>
+                            setEditInterview((prev) => ({ ...prev, notes: e.target.value }))
+                          }
+                          placeholder="Interview notes"
+                        />
+                        <div className="jh-interview-actions">
+                          <button
+                            type="button"
+                            className="jh-notes-btn jh-notes-btn--muted"
+                            onClick={() => setEditingInterviewId(null)}
+                            disabled={savingInterview}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="jh-notes-btn"
+                            onClick={handleSaveInterviewEdit}
+                            disabled={savingInterview}
+                          >
+                            {savingInterview ? 'Saving...' : 'Save'}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="jh-interview-item-head">
+                          <strong>{interview.round_type}</strong>
+                          <span className="jh-time">{formatDateTime(interview.scheduled_at)}</span>
+                        </div>
+                        {interview.notes && <p className="jh-interview-notes">{interview.notes}</p>}
+                        <div className="jh-interview-actions">
+                          <button
+                            type="button"
+                            className="jh-notes-btn jh-notes-btn--muted"
+                            onClick={() => startEditingInterview(interview)}
+                            disabled={savingInterview}
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <div className="jh-interview-create">
+            <h4 className="jh-interviews-subtitle">Add Interview Event</h4>
+            <div className="jh-interview-grid">
+              <input
+                className="jh-input"
+                value={newInterview.round_type}
+                onChange={(e) =>
+                  setNewInterview((prev) => ({ ...prev, round_type: e.target.value }))
+                }
+                placeholder="Round type (e.g. Phone Screen)"
+              />
+              <input
+                className="jh-input"
+                type="datetime-local"
+                value={newInterview.scheduled_at}
+                onChange={(e) =>
+                  setNewInterview((prev) => ({ ...prev, scheduled_at: e.target.value }))
+                }
+              />
+            </div>
+            <textarea
+              className="jh-notes-textarea"
+              rows={2}
+              value={newInterview.notes}
+              onChange={(e) => setNewInterview((prev) => ({ ...prev, notes: e.target.value }))}
+              placeholder="Interview notes"
+            />
+            <div className="jh-interview-actions">
+              <button
+                type="button"
+                className="jh-notes-btn"
+                onClick={handleCreateInterview}
+                disabled={
+                  savingInterview || !newInterview.round_type.trim() || !newInterview.scheduled_at
+                }
+              >
+                {savingInterview ? 'Saving...' : 'Add Interview Event'}
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="jh-notes">
