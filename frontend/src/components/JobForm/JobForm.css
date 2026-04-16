@@ -164,6 +164,19 @@
   margin-bottom: 10px;
 }
 
+.jf-interview-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.jf-interview-saved {
+  font-size: 13px;
+  color: var(--green, #22c55e);
+}
+
 .jf-error-msg {
   font-size: 12px;
   color: var(--red, #ef4444);

@@ -547,6 +547,42 @@ describe('edit mode - form submission', () => {
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
     await waitFor(() => expect(baseProps.onClose).toHaveBeenCalledTimes(1));
   });
+
+  test('logs interview independently and clears interview fields', async () => {
+    render(<JobForm {...baseProps} mode="edit" job={sampleJob} />);
+
+    fireEvent.change(screen.getByLabelText(/round type/i), {
+      target: { value: 'System Design' },
+    });
+    fireEvent.change(screen.getByLabelText(/date & time/i), {
+      target: { value: '2026-04-20T10:30' },
+    });
+    fireEvent.change(screen.getByLabelText(/interview notes/i), {
+      target: { value: 'Bring portfolio' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^log interview$/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${BACKEND}/jobs/${sampleJob.id}/interviews`,
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    const interviewCall = global.fetch.mock.calls.find(([url]) =>
+      String(url).includes(`/jobs/${sampleJob.id}/interviews`)
+    );
+    const interviewBody = JSON.parse(interviewCall[1].body);
+    expect(interviewBody.round_type).toBe('System Design');
+    expect(interviewBody.notes).toBe('Bring portfolio');
+    expect(interviewBody.scheduled_at).toMatch(/Z$/);
+
+    expect(screen.getByLabelText(/round type/i)).toHaveValue('');
+    expect(screen.getByLabelText(/date & time/i)).toHaveValue('');
+    expect(screen.getByLabelText(/interview notes/i)).toHaveValue('');
+    expect(screen.getByText(/interview logged/i)).toBeInTheDocument();
+  });
 });
 
 // ─── API Errors ───────────────────────────────────────────────────────────────

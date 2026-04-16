@@ -33,6 +33,8 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
     scheduled_at: '',
     notes: '',
   });
+  const [loggingInterview, setLoggingInterview] = useState(false);
+  const [interviewLogMessage, setInterviewLogMessage] = useState(null);
   const overlayRef = useRef(null);
   const modalRef = useRef(null);
   const firstInputRef = useRef(null);
@@ -151,10 +153,8 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
           notes: nextInterview.notes.trim() || null,
         };
         const targetJobId = isEdit ? job.id : savedJob.id;
-        const interviewUrl = `${backendBase}/jobs/${targetJobId}/interviews`;
-        const interviewMethod = 'POST';
-        const interviewRes = await fetch(interviewUrl, {
-          method: interviewMethod,
+        const interviewRes = await fetch(`${backendBase}/jobs/${targetJobId}/interviews`, {
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${accessToken}`,
@@ -178,6 +178,57 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
 
   function handleOverlayClick(e) {
     if (e.target === overlayRef.current && !saving) onClose();
+  }
+
+  async function handleLogInterview() {
+    if (loggingInterview || saving) return;
+    setApiError(null);
+    setInterviewLogMessage(null);
+
+    if (!isEdit || !job?.id) {
+      setApiError('Save this application first, then log interviews.');
+      return;
+    }
+    if (!nextInterview.round_type.trim() || !nextInterview.scheduled_at) {
+      setApiError('Round type and date/time are required to log an interview.');
+      return;
+    }
+
+    const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '');
+    if (!backendBase) {
+      setApiError('Backend URL is not configured.');
+      return;
+    }
+    if (!accessToken) {
+      setApiError('You are not authenticated. Please sign in again.');
+      return;
+    }
+
+    setLoggingInterview(true);
+    try {
+      const interviewRes = await fetch(`${backendBase}/jobs/${job.id}/interviews`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          round_type: nextInterview.round_type.trim(),
+          scheduled_at: localDateTimeToUtcIso(nextInterview.scheduled_at),
+          notes: nextInterview.notes.trim() || null,
+        }),
+      });
+      if (!interviewRes.ok) {
+        const text = await interviewRes.text().catch(() => '');
+        throw new Error(text || `Interview request failed (${interviewRes.status})`);
+      }
+      setNextInterview({ round_type: '', scheduled_at: '', notes: '' });
+      setInterviewLogMessage('Interview logged.');
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoggingInterview(false);
+    }
   }
 
   return (
@@ -305,6 +356,24 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
                     placeholder="Prep notes, interviewer context, reminders..."
                   />
                 </div>
+              </div>
+              <div className="jf-interview-actions">
+                {interviewLogMessage && (
+                  <span className="jf-interview-saved">{interviewLogMessage}</span>
+                )}
+                <button
+                  type="button"
+                  className="jf-btn jf-btn--save"
+                  onClick={handleLogInterview}
+                  disabled={
+                    saving ||
+                    loggingInterview ||
+                    !nextInterview.round_type.trim() ||
+                    !nextInterview.scheduled_at
+                  }
+                >
+                  {loggingInterview ? 'Logging...' : 'Log Interview'}
+                </button>
               </div>
             </div>
           )}
