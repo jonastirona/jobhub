@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Response
+from fastapi import FastAPI, Header, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -213,12 +213,39 @@ def root():
 
 
 @app.get("/jobs")
-def list_jobs(authorization: Optional[str] = Header(default=None)):
+def list_jobs(
+    authorization: Optional[str] = Header(default=None),
+    q: Optional[str] = Query(default=None),
+):
     user_id = get_user_id(authorization)
     sb = get_supabase()
     response = sb.table("jobs").select("*").eq("user_id", user_id).order("created_at", desc=True)
     response = response.execute()
-    return response.data
+    jobs = response.data
+    if not q:
+        return jobs
+
+    normalized_query = q.strip().lower()
+    if not normalized_query:
+        return jobs
+
+    searchable_fields = (
+        "title",
+        "company",
+        "location",
+        "description",
+        "notes",
+        "status",
+        "applied_date",
+    )
+    return [
+        job
+        for job in jobs
+        if any(
+            job.get(field) is not None and normalized_query in str(job[field]).lower()
+            for field in searchable_fields
+        )
+    ]
 
 
 @app.post("/jobs", status_code=201)

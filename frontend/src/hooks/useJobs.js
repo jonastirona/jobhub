@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export function useJobs(accessToken) {
+export function useJobs(accessToken, searchTerm = '') {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -28,7 +28,12 @@ export function useJobs(accessToken) {
     setError(null);
 
     try {
-      const res = await fetch(`${backendBase}/jobs`, {
+      const query = searchTerm.trim();
+      const url = query
+        ? `${backendBase}/jobs?q=${encodeURIComponent(query)}`
+        : `${backendBase}/jobs`;
+
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
         signal,
       });
@@ -46,7 +51,7 @@ export function useJobs(accessToken) {
         setLoading(false);
       }
     }
-  }, [accessToken]);
+  }, [accessToken, searchTerm]);
 
   useEffect(() => {
     fetchJobs();
