@@ -68,6 +68,11 @@ const baseProps = {
   onSaved: jest.fn(),
 };
 
+async function renderAndWait(props = baseProps) {
+  render(<JobHistory {...props} />);
+  await waitFor(() => expect(screen.queryByText('Loading history...')).not.toBeInTheDocument());
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockFetchOk();
@@ -80,13 +85,13 @@ afterEach(() => {
 
 // ─── Rendering ────────────────────────────────────────────────────────────────
 
-test('renders job title and company in header', () => {
-  render(<JobHistory {...baseProps} />);
+test('renders job title and company in header', async () => {
+  await renderAndWait();
   expect(screen.getByText('Software Engineer — Acme Corp')).toBeInTheDocument();
 });
 
-test('renders Activity Timeline title', () => {
-  render(<JobHistory {...baseProps} />);
+test('renders Activity Timeline title', async () => {
+  await renderAndWait();
   expect(screen.getByText('Activity Timeline')).toBeInTheDocument();
 });
 
@@ -97,21 +102,18 @@ test('shows loading state initially', () => {
 });
 
 test('renders history entries after load', async () => {
-  render(<JobHistory {...baseProps} />);
-  await waitFor(() => expect(screen.queryByText('Loading history...')).not.toBeInTheDocument());
+  await renderAndWait();
   expect(screen.getAllByText('Applied').length).toBeGreaterThan(0);
   expect(screen.getByText('Interviewing')).toBeInTheDocument();
 });
 
 test('renders "Created as" label for first entry with no from_status', async () => {
-  render(<JobHistory {...baseProps} />);
-  await waitFor(() => expect(screen.queryByText('Loading history...')).not.toBeInTheDocument());
+  await renderAndWait();
   expect(screen.getByText('Created as')).toBeInTheDocument();
 });
 
 test('renders arrow for transition entries', async () => {
-  render(<JobHistory {...baseProps} />);
-  await waitFor(() => expect(screen.queryByText('Loading history...')).not.toBeInTheDocument());
+  await renderAndWait();
   expect(screen.getByText('→')).toBeInTheDocument();
 });
 
@@ -147,19 +149,18 @@ test('shows error state on failed fetch', async () => {
 
 // ─── Notes ────────────────────────────────────────────────────────────────────
 
-test('pre-fills notes textarea with job notes', () => {
-  render(<JobHistory {...baseProps} />);
+test('pre-fills notes textarea with job notes', async () => {
+  await renderAndWait();
   expect(screen.getByRole('textbox', { name: /notes/i })).toHaveValue('Call on Monday.');
 });
 
-test('pre-fills notes as empty when job has no notes', () => {
-  render(<JobHistory {...baseProps} job={{ ...sampleJob, notes: null }} />);
+test('pre-fills notes as empty when job has no notes', async () => {
+  await renderAndWait({ ...baseProps, job: { ...sampleJob, notes: null } });
   expect(screen.getByRole('textbox', { name: /notes/i })).toHaveValue('');
 });
 
 test('shows Saved confirmation after successful notes save', async () => {
-  render(<JobHistory {...baseProps} />);
-  await waitFor(() => expect(screen.queryByText('Loading history...')).not.toBeInTheDocument());
+  await renderAndWait();
 
   mockFetchOk();
   fireEvent.click(screen.getByRole('button', { name: /save notes/i }));
@@ -168,8 +169,7 @@ test('shows Saved confirmation after successful notes save', async () => {
 });
 
 test('calls onSaved after successful notes save', async () => {
-  render(<JobHistory {...baseProps} />);
-  await waitFor(() => expect(screen.queryByText('Loading history...')).not.toBeInTheDocument());
+  await renderAndWait();
 
   mockFetchOk();
   fireEvent.click(screen.getByRole('button', { name: /save notes/i }));
@@ -178,8 +178,7 @@ test('calls onSaved after successful notes save', async () => {
 });
 
 test('shows error when notes save fails', async () => {
-  render(<JobHistory {...baseProps} />);
-  await waitFor(() => expect(screen.queryByText('Loading history...')).not.toBeInTheDocument());
+  await renderAndWait();
 
   mockFetchError(500);
   fireEvent.click(screen.getByRole('button', { name: /save notes/i }));
@@ -189,21 +188,20 @@ test('shows error when notes save fails', async () => {
 
 // ─── Close ────────────────────────────────────────────────────────────────────
 
-test('calls onClose when close button is clicked', () => {
-  render(<JobHistory {...baseProps} />);
+test('calls onClose when close button is clicked', async () => {
+  await renderAndWait();
   fireEvent.click(screen.getByRole('button', { name: /close/i }));
   expect(baseProps.onClose).toHaveBeenCalled();
 });
 
-test('calls onClose when overlay is clicked', () => {
-  render(<JobHistory {...baseProps} />);
+test('calls onClose when overlay is clicked', async () => {
+  await renderAndWait();
   fireEvent.click(screen.getByRole('presentation'));
   expect(baseProps.onClose).toHaveBeenCalled();
 });
 
 test('renders interview in timeline and expands on click', async () => {
-  render(<JobHistory {...baseProps} />);
-  await waitFor(() => expect(screen.getByText('Phone Screen')).toBeInTheDocument());
+  await renderAndWait();
   expect(screen.queryByText('Bring resume')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Phone Screen' }));
   expect(screen.getByText('Bring resume')).toBeInTheDocument();
@@ -213,8 +211,7 @@ test('renders interview in timeline and expands on click', async () => {
 
 test('can delete interview event', async () => {
   mockFetchOk();
-  render(<JobHistory {...baseProps} />);
-  await waitFor(() => expect(screen.getByText('Phone Screen')).toBeInTheDocument());
+  await renderAndWait();
   expect(screen.queryByText('Log Interview')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Phone Screen' }));
   fireEvent.click(screen.getByRole('button', { name: /delete/i }));

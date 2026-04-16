@@ -174,18 +174,6 @@
   font-family: 'JetBrains Mono', monospace;
 }
 
-.jh-interviews-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.jh-interviews-title {
-  margin: 0;
-  font-size: 15px;
-  color: var(--text-primary);
-}
-
 .jh-interview-notes {
   margin: 0;
   font-size: 13px;
@@ -283,18 +271,6 @@
 
 .jh-interview-btn--danger:hover:not(:disabled) {
   background: #fef2f2;
-}
-
-.jh-notes-btn--muted {
-  background: var(--bg-page);
-  color: var(--text-secondary);
-  box-shadow: none;
-}
-
-.jh-notes-btn--danger {
-  background: var(--red-bg);
-  color: var(--red);
-  box-shadow: none;
 }
 
 .jh-inline-error {
