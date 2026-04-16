@@ -12,6 +12,8 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from main import (
+    DocumentCreate,
+    DocumentUpdate,
     JOB_STATUSES,
     PROFILE_REQUIRED_FIELDS,
     ExperienceCreate,
@@ -51,6 +53,17 @@ SAMPLE_JOB = {
     "description": None,
     "notes": None,
     "recruiter_notes": None,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-01T00:00:00+00:00",
+}
+
+SAMPLE_DOCUMENT = {
+    "id": "doc-uuid-3322",
+    "user_id": MOCK_USER_ID,
+    "job_id": SAMPLE_JOB["id"],
+    "name": "Datadog_Backend_Engineer_Draft",
+    "doc_type": "Cover Letter Draft",
+    "content": "Draft content",
     "created_at": "2026-01-01T00:00:00+00:00",
     "updated_at": "2026-01-01T00:00:00+00:00",
 }
@@ -1183,6 +1196,106 @@ def test_delete_job_scoped_to_user():
         client.delete(f"/jobs/{SAMPLE_JOB['id']}", headers={"authorization": AUTH_HEADER})
     eq_calls = [call[0] for call in mock_query.eq.call_args_list]
     assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+# ---------------------------------------------------------------------------
+# Document routes
+# ---------------------------------------------------------------------------
+
+
+def test_list_documents_requires_auth():
+    response = client.get("/documents")
+    assert response.status_code == 401
+
+
+def test_create_document_requires_auth():
+    response = client.post(
+        "/documents",
+        json={
+            "name": "Draft",
+            "doc_type": "Cover Letter Draft",
+            "content": "Draft content",
+        },
+    )
+    assert response.status_code == 401
+
+
+def test_list_documents_returns_user_documents():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/documents", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == SAMPLE_DOCUMENT["id"]
+    assert body[0]["name"] == SAMPLE_DOCUMENT["name"]
+
+
+def test_create_document_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            json={
+                "name": "Datadog_Backend_Engineer_Draft",
+                "doc_type": "Cover Letter Draft",
+                "content": "Draft content",
+                "job_id": SAMPLE_JOB["id"],
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    assert response.json()["job_id"] == SAMPLE_JOB["id"]
+
+
+def test_create_document_sets_user_id():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/documents",
+            json={"name": "Draft", "content": "Draft content"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    inserted_payload = mock_query.insert.call_args[0][0]
+    assert inserted_payload["user_id"] == MOCK_USER_ID
+
+
+def test_create_document_rejects_blank_content():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            json={"name": "Draft", "content": "    "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "content must not be blank" in response.json()["detail"]
+
+
+def test_create_document_rejects_unknown_linked_job():
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            json={"name": "Draft", "content": "Body", "job_id": "missing-job-id"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Linked job not found"
+
+
+def test_document_create_defaults():
+    document = DocumentCreate(name="Draft", content="Body")
+    assert document.doc_type == "Draft"
+    assert document.job_id is None
+
+
+def test_document_update_all_optional():
+    document = DocumentUpdate()
+    assert document.name is None
+    assert document.doc_type is None
+    assert document.content is None
+    assert document.job_id is None
 
 
 # ---------------------------------------------------------------------------
