@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 
 const mockAuthValue = {
@@ -36,6 +36,7 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
+// Verifies authenticated users can reach the dashboard landing view.
 test('renders job board heading when authenticated', async () => {
   render(<App />);
   await waitFor(() => {
@@ -43,6 +44,7 @@ test('renders job board heading when authenticated', async () => {
   });
 });
 
+// Verifies the authenticated user identity is shown in the top bar.
 test('shows user email in toolbar', async () => {
   render(<App />);
   await waitFor(() => {
@@ -50,6 +52,7 @@ test('shows user email in toolbar', async () => {
   });
 });
 
+// Verifies the empty-state row appears when the API returns no jobs.
 test('shows empty state when api returns no jobs', async () => {
   render(<App />);
   await waitFor(() => {
@@ -57,6 +60,7 @@ test('shows empty state when api returns no jobs', async () => {
   });
 });
 
+// Verifies job data from API is rendered in the dashboard table.
 test('renders job cards when api returns jobs', async () => {
   global.fetch = jest.fn(() =>
     Promise.resolve({
@@ -82,6 +86,47 @@ test('renders job cards when api returns jobs', async () => {
   expect(screen.getAllByText('Applied').length).toBeGreaterThan(0);
 });
 
+// Verifies View (eye) opens a read-only job overview, not an editable form.
+test('clicking View opens read-only overview with job details', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'DevRel Engineer',
+            company: 'Contoso',
+            location: 'Remote',
+            status: 'interviewing',
+            applied_date: '2026-02-01',
+            deadline: '2026-03-01',
+            description: 'Talk at conferences.',
+            notes: 'Great fit.',
+            recruiter_notes: 'pat@example.com',
+            updated_at: '2026-03-29T00:00:00+00:00',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => screen.getByText('DevRel Engineer'));
+  fireEvent.click(screen.getByRole('button', { name: /view application/i }));
+  await waitFor(() => {
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /devrel engineer/i })).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Contoso');
+    expect(dialog).toHaveTextContent('Talk at conferences.');
+    expect(within(dialog).queryAllByRole('textbox')).toHaveLength(0);
+  });
+  fireEvent.click(screen.getByRole('button', { name: /close overview/i }));
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+// Verifies API failures surface a user-visible load error message.
 test('shows error state when api request fails', async () => {
   global.fetch = jest.fn(() =>
     Promise.resolve({
@@ -95,6 +140,7 @@ test('shows error state when api request fails', async () => {
   });
 });
 
+// Verifies sidebar logout action is available on the dashboard.
 test('renders log out button in sidebar', async () => {
   render(<App />);
   await waitFor(() => {
@@ -102,6 +148,7 @@ test('renders log out button in sidebar', async () => {
   });
 });
 
+// Verifies primary create action is visible in the dashboard header.
 test('renders Add Job button on dashboard', async () => {
   render(<App />);
   await waitFor(() => {
@@ -109,6 +156,7 @@ test('renders Add Job button on dashboard', async () => {
   });
 });
 
+// Verifies clicking Add Job opens the job form modal dialog.
 test('clicking Add Job opens the job form modal', async () => {
   render(<App />);
   await waitFor(() => screen.getByRole('button', { name: /add job/i }));
@@ -119,6 +167,7 @@ test('clicking Add Job opens the job form modal', async () => {
   });
 });
 
+// Verifies the create modal closes when the user clicks Cancel.
 test('job form modal closes when Cancel is clicked', async () => {
   render(<App />);
   await waitFor(() => screen.getByRole('button', { name: /add job/i }));
@@ -130,6 +179,7 @@ test('job form modal closes when Cancel is clicked', async () => {
   });
 });
 
+// Verifies edit action opens the modal pre-filled with job data.
 test('clicking Edit opens form pre-filled with that job', async () => {
   global.fetch = jest.fn(() =>
     Promise.resolve({
@@ -142,9 +192,11 @@ test('clicking Edit opens form pre-filled with that job', async () => {
             company: 'DataCorp',
             status: 'applied',
             applied_date: '2026-03-01',
+            deadline: '2026-04-15',
             location: 'Remote',
             description: null,
             notes: null,
+            recruiter_notes: 'hiring@datacorp.com',
             updated_at: '2026-03-29T00:00:00+00:00',
           },
         ]),
@@ -158,9 +210,12 @@ test('clicking Edit opens form pre-filled with that job', async () => {
     expect(screen.getByRole('heading', { name: /edit application/i })).toBeInTheDocument();
     expect(screen.getByDisplayValue('Backend Engineer')).toBeInTheDocument();
     expect(screen.getByDisplayValue('DataCorp')).toBeInTheDocument();
+    expect(screen.getByLabelText(/job deadline/i)).toHaveValue('2026-04-15');
+    expect(screen.getByLabelText(/recruiter.*contact notes/i)).toHaveValue('hiring@datacorp.com');
   });
 });
 
+// Verifies the edit modal closes when the user clicks Cancel.
 test('edit form modal closes when Cancel is clicked', async () => {
   global.fetch = jest.fn(() =>
     Promise.resolve({
@@ -188,5 +243,753 @@ test('edit form modal closes when Cancel is clicked', async () => {
   fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
   await waitFor(() => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+test('clicking delete opens a custom confirmation modal', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Backend Engineer',
+              company: 'DataCorp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: true, status: 204 });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Backend Engineer'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application backend engineer/i }));
+
+  const deleteDialog = screen.getByRole('dialog');
+  expect(deleteDialog).toBeInTheDocument();
+  expect(within(deleteDialog).getByText(/delete application\?/i)).toBeInTheDocument();
+  expect(within(deleteDialog).getByText(/backend engineer/i)).toBeInTheDocument();
+  expect(within(deleteDialog).getByText(/datacorp/i)).toBeInTheDocument();
+  expect(global.fetch).not.toHaveBeenCalledWith(
+    expect.stringMatching(/\/jobs\/job-1$/),
+    expect.objectContaining({ method: 'DELETE' })
+  );
+});
+
+test('cancelling delete does not call delete endpoint', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Frontend Engineer',
+              company: 'UI Corp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: true, status: 204 });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Frontend Engineer'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application frontend engineer/i }));
+  fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+  expect(global.fetch).not.toHaveBeenCalledWith(
+    expect.stringMatching(/\/jobs\/job-1$/),
+    expect.objectContaining({ method: 'DELETE' })
+  );
+});
+
+test('pressing Escape closes delete modal', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Escape Close',
+              company: 'UI Corp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: true, status: 204 });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Escape Close'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application escape close/i }));
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+test('clicking modal overlay closes delete modal', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Overlay Close',
+              company: 'UI Corp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: true, status: 204 });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Overlay Close'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application overlay close/i }));
+  fireEvent.click(screen.getByTestId('delete-modal-overlay'));
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+test('delete modal traps focus within its action buttons', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Focus Trap',
+              company: 'UI Corp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: true, status: 204 });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Focus Trap'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application focus trap/i }));
+
+  const cancelButton = screen.getByRole('button', { name: /^cancel$/i });
+  const deleteButton = screen.getByRole('button', { name: /^delete$/i });
+  expect(cancelButton).toHaveFocus();
+
+  deleteButton.focus();
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Tab' });
+  expect(cancelButton).toHaveFocus();
+
+  cancelButton.focus();
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Tab', shiftKey: true });
+  expect(deleteButton).toHaveFocus();
+});
+
+test('confirming delete calls endpoint and refetches jobs', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      if (url === 'http://localhost:8000/jobs') {
+        getJobsCallCount += 1;
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => {
+          if (getJobsCallCount === 1) {
+            return Promise.resolve([
+              {
+                id: 'job-1',
+                title: 'Delete Me',
+                company: 'DataCorp',
+                status: 'applied',
+                applied_date: null,
+              },
+            ]);
+          }
+          return Promise.resolve([]);
+        },
+      });
+    }
+    if (options.method === 'DELETE') {
+      return Promise.resolve({ ok: true, status: 204 });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+  });
+  let getJobsCallCount = 0;
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Delete Me'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application delete me/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/jobs/job-1',
+      expect.objectContaining({
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer test-token' },
+      })
+    );
+  });
+  await waitFor(() => {
+    expect(screen.queryByText('Delete Me')).not.toBeInTheDocument();
+  });
+});
+
+test('shows delete error when delete request fails', async () => {
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'Delete Failure',
+              company: 'FailCorp',
+              status: 'applied',
+              applied_date: null,
+            },
+          ]),
+      });
+    }
+    return Promise.resolve({ ok: false, status: 500 });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Delete Failure'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application delete failure/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+  await waitFor(() => {
+    expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent(
+      /failed to delete application/i
+    );
+  });
+});
+
+// Verifies typing in the dashboard table search input immediately updates visible dashboard rows.
+test('filters jobs immediately when typing in dashboard table search input', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Backend Engineer',
+            company: 'DataCorp',
+            status: 'applied',
+            location: 'Remote',
+          },
+          {
+            id: 'job-2',
+            title: 'Frontend Engineer',
+            company: 'Pixel Labs',
+            status: 'interviewing',
+            location: 'Austin',
+          },
+        ]),
+    })
+  );
+
+  render(<App />);
+  await waitFor(() => {
+    expect(screen.getByText('Backend Engineer')).toBeInTheDocument();
+    expect(screen.getByText('Frontend Engineer')).toBeInTheDocument();
+  });
+
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: 'pixel' },
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText('Frontend Engineer')).toBeInTheDocument();
+    expect(screen.queryByText('Backend Engineer')).not.toBeInTheDocument();
+  });
+});
+
+// Verifies search text is sent to the backend as the q query parameter.
+test('passes search text to GET /jobs q query param', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve([]),
+    })
+  );
+
+  render(<App />);
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith('http://localhost:8000/jobs', expect.anything());
+  });
+
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: 'acme' },
+  });
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      'http://localhost:8000/jobs?q=acme',
+      expect.anything()
+    );
+  });
+});
+
+// Verifies the dashboard search input exists in the table section and topbar search is removed.
+test('uses table-level search input instead of topbar search input', async () => {
+  render(<App />);
+  await waitFor(() => {
+    expect(screen.getByLabelText(/search job applications/i)).toBeInTheDocument();
+  });
+  expect(screen.queryByLabelText(/search jobs and companies/i)).not.toBeInTheDocument();
+});
+
+// Verifies status text can be used to filter matching jobs.
+test('filters jobs by status keyword', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Platform Engineer',
+            company: 'InfraWorks',
+            status: 'interviewing',
+            applied_date: '2026-03-15',
+          },
+          {
+            id: 'job-2',
+            title: 'QA Analyst',
+            company: 'Test Labs',
+            status: 'applied',
+            applied_date: '2026-03-16',
+          },
+        ]),
+    })
+  );
+
+  render(<App />);
+  await waitFor(() => {
+    expect(screen.getByText('Platform Engineer')).toBeInTheDocument();
+    expect(screen.getByText('QA Analyst')).toBeInTheDocument();
+  });
+
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: 'interviewing' },
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText('Platform Engineer')).toBeInTheDocument();
+    expect(screen.queryByText('QA Analyst')).not.toBeInTheDocument();
+  });
+});
+
+// Verifies applied date text can be used to filter rows.
+test('filters jobs by formatted applied date text', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Data Engineer',
+            company: 'DataCorp',
+            status: 'applied',
+            applied_date: '2026-03-15',
+          },
+          {
+            id: 'job-2',
+            title: 'Support Engineer',
+            company: 'HelpDesk',
+            status: 'applied',
+            applied_date: '2026-01-01',
+          },
+        ]),
+    })
+  );
+
+  render(<App />);
+  await waitFor(() => {
+    expect(screen.getByText('Data Engineer')).toBeInTheDocument();
+    expect(screen.getByText('Support Engineer')).toBeInTheDocument();
+  });
+
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: 'mar 15' },
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText('Data Engineer')).toBeInTheDocument();
+    expect(screen.queryByText('Support Engineer')).not.toBeInTheDocument();
+  });
+});
+
+// Verifies description content (not visible in table) can still be searched.
+test('filters jobs by description text', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'ML Engineer',
+            company: 'Neuron Labs',
+            status: 'applied',
+            applied_date: '2026-03-15',
+            description: 'Build ranking and recommendation pipelines',
+          },
+          {
+            id: 'job-2',
+            title: 'Frontend Engineer',
+            company: 'Pixel Labs',
+            status: 'applied',
+            applied_date: '2026-03-15',
+            description: 'Build design systems',
+          },
+        ]),
+    })
+  );
+
+  render(<App />);
+  await waitFor(() => {
+    expect(screen.getByText('ML Engineer')).toBeInTheDocument();
+    expect(screen.getByText('Frontend Engineer')).toBeInTheDocument();
+  });
+
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: 'recommendation' },
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText('ML Engineer')).toBeInTheDocument();
+    expect(screen.queryByText('Frontend Engineer')).not.toBeInTheDocument();
+  });
+});
+
+// Verifies title text can be used to filter matching jobs.
+test('filters jobs by title text', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Backend Engineer',
+            company: 'InfraWorks',
+            status: 'applied',
+            applied_date: '2026-03-15',
+          },
+          {
+            id: 'job-2',
+            title: 'Marketing Analyst',
+            company: 'Growth Labs',
+            status: 'applied',
+            applied_date: '2026-03-16',
+          },
+        ]),
+    })
+  );
+
+  render(<App />);
+  await waitFor(() => {
+    expect(screen.getByText('Backend Engineer')).toBeInTheDocument();
+    expect(screen.getByText('Marketing Analyst')).toBeInTheDocument();
+  });
+
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: 'backend' },
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText('Backend Engineer')).toBeInTheDocument();
+    expect(screen.queryByText('Marketing Analyst')).not.toBeInTheDocument();
+  });
+});
+
+// Verifies table lists Deadline and Recruiter columns for job rows.
+test('renders Deadline and Recruiter column headers', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Analyst',
+            company: 'Metrics Inc',
+            status: 'applied',
+            applied_date: '2026-03-01',
+            deadline: '2026-06-01',
+            recruiter_notes: 'team@metrics.inc',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => {
+    expect(screen.getByRole('columnheader', { name: /^deadline$/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /^recruiter$/i })).toBeInTheDocument();
+  });
+});
+
+// Verifies formatted deadline appears in the dashboard table.
+test('shows formatted deadline in table when job has deadline', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'SRE',
+            company: 'OpsCo',
+            status: 'applied',
+            applied_date: null,
+            deadline: '2026-07-04',
+            recruiter_notes: null,
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => {
+    expect(screen.getByText('Jul 4, 2026')).toBeInTheDocument();
+  });
+});
+
+// Verifies recruiter snippet appears in the recruiter column.
+test('shows recruiter_notes text in recruiter column', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'PM',
+            company: 'PlanCo',
+            status: 'applied',
+            applied_date: '2026-01-01',
+            deadline: null,
+            recruiter_notes: 'Jamie — jamie@planco.com',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => {
+    expect(screen.getByText(/jamie.*jamie@planco\.com/i)).toBeInTheDocument();
+  });
+});
+
+// Verifies hybrid client filter matches recruiter_notes.
+test('filters jobs by recruiter_notes text', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Role A',
+            company: 'Co',
+            status: 'applied',
+            recruiter_notes: 'Call Morgan Lee before Friday',
+          },
+          {
+            id: 'job-2',
+            title: 'Role B',
+            company: 'Co',
+            status: 'applied',
+            recruiter_notes: 'Different hiring manager',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => expect(screen.getByText('Role A')).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: 'morgan lee' },
+  });
+  await waitFor(() => {
+    expect(screen.getByText('Role A')).toBeInTheDocument();
+    expect(screen.queryByText('Role B')).not.toBeInTheDocument();
+  });
+});
+
+// Verifies hybrid client filter matches formatted deadline (not only raw ISO).
+test('filters jobs by formatted deadline text', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Role A',
+            company: 'X',
+            status: 'applied',
+            deadline: '2026-07-04',
+          },
+          {
+            id: 'job-2',
+            title: 'Role B',
+            company: 'Y',
+            status: 'applied',
+            deadline: '2026-12-01',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => expect(screen.getByText('Role A')).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: 'jul 4' },
+  });
+  await waitFor(() => {
+    expect(screen.getByText('Role A')).toBeInTheDocument();
+    expect(screen.queryByText('Role B')).not.toBeInTheDocument();
+  });
+});
+
+// Verifies company text can be used to filter matching jobs.
+test('filters jobs by company text', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Data Engineer',
+            company: 'Acme Robotics',
+            status: 'applied',
+            applied_date: '2026-03-15',
+          },
+          {
+            id: 'job-2',
+            title: 'Data Engineer',
+            company: 'Nimbus Cloud',
+            status: 'applied',
+            applied_date: '2026-03-16',
+          },
+        ]),
+    })
+  );
+
+  render(<App />);
+  await waitFor(() => {
+    expect(screen.getByText('Acme Robotics')).toBeInTheDocument();
+    expect(screen.getByText('Nimbus Cloud')).toBeInTheDocument();
+  });
+
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: 'acme' },
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText('Acme Robotics')).toBeInTheDocument();
+    expect(screen.queryByText('Nimbus Cloud')).not.toBeInTheDocument();
+  });
+});
+
+// Verifies hybrid client filter matches calendar month name on deadline or applied date.
+test('filters jobs by month name across deadline and applied_date', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'April Role',
+            company: 'X',
+            status: 'applied',
+            deadline: '2026-04-10',
+            applied_date: null,
+          },
+          {
+            id: 'job-2',
+            title: 'March Role',
+            company: 'Y',
+            status: 'applied',
+            applied_date: '2026-03-20',
+            deadline: null,
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => expect(screen.getByText('April Role')).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: 'april' },
+  });
+  await waitFor(() => {
+    expect(screen.getByText('April Role')).toBeInTheDocument();
+    expect(screen.queryByText('March Role')).not.toBeInTheDocument();
+  });
+});
+
+// Verifies hybrid client filter matches year token on date fields.
+test('filters jobs by year on deadline', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            id: 'job-1',
+            title: 'Future',
+            company: 'Z',
+            status: 'applied',
+            deadline: '2027-01-01',
+          },
+          {
+            id: 'job-2',
+            title: 'Past',
+            company: 'Z',
+            status: 'applied',
+            deadline: '2026-12-31',
+          },
+        ]),
+    })
+  );
+  render(<App />);
+  await waitFor(() => expect(screen.getByText('Future')).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText(/search job applications/i), {
+    target: { value: '2027' },
+  });
+  await waitFor(() => {
+    expect(screen.getByText('Future')).toBeInTheDocument();
+    expect(screen.queryByText('Past')).not.toBeInTheDocument();
   });
 });

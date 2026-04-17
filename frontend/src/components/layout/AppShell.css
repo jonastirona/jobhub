@@ -16,6 +16,62 @@
   flex: 1;
 }
 
+/* Due-today alert banner */
+.app-shell-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 32px;
+  background: rgba(249, 115, 22, 0.08);
+  border-bottom: 1px solid rgba(249, 115, 22, 0.2);
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.app-shell-alert-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.app-shell-alert-btn {
+  padding: 4px 14px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--orange-500);
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.app-shell-alert-btn:hover {
+  background: var(--orange-600);
+}
+
+.app-shell-alert-dismiss {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s;
+}
+
+.app-shell-alert-dismiss:hover {
+  background: var(--bg-page);
+}
+
 @media (max-width: 768px) {
   .app-shell-main {
     margin-left: 0;
