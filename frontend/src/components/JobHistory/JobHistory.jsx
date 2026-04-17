@@ -177,7 +177,9 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
                 >
                   <div className="jh-entry-line">
                     <div
-                      className={`jh-dot${index === timelineEntries.length - 1 ? ' jh-dot--current' : ''}`}
+                      className={`jh-dot${
+                        index === timelineEntries.length - 1 ? ' jh-dot--current' : ''
+                      }`}
                     />
                     {index < timelineEntries.length - 1 && <div className="jh-connector" />}
                   </div>

@@ -106,7 +106,7 @@ def make_mock_sb(data=None):
     mock_result.data = data if data is not None else []
 
     mock_query = MagicMock()
-    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order"):
+    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order", "in_", "or_"):
         getattr(mock_query, method).return_value = mock_query
     mock_query.execute.return_value = mock_result
 
@@ -133,7 +133,18 @@ def _make_mock_sb_with_side_effects(*data_list):
         results.append(r)
 
     mock_query = MagicMock()
-    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order", "limit"):
+    for method in (
+        "select",
+        "insert",
+        "update",
+        "delete",
+        "upsert",
+        "eq",
+        "order",
+        "limit",
+        "in_",
+        "or_",
+    ):
         getattr(mock_query, method).return_value = mock_query
     mock_query.execute.side_effect = results
 
@@ -200,11 +211,12 @@ def test_list_jobs_returns_user_jobs():
         response = client.get("/jobs", headers={"authorization": AUTH_HEADER})
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 1
-    assert body[0]["id"] == SAMPLE_JOB["id"]
-    assert body[0]["company"] == "TechCorp"
-    assert "deadline" in body[0]
-    assert "recruiter_notes" in body[0]
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+    assert body["items"][0]["id"] == SAMPLE_JOB["id"]
+    assert body["items"][0]["company"] == "TechCorp"
+    assert "deadline" in body["items"][0]
+    assert "recruiter_notes" in body["items"][0]
 
 
 # Verifies list endpoint returns an empty array when no jobs exist.
@@ -213,7 +225,9 @@ def test_list_jobs_empty():
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.get("/jobs", headers={"authorization": AUTH_HEADER})
     assert response.status_code == 200
-    assert response.json() == []
+    body = response.json()
+    assert body["items"] == []
+    assert body["total"] == 0
 
 
 # Verifies list query always filters by authenticated user_id.
@@ -273,8 +287,8 @@ def test_list_jobs_q_filters_across_text_fields():
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 1
-    assert body[0]["id"] == "job-location-match"
+    assert len(body["items"]) == 1
+    assert body["items"][0]["id"] == "job-location-match"
 
     with patch("main.get_supabase", return_value=mock_sb):
         status_response = client.get(
@@ -282,7 +296,7 @@ def test_list_jobs_q_filters_across_text_fields():
             headers={"authorization": AUTH_HEADER},
         )
     assert status_response.status_code == 200
-    assert status_response.json()[0]["id"] == "job-status-match"
+    assert status_response.json()["items"][0]["id"] == "job-status-match"
 
     with patch("main.get_supabase", return_value=mock_sb):
         date_response = client.get(
@@ -290,7 +304,7 @@ def test_list_jobs_q_filters_across_text_fields():
             headers={"authorization": AUTH_HEADER},
         )
     assert date_response.status_code == 200
-    assert date_response.json()[0]["id"] == "job-date-match"
+    assert date_response.json()["items"][0]["id"] == "job-date-match"
 
     matching_by_recruiter = {
         **SAMPLE_JOB,
@@ -315,8 +329,8 @@ def test_list_jobs_q_filters_across_text_fields():
             headers={"authorization": AUTH_HEADER},
         )
     assert recruiter_response.status_code == 200
-    assert len(recruiter_response.json()) == 1
-    assert recruiter_response.json()[0]["id"] == "job-recruiter-match"
+    assert len(recruiter_response.json()["items"]) == 1
+    assert recruiter_response.json()["items"][0]["id"] == "job-recruiter-match"
 
     with patch("main.get_supabase", return_value=mock_sb2):
         deadline_response = client.get(
@@ -324,8 +338,8 @@ def test_list_jobs_q_filters_across_text_fields():
             headers={"authorization": AUTH_HEADER},
         )
     assert deadline_response.status_code == 200
-    assert len(deadline_response.json()) == 1
-    assert deadline_response.json()[0]["id"] == "job-deadline-match"
+    assert len(deadline_response.json()["items"]) == 1
+    assert deadline_response.json()["items"][0]["id"] == "job-deadline-match"
 
 
 # Verifies q matches calendar month names, years, day numbers, abbreviations, and notes.
@@ -349,8 +363,8 @@ def test_list_jobs_q_month_year_day_tokens_and_notes():
             headers={"authorization": AUTH_HEADER},
         )
     assert april_resp.status_code == 200
-    assert len(april_resp.json()) == 1
-    assert april_resp.json()[0]["id"] == "job-april-deadline"
+    assert len(april_resp.json()["items"]) == 1
+    assert april_resp.json()["items"][0]["id"] == "job-april-deadline"
 
     with patch("main.get_supabase", return_value=mock_sb):
         apr_resp = client.get(
@@ -358,8 +372,8 @@ def test_list_jobs_q_month_year_day_tokens_and_notes():
             headers={"authorization": AUTH_HEADER},
         )
     assert apr_resp.status_code == 200
-    assert len(apr_resp.json()) == 1
-    assert apr_resp.json()[0]["id"] == "job-april-deadline"
+    assert len(apr_resp.json()["items"]) == 1
+    assert apr_resp.json()["items"][0]["id"] == "job-april-deadline"
 
     july_day4 = {
         **SAMPLE_JOB,
@@ -380,8 +394,8 @@ def test_list_jobs_q_month_year_day_tokens_and_notes():
             headers={"authorization": AUTH_HEADER},
         )
     assert jul4_resp.status_code == 200
-    assert len(jul4_resp.json()) == 1
-    assert jul4_resp.json()[0]["id"] == "job-jul-4"
+    assert len(jul4_resp.json()["items"]) == 1
+    assert jul4_resp.json()["items"][0]["id"] == "job-jul-4"
 
     year_2027 = {
         **SAMPLE_JOB,
@@ -402,8 +416,8 @@ def test_list_jobs_q_month_year_day_tokens_and_notes():
             headers={"authorization": AUTH_HEADER},
         )
     assert y_resp.status_code == 200
-    assert len(y_resp.json()) == 1
-    assert y_resp.json()[0]["id"] == "job-2027"
+    assert len(y_resp.json()["items"]) == 1
+    assert y_resp.json()["items"][0]["id"] == "job-2027"
 
     day_14 = {
         **SAMPLE_JOB,
@@ -424,8 +438,8 @@ def test_list_jobs_q_month_year_day_tokens_and_notes():
             headers={"authorization": AUTH_HEADER},
         )
     assert d_resp.status_code == 200
-    assert len(d_resp.json()) == 1
-    assert d_resp.json()[0]["id"] == "job-day-14"
+    assert len(d_resp.json()["items"]) == 1
+    assert d_resp.json()["items"][0]["id"] == "job-day-14"
 
     notes_job = {
         **SAMPLE_JOB,
@@ -444,8 +458,8 @@ def test_list_jobs_q_month_year_day_tokens_and_notes():
             headers={"authorization": AUTH_HEADER},
         )
     assert n_resp.status_code == 200
-    assert len(n_resp.json()) == 1
-    assert n_resp.json()[0]["id"] == "job-notes-xyz"
+    assert len(n_resp.json()["items"]) == 1
+    assert n_resp.json()["items"][0]["id"] == "job-notes-xyz"
 
 
 # Verifies whitespace-only q values are treated as empty search input.
@@ -457,7 +471,80 @@ def test_list_jobs_q_ignores_whitespace_only_query():
             headers={"authorization": AUTH_HEADER},
         )
     assert response.status_code == 200
-    assert len(response.json()) == 1
+    assert len(response.json()["items"]) == 1
+
+
+def test_list_jobs_filters_status_location_deadline_state_and_paginates():
+    today = date.today().isoformat()
+    upcoming = {
+        **SAMPLE_JOB,
+        "id": "job-upcoming",
+        "status": "interviewing",
+        "location": "Remote",
+        "deadline": "2099-01-01",
+    }
+    due_today = {
+        **SAMPLE_JOB,
+        "id": "job-due-today",
+        "status": "offered",
+        "location": "Remote",
+        "deadline": today,
+    }
+    overdue = {
+        **SAMPLE_JOB,
+        "id": "job-overdue",
+        "status": "offered",
+        "location": "Remote",
+        "deadline": "2000-01-01",
+    }
+    no_deadline = {
+        **SAMPLE_JOB,
+        "id": "job-no-deadline",
+        "status": "interviewing",
+        "location": "Remote",
+        "deadline": None,
+    }
+    excluded = {
+        **SAMPLE_JOB,
+        "id": "job-excluded",
+        "status": "applied",
+        "location": "Onsite",
+        "deadline": None,
+    }
+    mock_sb, mock_query, _ = make_mock_sb(
+        data=[upcoming, due_today, overdue, no_deadline, excluded]
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/jobs?statuses=interviewing&statuses=offered&locations=Remote&deadline_states=upcoming&deadline_states=due_today&deadline_states=overdue&deadline_states=no_deadline&page=2&page_size=2",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 4
+    assert body["page"] == 2
+    assert body["page_size"] == 2
+    assert body["total_pages"] == 2
+    assert len(body["items"]) == 2
+    mock_query.in_.assert_any_call("status", ["interviewing", "offered"])
+    mock_query.or_.assert_called_once()
+
+
+def test_list_jobs_locations_filter_is_case_insensitive_and_dedupes_available_locations():
+    mixed_case_one = {**SAMPLE_JOB, "id": "job-montreal-title", "location": "Montreal"}
+    mixed_case_two = {**SAMPLE_JOB, "id": "job-montreal-lower", "location": "montreal"}
+    other_city = {**SAMPLE_JOB, "id": "job-nyc", "location": "New York City"}
+    mock_sb, _, _ = make_mock_sb(data=[mixed_case_one, mixed_case_two, other_city])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/jobs?locations=montreal",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    assert {job["id"] for job in body["items"]} == {"job-montreal-title", "job-montreal-lower"}
+    assert body["available_locations"] == ["Montreal"]
 
 
 # Verifies user_id ownership filtering remains enforced when q is provided.

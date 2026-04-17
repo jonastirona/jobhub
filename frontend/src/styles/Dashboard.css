@@ -44,6 +44,8 @@
 .table-search-row {
   padding: 16px 24px;
   border-bottom: 1px solid var(--border-light);
+  display: grid;
+  gap: 12px;
 }
 
 .dashboard-search-box {
@@ -76,6 +78,74 @@
 
 .dashboard-search-box input::placeholder {
   color: var(--text-muted);
+}
+
+.dashboard-filter-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.dashboard-filter-dropdown {
+  position: relative;
+  min-width: 180px;
+}
+
+.dashboard-filter-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 10px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-white);
+  cursor: pointer;
+}
+
+.dashboard-filter-trigger::after {
+  content: '▾';
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.dashboard-filter-trigger[aria-expanded='true'] {
+  border-color: var(--orange-400);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.08);
+}
+
+.dashboard-filter-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 100%;
+  z-index: 20;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-white);
+  box-shadow: var(--shadow-card);
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+  max-height: 170px;
+  overflow-y: auto;
+}
+
+.dashboard-filter-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.dashboard-filter-option input[type='checkbox'] {
+  accent-color: var(--orange-500);
 }
 
 .dashboard-search-icon {
@@ -339,6 +409,16 @@
   font-size: 16px;
 }
 
+.page-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.page-btn:disabled:hover {
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .stats-row {
@@ -361,6 +441,10 @@
 
   .table-section {
     overflow-x: auto;
+  }
+
+  .dashboard-filter-dropdown {
+    min-width: 160px;
   }
 }
 

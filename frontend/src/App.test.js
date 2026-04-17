@@ -414,7 +414,7 @@ test('delete modal traps focus within its action buttons', async () => {
 test('confirming delete calls endpoint and refetches jobs', async () => {
   global.fetch = jest.fn((url, options = {}) => {
     if (!options.method) {
-      if (url === 'http://localhost:8000/jobs') {
+      if (String(url).startsWith('http://localhost:8000/jobs')) {
         getJobsCallCount += 1;
       }
       return Promise.resolve({
@@ -545,7 +545,10 @@ test('passes search text to GET /jobs q query param', async () => {
 
   render(<App />);
   await waitFor(() => {
-    expect(global.fetch).toHaveBeenCalledWith('http://localhost:8000/jobs', expect.anything());
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('http://localhost:8000/jobs'),
+      expect.anything()
+    );
   });
 
   fireEvent.change(screen.getByLabelText(/search job applications/i), {
@@ -554,7 +557,7 @@ test('passes search text to GET /jobs q query param', async () => {
 
   await waitFor(() => {
     expect(global.fetch).toHaveBeenLastCalledWith(
-      'http://localhost:8000/jobs?q=acme',
+      expect.stringContaining('http://localhost:8000/jobs?q=acme'),
       expect.anything()
     );
   });
@@ -1070,5 +1073,134 @@ test('saves draft from job context with linked job_id', async () => {
     expect(
       screen.queryByRole('heading', { name: /save draft from job context/i })
     ).not.toBeInTheDocument();
+  });
+});
+
+test('stage dropdown supports multi-select and uncheck clearing', async () => {
+  global.fetch = jest.fn((url) => {
+    const hasStatusFilter = String(url).includes('statuses=');
+    return Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          items: [
+            { id: 'job-1', title: 'Role 1', company: 'Acme', status: 'applied' },
+            { id: 'job-2', title: 'Role 2', company: 'Beta', status: 'interviewing' },
+          ],
+          total: 2,
+          page: 1,
+          page_size: 10,
+          total_pages: 1,
+          // Simulate backend narrowing options after a filter is selected.
+          available_statuses: hasStatusFilter
+            ? ['applied']
+            : ['applied', 'interviewing', 'archived'],
+          available_locations: ['Remote'],
+          status_counts: { interviewing: 1, offered: 0 },
+        }),
+    });
+  });
+
+  render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: 'Stage' }));
+  const appliedCheckbox = await screen.findByRole('checkbox', { name: 'applied' });
+  const interviewingCheckbox = await screen.findByRole('checkbox', { name: 'interviewing' });
+  fireEvent.click(appliedCheckbox);
+  fireEvent.click(interviewingCheckbox);
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining('statuses=applied'),
+      expect.anything()
+    );
+  });
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining('statuses=interviewing'),
+      expect.anything()
+    );
+  });
+
+  fireEvent.click(appliedCheckbox);
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.not.stringContaining('statuses=applied'),
+      expect.anything()
+    );
+  });
+
+  const stageButton = screen.getByRole('button', { name: /Stage/ });
+  fireEvent.click(stageButton);
+  fireEvent.click(stageButton);
+  expect(await screen.findByRole('checkbox', { name: 'archived' })).toBeInTheDocument();
+});
+
+test('location and deadline dropdown selections persist and clear by unchecking', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          items: [{ id: 'job-1', title: 'Role 1', company: 'Acme', status: 'applied' }],
+          total: 1,
+          page: 1,
+          page_size: 10,
+          total_pages: 1,
+          available_statuses: ['applied'],
+          available_locations: ['Remote', 'Boston, MA'],
+          status_counts: { interviewing: 0, offered: 0 },
+        }),
+    })
+  );
+
+  render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: 'Location' }));
+  fireEvent.click(await screen.findByRole('checkbox', { name: 'Remote' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Boston, MA' }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Deadline' }));
+  fireEvent.click(await screen.findByRole('checkbox', { name: 'Upcoming' }));
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining('locations=Remote'),
+      expect.anything()
+    );
+  });
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining('locations=Boston%2C+MA'),
+      expect.anything()
+    );
+  });
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining('deadline_states=upcoming'),
+      expect.anything()
+    );
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: /Location/ }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Remote' }));
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.not.stringContaining('locations=Remote'),
+      expect.anything()
+    );
+  });
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining('locations=Boston%2C+MA'),
+      expect.anything()
+    );
+  });
+
+  fireEvent.click(screen.getByRole('button', { name: /Deadline/ }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Upcoming' }));
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.not.stringContaining('deadline_states=upcoming'),
+      expect.anything()
+    );
   });
 });

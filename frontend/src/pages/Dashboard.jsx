@@ -74,7 +74,38 @@ const STAT_BARS = {
   ],
 };
 
-const PAGE_NUMBERS = [1, 2, 3, 4, 5];
+const DEADLINE_STATE_OPTIONS = [
+  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'due_today', label: 'Due Today' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'no_deadline', label: 'No deadline set' },
+];
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
+
+function toggleFilterValue(currentValues, value) {
+  return currentValues.includes(value)
+    ? currentValues.filter((item) => item !== value)
+    : [...currentValues, value];
+}
+
+function getDropdownLabel(label, selectedCount) {
+  if (selectedCount === 0) return label;
+  return `${label} (${selectedCount})`;
+}
+
+function getVisiblePageNumbers(currentPage, totalPages, maxButtons = 5) {
+  if (totalPages <= maxButtons) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+  const half = Math.floor(maxButtons / 2);
+  let start = Math.max(1, currentPage - half);
+  let end = start + maxButtons - 1;
+  if (end > totalPages) {
+    end = totalPages;
+    start = end - maxButtons + 1;
+  }
+  return Array.from({ length: maxButtons }, (_, index) => start + index);
+}
 
 function buildDraftTemplate(job) {
   return [
@@ -97,7 +128,21 @@ function buildDraftTemplate(job) {
 export default function Dashboard() {
   const { session } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
-  const { jobs, loading, error, refetch } = useJobs(session?.access_token, searchTerm);
+  const [selectedStatuses, setSelectedStatuses] = useState([]);
+  const [selectedLocations, setSelectedLocations] = useState([]);
+  const [selectedDeadlineStates, setSelectedDeadlineStates] = useState([]);
+  const [isStageOpen, setIsStageOpen] = useState(false);
+  const [isLocationOpen, setIsLocationOpen] = useState(false);
+  const [isDeadlineOpen, setIsDeadlineOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const { jobs, meta, loading, error, refetch } = useJobs(session?.access_token, searchTerm, {
+    statuses: selectedStatuses,
+    locations: selectedLocations,
+    deadlineStates: selectedDeadlineStates,
+    page: currentPage,
+    pageSize,
+  });
   const {
     createDocument,
     clearSaveError,
@@ -119,15 +164,29 @@ export default function Dashboard() {
   const deleteCancelButtonRef = useRef(null);
   const draftModalRef = useRef(null);
   const draftCancelButtonRef = useRef(null);
+  const filterControlsRef = useRef(null);
   const [viewJob, setViewJob] = useState(null);
   const filteredJobs = jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm));
-  const totalApplications = filteredJobs.length;
-  const interviews = filteredJobs.filter(
-    (j) => j.status === 'interviewing' || j.status === 'interview'
-  ).length;
-  const offers = filteredJobs.filter(
-    (j) => j.status === 'offered' || j.status === 'offer' || j.status === 'accepted'
-  ).length;
+  const totalApplications = meta.total;
+  const interviews = meta.statusCounts?.interviewing ?? 0;
+  const offers = meta.statusCounts?.offered ?? 0;
+  const pageNumbers = getVisiblePageNumbers(meta.page, meta.totalPages);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedStatuses, selectedLocations, selectedDeadlineStates, pageSize]);
+
+  useEffect(() => {
+    function handleOutsideClick(event) {
+      if (filterControlsRef.current && !filterControlsRef.current.contains(event.target)) {
+        setIsStageOpen(false);
+        setIsLocationOpen(false);
+        setIsDeadlineOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   const statCards = [
     {
@@ -415,6 +474,113 @@ export default function Dashboard() {
                 onChange={(event) => setSearchTerm(event.target.value)}
               />
             </div>
+            <div className="dashboard-filter-controls" ref={filterControlsRef}>
+              <div className="dashboard-filter-dropdown">
+                <button
+                  type="button"
+                  className="dashboard-filter-trigger"
+                  aria-haspopup="true"
+                  aria-expanded={isStageOpen}
+                  onClick={() => {
+                    setIsStageOpen((prev) => !prev);
+                    setIsLocationOpen(false);
+                    setIsDeadlineOpen(false);
+                  }}
+                >
+                  {getDropdownLabel('Stage', selectedStatuses.length)}
+                </button>
+                {isStageOpen && (
+                  <div className="dashboard-filter-panel" role="group" aria-label="Filter by stage">
+                    {meta.availableStatuses.map((status) => (
+                      <label key={status} className="dashboard-filter-option">
+                        <input
+                          type="checkbox"
+                          checked={selectedStatuses.includes(status)}
+                          onChange={() =>
+                            setSelectedStatuses((prev) => toggleFilterValue(prev, status))
+                          }
+                        />
+                        <span>{status}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="dashboard-filter-dropdown">
+                <button
+                  type="button"
+                  className="dashboard-filter-trigger"
+                  aria-haspopup="true"
+                  aria-expanded={isLocationOpen}
+                  onClick={() => {
+                    setIsLocationOpen((prev) => !prev);
+                    setIsStageOpen(false);
+                    setIsDeadlineOpen(false);
+                  }}
+                >
+                  {getDropdownLabel('Location', selectedLocations.length)}
+                </button>
+                {isLocationOpen && (
+                  <div
+                    className="dashboard-filter-panel"
+                    role="group"
+                    aria-label="Filter by location"
+                  >
+                    {meta.availableLocations.map((location) => (
+                      <label key={location} className="dashboard-filter-option">
+                        <input
+                          type="checkbox"
+                          checked={selectedLocations.includes(location)}
+                          onChange={() =>
+                            setSelectedLocations((prev) => toggleFilterValue(prev, location))
+                          }
+                        />
+                        <span>{location}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="dashboard-filter-dropdown">
+                <button
+                  type="button"
+                  className="dashboard-filter-trigger"
+                  aria-haspopup="true"
+                  aria-expanded={isDeadlineOpen}
+                  onClick={() => {
+                    setIsDeadlineOpen((prev) => !prev);
+                    setIsStageOpen(false);
+                    setIsLocationOpen(false);
+                  }}
+                >
+                  {getDropdownLabel('Deadline', selectedDeadlineStates.length)}
+                </button>
+                {isDeadlineOpen && (
+                  <div
+                    className="dashboard-filter-panel"
+                    role="group"
+                    aria-label="Filter by deadline state"
+                  >
+                    {DEADLINE_STATE_OPTIONS.map((state) => (
+                      <label key={state.value} className="dashboard-filter-option">
+                        <input
+                          type="checkbox"
+                          checked={selectedDeadlineStates.includes(state.value)}
+                          onChange={() =>
+                            setSelectedDeadlineStates((prev) =>
+                              toggleFilterValue(prev, state.value)
+                            )
+                          }
+                        />
+                        <span>{state.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {loading && <p className="table-state">Loading jobs...</p>}
@@ -449,7 +615,7 @@ export default function Dashboard() {
                 ) : (
                   filteredJobs.map((job, index) => (
                     <tr key={job.id}>
-                      <td className="row-number">{index + 1}</td>
+                      <td className="row-number">{(meta.page - 1) * meta.pageSize + index + 1}</td>
                       <td>
                         <div className="job-title-cell">
                           <span className="job-title-text">{job.title}</span>
@@ -547,30 +713,49 @@ export default function Dashboard() {
           <div className="table-footer">
             <div className="rows-select">
               Show
-              <select aria-label="Rows per page">
-                <option>10</option>
-                <option>25</option>
-                <option>50</option>
+              <select
+                aria-label="Rows per page"
+                value={pageSize}
+                onChange={(event) => setPageSize(Number(event.target.value))}
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
               </select>
               entries
             </div>
 
             <div className="pagination" role="navigation" aria-label="Pagination">
-              <button type="button" className="page-btn nav-arrow" aria-label="Previous page">
+              <button
+                type="button"
+                className="page-btn nav-arrow"
+                aria-label="Previous page"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={meta.page <= 1}
+              >
                 ‹
               </button>
-              {PAGE_NUMBERS.map((page) => (
+              {pageNumbers.map((page) => (
                 <button
                   key={page}
                   type="button"
-                  className={`page-btn${page === 1 ? ' active' : ''}`}
+                  className={`page-btn${page === meta.page ? ' active' : ''}`}
                   aria-label={`Page ${page}`}
-                  aria-current={page === 1 ? 'page' : undefined}
+                  aria-current={page === meta.page ? 'page' : undefined}
+                  onClick={() => setCurrentPage(page)}
                 >
                   {page}
                 </button>
               ))}
-              <button type="button" className="page-btn nav-arrow" aria-label="Next page">
+              <button
+                type="button"
+                className="page-btn nav-arrow"
+                aria-label="Next page"
+                onClick={() => setCurrentPage((prev) => Math.min(meta.totalPages, prev + 1))}
+                disabled={meta.page >= meta.totalPages}
+              >
                 ›
               </button>
             </div>

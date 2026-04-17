@@ -1,6 +1,7 @@
 import calendar
 import os
 from datetime import date, datetime
+from math import ceil
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -42,6 +43,7 @@ JOB_STATUSES = {
     "archived",
 }
 JOB_STATUS_ALIAS = {"interview": "interviewing", "offer": "offered"}
+DEADLINE_STATES = {"upcoming", "due_today", "overdue", "no_deadline"}
 
 
 def get_supabase():
@@ -367,6 +369,41 @@ def _job_matches_query(job: dict, normalized_query: str) -> bool:
     return any(normalized_query in fragment for fragment in _job_search_fragments(job))
 
 
+def _normalize_list_param(values: Optional[list[str]]) -> list[str]:
+    if not values:
+        return []
+    normalized: list[str] = []
+    for raw in values:
+        if raw is None:
+            continue
+        for piece in str(raw).split(","):
+            cleaned = piece.strip()
+            if cleaned:
+                normalized.append(cleaned)
+    return normalized
+
+
+def _normalize_location_key(value: Optional[str]) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.strip().casefold()
+
+
+def _build_available_locations(jobs: list[dict]) -> list[str]:
+    deduped: dict[str, str] = {}
+    for job in jobs:
+        raw_location = job.get("location")
+        if not isinstance(raw_location, str):
+            continue
+        cleaned_location = raw_location.strip()
+        if not cleaned_location:
+            continue
+        key = cleaned_location.casefold()
+        if key not in deduped:
+            deduped[key] = cleaned_location
+    return sorted(deduped.values(), key=lambda location: location.casefold())
+
+
 # --- Routes ---
 
 
@@ -379,20 +416,90 @@ def root():
 def list_jobs(
     authorization: Optional[str] = Header(default=None),
     q: Optional[str] = Query(default=None),
+    statuses: Optional[list[str]] = Query(default=None),
+    locations: Optional[list[str]] = Query(default=None),
+    deadline_states: Optional[list[str]] = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10, ge=1, le=100),
 ):
     user_id = get_user_id(authorization)
     sb = get_supabase()
-    response = sb.table("jobs").select("*").eq("user_id", user_id).order("created_at", desc=True)
-    response = response.execute()
-    jobs = response.data
-    if not q:
-        return jobs
+    normalized_statuses = [
+        _normalize_job_status_alias(status) for status in _normalize_list_param(statuses)
+    ]
+    normalized_locations = _normalize_list_param(locations)
+    normalized_deadline_states = _normalize_list_param(deadline_states)
 
-    normalized_query = q.strip().lower()
-    if not normalized_query:
-        return jobs
+    if any(status not in JOB_STATUSES for status in normalized_statuses):
+        raise HTTPException(status_code=422, detail="statuses contains unsupported values")
+    if any(state not in DEADLINE_STATES for state in normalized_deadline_states):
+        raise HTTPException(status_code=422, detail="deadline_states contains unsupported values")
 
-    return [job for job in jobs if _job_matches_query(job, normalized_query)]
+    query = sb.table("jobs").select("*").eq("user_id", user_id)
+    if normalized_statuses:
+        query = query.in_("status", normalized_statuses)
+    if normalized_deadline_states:
+        today_iso = date.today().isoformat()
+        deadline_clauses: list[str] = []
+        if "upcoming" in normalized_deadline_states:
+            deadline_clauses.append(f"deadline.gt.{today_iso}")
+        if "due_today" in normalized_deadline_states:
+            deadline_clauses.append(f"deadline.eq.{today_iso}")
+        if "overdue" in normalized_deadline_states:
+            deadline_clauses.append(f"deadline.lt.{today_iso}")
+        if "no_deadline" in normalized_deadline_states:
+            deadline_clauses.append("deadline.is.null")
+        query = query.or_(",".join(deadline_clauses))
+
+    response = query.order("created_at", desc=True).execute()
+    jobs = response.data or []
+    if normalized_locations:
+        normalized_location_keys = {
+            _normalize_location_key(location) for location in normalized_locations
+        }
+        normalized_location_keys.discard("")
+        jobs = [
+            job
+            for job in jobs
+            if _normalize_location_key(job.get("location")) in normalized_location_keys
+        ]
+    normalized_query = (q or "").strip().lower()
+    if normalized_query:
+        jobs = [job for job in jobs if _job_matches_query(job, normalized_query)]
+
+    total = len(jobs)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    items = jobs[start_idx:end_idx]
+    total_pages = ceil(total / page_size) if total > 0 else 1
+
+    status_counts = {
+        "interviewing": 0,
+        "offered": 0,
+    }
+    for job in jobs:
+        status = _normalize_job_status_alias((job.get("status") or "").strip().lower())
+        if status == "interviewing":
+            status_counts["interviewing"] += 1
+        if status in {"offered", "accepted"}:
+            status_counts["offered"] += 1
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "available_statuses": sorted(
+            {
+                status
+                for status in (job.get("status") for job in jobs)
+                if isinstance(status, str) and status
+            }
+        ),
+        "available_locations": _build_available_locations(jobs),
+        "status_counts": status_counts,
+    }
 
 
 @app.post("/jobs", status_code=201)
