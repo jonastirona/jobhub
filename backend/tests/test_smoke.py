@@ -1252,7 +1252,9 @@ def test_list_documents_returns_user_documents():
 def test_get_document_success():
     mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
     with patch("main.get_supabase", return_value=mock_sb):
-        response = client.get(f"/documents/{SAMPLE_DOCUMENT['id']}", headers={"authorization": AUTH_HEADER})
+        response = client.get(
+            f"/documents/{SAMPLE_DOCUMENT['id']}", headers={"authorization": AUTH_HEADER}
+        )
     assert response.status_code == 200
     body = response.json()
     assert body["id"] == SAMPLE_DOCUMENT["id"]
@@ -1263,7 +1265,7 @@ def test_get_document_not_found():
     mock_sb, _, _ = make_mock_sb(data=[])
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.get(
-            f"/documents/nonexistent-id",
+            "/documents/nonexistent-id",
             headers={"authorization": AUTH_HEADER},
         )
     assert response.status_code == 404
