@@ -7,6 +7,18 @@ import ProfilePage from './ProfilePage';
 const ACCESS_TOKEN = 'test-token';
 const BACKEND = 'http://localhost:8000';
 
+const SAMPLE_EXPERIENCE_ENTRY = {
+  id: 'exp-uuid-0001',
+  user_id: 'user-1',
+  title: 'Software Engineer',
+  company: 'Acme Corp',
+  location: 'New York, NY',
+  start_year: 2021,
+  end_year: null,
+  description: null,
+  position: 0,
+};
+
 const mockAuthValue = {
   session: { access_token: ACCESS_TOKEN },
   user: { id: 'user-1', email: 'jane@example.com' },
@@ -20,6 +32,10 @@ const mockAuthValue = {
 jest.mock('../context/AuthContext', () => ({
   AuthProvider: ({ children }) => children,
   useAuth: () => mockAuthValue,
+}));
+
+jest.mock('../hooks/useReminders', () => ({
+  useReminders: () => ({ reminders: [], loading: false, error: null, refetch: jest.fn() }),
 }));
 
 const SAMPLE_PROFILE = {
@@ -67,61 +83,83 @@ const COMPLETE_COMPLETION = {
   required_count: REQUIRED_FIELD_KEYS.length,
 };
 
-// Mount fires GET /profile and GET /skills concurrently.
-// skills defaults to [] so the skills section loads cleanly without errors.
-function mockFetch({ getProfile = {}, saveProfile = SAMPLE_PROFILE, skills = [] } = {}) {
+/** Returns an ok experience GET/mutation response, or null if the URL is not
+ *  an /experience endpoint. Centralising this keeps all mock helpers consistent
+ *  and prevents the /experience stub from drifting between them.
+ */
+function resolveExperienceUrl(url, opts = {}, { getExperience = [], saveExperience = null } = {}) {
+  if (!url.includes('/experience')) return null;
+  if (opts.method === 'POST') {
+    const entry = saveExperience ?? { ...SAMPLE_EXPERIENCE_ENTRY, id: 'exp-new' };
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(entry) });
+  }
+  if (opts.method === 'PUT' || opts.method === 'DELETE') {
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(saveExperience ?? {}) });
+  }
+  return Promise.resolve({ ok: true, json: () => Promise.resolve(getExperience) });
+}
+
+function resolveSkillsUrl(url, opts = {}, { getSkills = [], saveSkill = null } = {}) {
+  if (!url.includes('/skills')) return null;
+  if (opts.method === 'POST') {
+    const skill = saveSkill ?? { id: 'new-skill', user_id: 'user-1', position: 0 };
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(skill) });
+  }
+  if (opts.method === 'PUT' || opts.method === 'DELETE') {
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(saveSkill ?? getSkills) });
+  }
+  return Promise.resolve({ ok: true, json: () => Promise.resolve(getSkills) });
+}
+
+function mockFetch({
+  getProfile = {},
+  saveProfile = SAMPLE_PROFILE,
+  getExperience = [],
+  saveExperience = null,
+  skills = [],
+  saveSkill = null,
+} = {}) {
   global.fetch = jest.fn((url, opts = {}) => {
-    if (url && url.includes('/skills')) {
-      if (opts.method === 'POST') {
-        const body = opts.body ? JSON.parse(opts.body) : {};
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ id: 'new-skill', user_id: 'user-1', position: 0, ...body }),
-        });
-      }
-      if (opts.method === 'PUT') {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(skills) });
-      }
-      if (opts.method === 'DELETE') {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(null) });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(skills) });
-    }
-    if (opts.method === 'PUT') {
+    const exp = resolveExperienceUrl(url, opts, { getExperience, saveExperience });
+    if (exp) return exp;
+    const skl = resolveSkillsUrl(url, opts, { getSkills: skills, saveSkill });
+    if (skl) return skl;
+    if (opts.method === 'PUT' && url.endsWith('/profile')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(saveProfile) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve(getProfile) });
   });
 }
 
-// Skills GET succeeds so only the profile error is visible in load-error tests.
 function mockFetchGetError(status = 500, message = 'Internal Server Error') {
-  global.fetch = jest.fn((url) => {
-    if (url && url.includes('/skills')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-    }
+  global.fetch = jest.fn((url, opts = {}) => {
+    const exp = resolveExperienceUrl(url, opts);
+    if (exp) return exp;
+    const skl = resolveSkillsUrl(url, opts);
+    if (skl) return skl;
     return Promise.resolve({ ok: false, status, text: () => Promise.resolve(message) });
   });
 }
 
 function mockFetchSaveError(status = 500, text = 'Server Error') {
   global.fetch = jest.fn((url, opts = {}) => {
-    if (url && url.includes('/skills')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-    }
-    if (opts.method === 'PUT') {
+    const exp = resolveExperienceUrl(url, opts);
+    if (exp) return exp;
+    const skl = resolveSkillsUrl(url, opts);
+    if (skl) return skl;
+    if (opts.method === 'PUT' && url.endsWith('/profile')) {
       return Promise.resolve({ ok: false, status, text: () => Promise.resolve(text) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
   });
 }
 
-// Skills GET succeeds so only the profile network error is visible.
 function mockFetchNetworkError(message = 'Network error') {
-  global.fetch = jest.fn((url) => {
-    if (url && url.includes('/skills')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-    }
+  global.fetch = jest.fn((url, opts = {}) => {
+    const exp = resolveExperienceUrl(url, opts);
+    if (exp) return exp;
+    const skl = resolveSkillsUrl(url, opts);
+    if (skl) return skl;
     return Promise.reject(new Error(message));
   });
 }
@@ -132,10 +170,11 @@ function makePendingSave() {
     resolve = res;
   });
   global.fetch = jest.fn((url, opts = {}) => {
-    if (url && url.includes('/skills')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-    }
-    if (opts.method === 'PUT') return promise;
+    const exp = resolveExperienceUrl(url, opts);
+    if (exp) return exp;
+    const skl = resolveSkillsUrl(url, opts);
+    if (skl) return skl;
+    if (opts.method === 'PUT' && url.endsWith('/profile')) return promise;
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
   });
   return () => resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
@@ -495,14 +534,10 @@ describe('save — success', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
     await waitFor(() => {
-      const call = global.fetch.mock.calls.find(
-        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-      );
-      expect(call).toBeDefined();
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+      expect(putCall).toBeDefined();
     });
-    const [url, opts] = global.fetch.mock.calls.find(
-      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-    );
+    const [url, opts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
     expect(url).toBe(`${BACKEND}/profile`);
     expect(opts.method).toBe('PUT');
     const body = JSON.parse(opts.body);
@@ -515,14 +550,10 @@ describe('save — success', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
     await waitFor(() => {
-      const call = global.fetch.mock.calls.find(
-        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-      );
-      expect(call).toBeDefined();
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+      expect(putCall).toBeDefined();
     });
-    const [, opts] = global.fetch.mock.calls.find(
-      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-    );
+    const [, opts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
     expect(opts.headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
   });
 
@@ -553,16 +584,11 @@ describe('save — success', () => {
     await userEvent.type(screen.getByLabelText(/full name/i), '   ');
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
     await waitFor(() => {
-      const call = global.fetch.mock.calls.find(
-        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-      );
-      expect(call).toBeDefined();
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+      expect(putCall).toBeDefined();
     });
-    const body = JSON.parse(
-      global.fetch.mock.calls.find(
-        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-      )[1].body
-    );
+    const [, opts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+    const body = JSON.parse(opts.body);
     expect(body.full_name).toBeNull();
   });
 
@@ -617,10 +643,12 @@ describe('save — error', () => {
 
   test('shows network error message when fetch rejects on save', async () => {
     global.fetch = jest.fn((url, opts = {}) => {
-      if (url && url.includes('/skills')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-      }
-      if (opts.method === 'PUT') return Promise.reject(new Error('Connection refused'));
+      const exp = resolveExperienceUrl(url, opts);
+      if (exp) return exp;
+      const skl = resolveSkillsUrl(url, opts);
+      if (skl) return skl;
+      if (opts.method === 'PUT' && url.endsWith('/profile'))
+        return Promise.reject(new Error('Connection refused'));
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
     renderPage();
@@ -646,10 +674,11 @@ describe('save — error', () => {
     // First save succeeds, second fails
     let callCount = 0;
     global.fetch = jest.fn((url, opts = {}) => {
-      if (url && url.includes('/skills')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-      }
-      if (opts.method === 'PUT') {
+      const exp = resolveExperienceUrl(url, opts);
+      if (exp) return exp;
+      const skl = resolveSkillsUrl(url, opts);
+      if (skl) return skl;
+      if (opts.method === 'PUT' && url.endsWith('/profile')) {
         callCount++;
         if (callCount === 1) {
           return Promise.resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
@@ -718,9 +747,7 @@ describe('saving state', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /save profile/i })).toBeInTheDocument()
     );
-    const putCalls = global.fetch.mock.calls.filter(
-      ([u, opts = {}]) => u === `${BACKEND}/profile` && opts.method === 'PUT'
-    );
+    const putCalls = global.fetch.mock.calls.filter(([, opts = {}]) => opts.method === 'PUT');
     expect(putCalls).toHaveLength(1);
   });
 });
@@ -791,16 +818,11 @@ describe('fetch payload', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
     await waitFor(() => {
-      const call = global.fetch.mock.calls.find(
-        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-      );
-      expect(call).toBeDefined();
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+      expect(putCall).toBeDefined();
     });
-    const body = JSON.parse(
-      global.fetch.mock.calls.find(
-        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-      )[1].body
-    );
+    const [, putOpts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+    const body = JSON.parse(putOpts.body);
     for (const field of [
       'full_name',
       'headline',
@@ -817,11 +839,10 @@ describe('fetch payload', () => {
 
   test('GET /profile is called with Authorization header', async () => {
     renderPage();
-    await waitFor(() => {
-      const call = global.fetch.mock.calls.find(([u]) => u === `${BACKEND}/profile`);
-      expect(call).toBeDefined();
-    });
-    const [url, opts] = global.fetch.mock.calls.find(([u]) => u === `${BACKEND}/profile`);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const profileCall = global.fetch.mock.calls.find(([url]) => url === `${BACKEND}/profile`);
+    expect(profileCall).toBeDefined();
+    const [url, opts] = profileCall;
     expect(url).toBe(`${BACKEND}/profile`);
     expect(opts.headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
   });
@@ -832,18 +853,142 @@ describe('fetch payload', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
     await waitFor(() => {
-      const call = global.fetch.mock.calls.find(
-        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-      );
-      expect(call).toBeDefined();
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+      expect(putCall).toBeDefined();
     });
-    const body = JSON.parse(
-      global.fetch.mock.calls.find(
-        ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-      )[1].body
-    );
+    const [, putOpts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+    const body = JSON.parse(putOpts.body);
     expect(body.full_name).toBeNull();
     expect(body.summary).toBeNull();
+  });
+});
+
+// ─── Experience section ───────────────────────────────────────────────────────
+
+describe('experience section', () => {
+  test('renders "Experience" section heading', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /^experience$/i })).toBeInTheDocument();
+    });
+  });
+
+  test('shows "No experience added yet." when list is empty', async () => {
+    mockFetch({ getExperience: [] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/no experience added yet/i)).toBeInTheDocument();
+    });
+  });
+
+  test('renders loaded experience entries', async () => {
+    mockFetch({ getExperience: [SAMPLE_EXPERIENCE_ENTRY] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Software Engineer')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+  });
+
+  test('experience section is a labeled region', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('region', { name: /^experience$/i })).toBeInTheDocument();
+    });
+  });
+
+  test('Add Experience form is always present', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /add experience/i })).toBeInTheDocument();
+    });
+  });
+
+  test('Add Experience button is disabled when form is empty', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /add experience/i })).toBeDisabled();
+    });
+  });
+
+  test('submitting the add form POSTs to /experience', async () => {
+    const newEntry = { ...SAMPLE_EXPERIENCE_ENTRY, id: 'exp-new' };
+    mockFetch({ saveExperience: newEntry });
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/^title$/i)).toBeInTheDocument());
+
+    await userEvent.type(screen.getByLabelText(/^title$/i), 'Software Engineer');
+    await userEvent.type(screen.getByLabelText(/^company$/i), 'Acme Corp');
+    await userEvent.type(screen.getByLabelText(/^start year$/i), '2021');
+
+    fireEvent.click(screen.getByRole('button', { name: /add experience/i }));
+
+    await waitFor(() => {
+      const postCall = global.fetch.mock.calls.find(
+        ([url, opts = {}]) => opts.method === 'POST' && url.includes('/experience')
+      );
+      expect(postCall).toBeDefined();
+    });
+    const [url, opts] = global.fetch.mock.calls.find(
+      ([url, opts = {}]) => opts.method === 'POST' && url.includes('/experience')
+    );
+    expect(url).toBe(`${BACKEND}/experience`);
+    const body = JSON.parse(opts.body);
+    expect(body.title).toBe('Software Engineer');
+    expect(body.company).toBe('Acme Corp');
+    expect(body.start_year).toBe(2021);
+  });
+
+  test('clicking Edit populates the form fields', async () => {
+    mockFetch({ getExperience: [SAMPLE_EXPERIENCE_ENTRY] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Software Engineer')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /edit software engineer/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^title$/i)).toHaveValue('Software Engineer');
+    });
+    expect(screen.getByLabelText(/^company$/i)).toHaveValue('Acme Corp');
+    expect(screen.getByRole('button', { name: /update experience/i })).toBeInTheDocument();
+  });
+
+  test('clicking Delete sends DELETE to /experience/:id', async () => {
+    mockFetch({ getExperience: [SAMPLE_EXPERIENCE_ENTRY] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Software Engineer')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /delete software engineer/i }));
+
+    await waitFor(() => {
+      const deleteCall = global.fetch.mock.calls.find(
+        ([url, opts = {}]) => opts.method === 'DELETE' && url.includes('/experience/')
+      );
+      expect(deleteCall).toBeDefined();
+    });
+    const [url] = global.fetch.mock.calls.find(
+      ([url, opts = {}]) => opts.method === 'DELETE' && url.includes('/experience/')
+    );
+    expect(url).toBe(`${BACKEND}/experience/${SAMPLE_EXPERIENCE_ENTRY.id}`);
+  });
+
+  test('shows experience load error with role=alert', async () => {
+    global.fetch = jest.fn((url, opts = {}) => {
+      const skl = resolveSkillsUrl(url, opts);
+      if (skl) return skl;
+      if (url.includes('/experience')) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          text: () => Promise.resolve('Failed to load experience'),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/failed to load experience/i)).toBeInTheDocument();
+    });
   });
 });
 
@@ -927,6 +1072,8 @@ describe('skills section', () => {
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
+      const exp = resolveExperienceUrl(url, opts);
+      if (exp) return exp;
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
 
@@ -995,6 +1142,8 @@ describe('skills section', () => {
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve([SAMPLE_SKILL]) });
       }
+      const exp = resolveExperienceUrl(url, opts);
+      if (exp) return exp;
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
 
@@ -1048,6 +1197,8 @@ describe('skills section', () => {
           json: () => Promise.resolve([SAMPLE_SKILL, skill2]),
         });
       }
+      const exp = resolveExperienceUrl(url, opts);
+      if (exp) return exp;
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
 
@@ -1076,6 +1227,8 @@ describe('skills section', () => {
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
+      const exp = resolveExperienceUrl(url, opts);
+      if (exp) return exp;
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
 

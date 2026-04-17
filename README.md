@@ -94,7 +94,7 @@ cd backend
 source venv/bin/activate
 pip install -r requirements.txt
 pip install pytest httpx
-pytest
+pytest -v
 ```
 
 Backend tests mock the Supabase client — no live database or credentials are needed to run them.
