@@ -4,6 +4,7 @@ Backend tests for jobhub.
 Supabase is fully mocked — no live database or credentials required.
 """
 
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -46,8 +47,10 @@ SAMPLE_JOB = {
     "location": "Remote",
     "status": "applied",
     "applied_date": None,
+    "deadline": None,
     "description": None,
     "notes": None,
+    "recruiter_notes": None,
     "created_at": "2026-01-01T00:00:00+00:00",
     "updated_at": "2026-01-01T00:00:00+00:00",
 }
@@ -113,6 +116,7 @@ def _make_mock_sb_with_side_effects(*data_list):
 # ---------------------------------------------------------------------------
 
 
+# Verifies the root endpoint responds with service health message.
 def test_root():
     response = client.get("/")
     assert response.status_code == 200
@@ -124,26 +128,31 @@ def test_root():
 # ---------------------------------------------------------------------------
 
 
+# Verifies listing jobs without auth token returns unauthorized.
 def test_list_jobs_requires_auth():
     response = client.get("/jobs")
     assert response.status_code == 401
 
 
+# Verifies creating a job without auth token returns unauthorized.
 def test_create_job_requires_auth():
     response = client.post("/jobs", json={"title": "Engineer", "company": "Acme"})
     assert response.status_code == 401
 
 
+# Verifies fetching a job without auth token returns unauthorized.
 def test_get_job_requires_auth():
     response = client.get("/jobs/some-uuid")
     assert response.status_code == 401
 
 
+# Verifies updating a job without auth token returns unauthorized.
 def test_update_job_requires_auth():
     response = client.put("/jobs/some-uuid", json={"title": "Senior Engineer"})
     assert response.status_code == 401
 
 
+# Verifies deleting a job without auth token returns unauthorized.
 def test_delete_job_requires_auth():
     response = client.delete("/jobs/some-uuid")
     assert response.status_code == 401
@@ -154,6 +163,7 @@ def test_delete_job_requires_auth():
 # ---------------------------------------------------------------------------
 
 
+# Verifies authenticated users can list their jobs successfully.
 def test_list_jobs_returns_user_jobs():
     mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -163,8 +173,11 @@ def test_list_jobs_returns_user_jobs():
     assert len(body) == 1
     assert body[0]["id"] == SAMPLE_JOB["id"]
     assert body[0]["company"] == "TechCorp"
+    assert "deadline" in body[0]
+    assert "recruiter_notes" in body[0]
 
 
+# Verifies list endpoint returns an empty array when no jobs exist.
 def test_list_jobs_empty():
     mock_sb, _, _ = make_mock_sb(data=[])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -173,6 +186,7 @@ def test_list_jobs_empty():
     assert response.json() == []
 
 
+# Verifies list query always filters by authenticated user_id.
 def test_list_jobs_scoped_to_user():
     """Verify the query filters by user_id."""
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_JOB])
@@ -181,11 +195,258 @@ def test_list_jobs_scoped_to_user():
     mock_query.eq.assert_any_call("user_id", MOCK_USER_ID)
 
 
+# Verifies GET /jobs?q filters results across searchable job text fields.
+def test_list_jobs_q_filters_across_text_fields():
+    matching_by_description = {
+        **SAMPLE_JOB,
+        "id": "job-desc-match",
+        "description": "Scaling distributed keyword index",
+    }
+    matching_by_location = {
+        **SAMPLE_JOB,
+        "id": "job-location-match",
+        "location": "San Francisco",
+    }
+    matching_by_status = {
+        **SAMPLE_JOB,
+        "id": "job-status-match",
+        "status": "interviewing",
+    }
+    matching_by_applied_date = {
+        **SAMPLE_JOB,
+        "id": "job-date-match",
+        "applied_date": "2026-03-15",
+    }
+    non_match = {
+        **SAMPLE_JOB,
+        "id": "job-no-match",
+        "title": "Product Manager",
+        "company": "Other Co",
+        "location": "Remote",
+        "description": "Roadmap and planning",
+        "notes": "General note",
+    }
+    mock_sb, _, _ = make_mock_sb(
+        data=[
+            matching_by_description,
+            matching_by_location,
+            matching_by_status,
+            matching_by_applied_date,
+            non_match,
+        ]
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/jobs?q=francisco",
+            headers={"authorization": AUTH_HEADER},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == "job-location-match"
+
+    with patch("main.get_supabase", return_value=mock_sb):
+        status_response = client.get(
+            "/jobs?q=interviewing",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert status_response.status_code == 200
+    assert status_response.json()[0]["id"] == "job-status-match"
+
+    with patch("main.get_supabase", return_value=mock_sb):
+        date_response = client.get(
+            "/jobs?q=2026-03-15",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert date_response.status_code == 200
+    assert date_response.json()[0]["id"] == "job-date-match"
+
+    matching_by_recruiter = {
+        **SAMPLE_JOB,
+        "id": "job-recruiter-match",
+        "recruiter_notes": "Reach out to Alex Chen before onsite",
+    }
+    matching_by_deadline = {
+        **SAMPLE_JOB,
+        "id": "job-deadline-match",
+        "deadline": "2026-07-04",
+    }
+    mock_sb2, _, _ = make_mock_sb(
+        data=[
+            matching_by_recruiter,
+            matching_by_deadline,
+            non_match,
+        ]
+    )
+    with patch("main.get_supabase", return_value=mock_sb2):
+        recruiter_response = client.get(
+            "/jobs?q=alex+chen",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert recruiter_response.status_code == 200
+    assert len(recruiter_response.json()) == 1
+    assert recruiter_response.json()[0]["id"] == "job-recruiter-match"
+
+    with patch("main.get_supabase", return_value=mock_sb2):
+        deadline_response = client.get(
+            "/jobs?q=2026-07-04",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert deadline_response.status_code == 200
+    assert len(deadline_response.json()) == 1
+    assert deadline_response.json()[0]["id"] == "job-deadline-match"
+
+
+# Verifies q matches calendar month names, years, day numbers, abbreviations, and notes.
+def test_list_jobs_q_month_year_day_tokens_and_notes():
+    april_deadline = {
+        **SAMPLE_JOB,
+        "id": "job-april-deadline",
+        "deadline": "2026-04-10",
+        "applied_date": None,
+    }
+    march_applied = {
+        **SAMPLE_JOB,
+        "id": "job-march-applied",
+        "applied_date": "2026-03-20",
+        "deadline": None,
+    }
+    mock_sb, _, _ = make_mock_sb(data=[april_deadline, march_applied])
+    with patch("main.get_supabase", return_value=mock_sb):
+        april_resp = client.get(
+            "/jobs?q=april",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert april_resp.status_code == 200
+    assert len(april_resp.json()) == 1
+    assert april_resp.json()[0]["id"] == "job-april-deadline"
+
+    with patch("main.get_supabase", return_value=mock_sb):
+        apr_resp = client.get(
+            "/jobs?q=apr",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert apr_resp.status_code == 200
+    assert len(apr_resp.json()) == 1
+    assert apr_resp.json()[0]["id"] == "job-april-deadline"
+
+    july_day4 = {
+        **SAMPLE_JOB,
+        "id": "job-jul-4",
+        "deadline": "2026-07-04",
+        "applied_date": None,
+    }
+    july_day14 = {
+        **SAMPLE_JOB,
+        "id": "job-jul-14",
+        "deadline": "2026-07-14",
+        "applied_date": None,
+    }
+    mock_jul, _, _ = make_mock_sb(data=[july_day4, july_day14])
+    with patch("main.get_supabase", return_value=mock_jul):
+        jul4_resp = client.get(
+            "/jobs?q=jul+4",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert jul4_resp.status_code == 200
+    assert len(jul4_resp.json()) == 1
+    assert jul4_resp.json()[0]["id"] == "job-jul-4"
+
+    year_2027 = {
+        **SAMPLE_JOB,
+        "id": "job-2027",
+        "deadline": "2027-01-01",
+        "applied_date": None,
+    }
+    year_2026 = {
+        **SAMPLE_JOB,
+        "id": "job-2026-only",
+        "deadline": "2026-12-31",
+        "applied_date": None,
+    }
+    mock_y, _, _ = make_mock_sb(data=[year_2027, year_2026])
+    with patch("main.get_supabase", return_value=mock_y):
+        y_resp = client.get(
+            "/jobs?q=2027",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert y_resp.status_code == 200
+    assert len(y_resp.json()) == 1
+    assert y_resp.json()[0]["id"] == "job-2027"
+
+    day_14 = {
+        **SAMPLE_JOB,
+        "id": "job-day-14",
+        "applied_date": "2026-05-14",
+        "deadline": None,
+    }
+    day_15 = {
+        **SAMPLE_JOB,
+        "id": "job-day-15",
+        "applied_date": "2026-05-15",
+        "deadline": None,
+    }
+    mock_d, _, _ = make_mock_sb(data=[day_14, day_15])
+    with patch("main.get_supabase", return_value=mock_d):
+        d_resp = client.get(
+            "/jobs?q=14",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert d_resp.status_code == 200
+    assert len(d_resp.json()) == 1
+    assert d_resp.json()[0]["id"] == "job-day-14"
+
+    notes_job = {
+        **SAMPLE_JOB,
+        "id": "job-notes-xyz",
+        "notes": "Follow up about offer details xyz123",
+    }
+    other = {
+        **SAMPLE_JOB,
+        "id": "job-other-notes",
+        "notes": "Different content",
+    }
+    mock_n, _, _ = make_mock_sb(data=[notes_job, other])
+    with patch("main.get_supabase", return_value=mock_n):
+        n_resp = client.get(
+            "/jobs?q=xyz123",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert n_resp.status_code == 200
+    assert len(n_resp.json()) == 1
+    assert n_resp.json()[0]["id"] == "job-notes-xyz"
+
+
+# Verifies whitespace-only q values are treated as empty search input.
+def test_list_jobs_q_ignores_whitespace_only_query():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/jobs?q=%20%20",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+
+# Verifies user_id ownership filtering remains enforced when q is provided.
+def test_list_jobs_q_keeps_user_scope_filter():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get(
+            "/jobs?q=techcorp",
+            headers={"authorization": AUTH_HEADER},
+        )
+    mock_query.eq.assert_any_call("user_id", MOCK_USER_ID)
+
+
 # ---------------------------------------------------------------------------
 # POST /jobs
 # ---------------------------------------------------------------------------
 
 
+# Verifies valid payload creates a job and returns created entity.
 def test_create_job_success():
     mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -202,6 +463,7 @@ def test_create_job_success():
     assert response.json()["company"] == "TechCorp"
 
 
+# Verifies create payload is augmented with authenticated user_id.
 def test_create_job_sets_user_id():
     """Verify user_id is injected into the insert payload."""
     mock_sb, mock_query, mock_result = make_mock_sb(data=[SAMPLE_JOB])
@@ -215,6 +477,41 @@ def test_create_job_sets_user_id():
     assert inserted_payload["user_id"] == MOCK_USER_ID
 
 
+# Verifies create serializes deadline to ISO date string for Supabase.
+def test_create_job_serializes_deadline_in_insert_payload():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/jobs",
+            json={
+                "title": "Engineer",
+                "company": "Acme",
+                "deadline": "2026-08-20",
+                "recruiter_notes": "  HR: Pat  ",
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    # First insert call is for `jobs`; later insert calls may target history.
+    inserted = mock_query.insert.call_args_list[0][0][0]
+    assert inserted["deadline"] == "2026-08-20"
+    assert inserted["recruiter_notes"] == "  HR: Pat  "
+
+
+# Verifies update serializes deadline in the update payload.
+def test_update_job_serializes_deadline_in_update_payload():
+    updated = {**SAMPLE_JOB, "deadline": "2026-09-01"}
+    mock_sb, mock_query, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"deadline": "2026-09-01"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    update_payload = mock_query.update.call_args[0][0]
+    assert update_payload == {"deadline": "2026-09-01"}
+
+
+# Verifies missing required title fails FastAPI validation.
 def test_create_job_missing_title_returns_422():
     response = client.post(
         "/jobs",
@@ -224,6 +521,7 @@ def test_create_job_missing_title_returns_422():
     assert response.status_code == 422
 
 
+# Verifies missing required company fails FastAPI validation.
 def test_create_job_missing_company_returns_422():
     response = client.post(
         "/jobs",
@@ -233,6 +531,7 @@ def test_create_job_missing_company_returns_422():
     assert response.status_code == 422
 
 
+# Verifies create endpoint returns 500 when insert result is empty.
 def test_create_job_db_failure_returns_500():
     mock_sb, _, mock_result = make_mock_sb(data=[])
     mock_result.data = []  # simulate insert returning nothing
@@ -275,6 +574,7 @@ def test_create_job_rejects_unknown_status():
 # ---------------------------------------------------------------------------
 
 
+# Verifies fetching an owned job by id returns expected record.
 def test_get_job_success():
     mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -286,6 +586,7 @@ def test_get_job_success():
     assert response.json()["id"] == SAMPLE_JOB["id"]
 
 
+# Verifies fetching non-existent or inaccessible job returns 404.
 def test_get_job_not_found():
     mock_sb, _, _ = make_mock_sb(data=[])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -293,6 +594,7 @@ def test_get_job_not_found():
     assert response.status_code == 404
 
 
+# Verifies job lookup applies user ownership constraints.
 def test_get_job_scoped_to_user():
     """A job belonging to another user must not be returned (RLS + eq filter)."""
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_JOB])
@@ -307,6 +609,7 @@ def test_get_job_scoped_to_user():
 # ---------------------------------------------------------------------------
 
 
+# Verifies updating an owned job persists and returns updated data.
 def test_update_job_success():
     updated = {**SAMPLE_JOB, "status": "interviewing"}
     mock_sb, _, _ = make_mock_sb(data=[updated])
@@ -320,6 +623,7 @@ def test_update_job_success():
     assert response.json()["status"] == "interviewing"
 
 
+# Verifies update returns 404 when target job is not found.
 def test_update_job_not_found():
     mock_sb, _, _ = make_mock_sb(data=[])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -331,6 +635,7 @@ def test_update_job_not_found():
     assert response.status_code == 404
 
 
+# Verifies empty update payload is rejected with 400.
 def test_update_job_empty_body_returns_400():
     mock_sb, _, _ = make_mock_sb()
     with patch("main.get_supabase", return_value=mock_sb):
@@ -342,6 +647,7 @@ def test_update_job_empty_body_returns_400():
     assert response.status_code == 400
 
 
+# Verifies partial updates only send explicitly provided fields.
 def test_update_job_partial_fields():
     """Only provided fields should be in the update payload."""
     updated = {**SAMPLE_JOB, "title": "Staff Engineer"}
@@ -850,6 +1156,7 @@ def test_update_job_no_history_when_status_not_in_payload():
 # ---------------------------------------------------------------------------
 
 
+# Verifies deleting an owned job returns HTTP 204.
 def test_delete_job_success():
     mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -860,6 +1167,7 @@ def test_delete_job_success():
     assert response.status_code == 204
 
 
+# Verifies deleting unknown job returns HTTP 404.
 def test_delete_job_not_found():
     mock_sb, _, _ = make_mock_sb(data=[])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -867,6 +1175,7 @@ def test_delete_job_not_found():
     assert response.status_code == 404
 
 
+# Verifies delete query includes user ownership filter.
 def test_delete_job_scoped_to_user():
     """Delete must filter by user_id so users cannot delete each other's jobs."""
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_JOB])
@@ -881,26 +1190,35 @@ def test_delete_job_scoped_to_user():
 # ---------------------------------------------------------------------------
 
 
+# Verifies JobCreate model applies default optional values.
 def test_job_create_defaults():
     job = JobCreate(title="Engineer", company="Acme")
     assert job.status == "applied"
     assert job.location is None
     assert job.applied_date is None
+    assert job.deadline is None
     assert job.description is None
     assert job.notes is None
+    assert job.recruiter_notes is None
 
 
+# Verifies JobCreate model accepts and stores all provided fields.
 def test_job_create_all_fields():
     job = JobCreate(
         title="Backend Engineer",
         company="TechCorp",
         location="Remote",
         status="interviewing",
+        applied_date=date(2026, 3, 1),
+        deadline=date(2026, 4, 15),
         description="Build APIs",
         notes="Referral from alumni",
+        recruiter_notes="Recruiter: Alex",
     )
     assert job.status == "interviewing"
     assert job.location == "Remote"
+    assert job.deadline == date(2026, 4, 15)
+    assert job.recruiter_notes == "Recruiter: Alex"
 
 
 def test_job_create_accepts_final_outcome_statuses():
@@ -913,6 +1231,7 @@ def test_job_statuses_constant_includes_new_final_outcomes():
     assert {"accepted", "declined", "withdrawn"}.issubset(JOB_STATUSES)
 
 
+# Verifies JobUpdate model allows all fields to remain optional.
 def test_job_update_all_optional():
     job = JobUpdate()
     assert job.title is None
@@ -961,11 +1280,13 @@ SAMPLE_PROFILE = {
 # ---------------------------------------------------------------------------
 
 
+# Verifies profile read endpoint requires authentication.
 def test_get_profile_requires_auth():
     response = client.get("/profile")
     assert response.status_code == 401
 
 
+# Verifies profile upsert endpoint requires authentication.
 def test_put_profile_requires_auth():
     response = client.put("/profile", json={"full_name": "Jane"})
     assert response.status_code == 401
@@ -976,6 +1297,7 @@ def test_put_profile_requires_auth():
 # ---------------------------------------------------------------------------
 
 
+# Verifies existing profile is returned with completion metadata.
 def test_get_profile_returns_existing_profile():
     mock_sb, _, _ = make_mock_sb(data=[SAMPLE_PROFILE])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -991,6 +1313,7 @@ def test_get_profile_returns_existing_profile():
     assert body["completion"]["required_count"] == 6
 
 
+# Verifies missing profile returns empty profile and zero completion.
 def test_get_profile_returns_empty_when_no_profile():
     mock_sb, _, _ = make_mock_sb(data=[])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -1004,6 +1327,7 @@ def test_get_profile_returns_empty_when_no_profile():
     assert body["completion"]["required_count"] == 6
 
 
+# Verifies profile query is scoped to authenticated user_id.
 def test_get_profile_scoped_to_user():
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -1011,6 +1335,7 @@ def test_get_profile_scoped_to_user():
     mock_query.eq.assert_any_call("user_id", MOCK_USER_ID)
 
 
+# Verifies profile query requests all columns from storage.
 def test_get_profile_selects_all_fields():
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -1023,6 +1348,7 @@ def test_get_profile_selects_all_fields():
 # ---------------------------------------------------------------------------
 
 
+# Verifies profile upsert succeeds and returns saved profile data.
 def test_upsert_profile_success():
     mock_sb, _, _ = make_mock_sb(data=[SAMPLE_PROFILE])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -1039,6 +1365,7 @@ def test_upsert_profile_success():
     assert body["completion"]["missing_fields"] == []
 
 
+# Verifies user_id is injected during profile upsert operations.
 def test_upsert_profile_injects_user_id():
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -1051,6 +1378,7 @@ def test_upsert_profile_injects_user_id():
     assert upserted["user_id"] == MOCK_USER_ID
 
 
+# Verifies profile upsert uses user_id conflict target.
 def test_upsert_profile_uses_on_conflict_user_id():
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -1063,6 +1391,7 @@ def test_upsert_profile_uses_on_conflict_user_id():
     assert kwargs.get("on_conflict") == "user_id"
 
 
+# Verifies upsert payload includes every provided profile field.
 def test_upsert_profile_sends_all_fields():
     """All provided ProfileUpsert fields are included in the upsert payload."""
     all_fields = {
@@ -1087,6 +1416,7 @@ def test_upsert_profile_sends_all_fields():
         assert field in upserted
 
 
+# Verifies profile upsert returns 500 when database write fails.
 def test_upsert_profile_db_failure_returns_500():
     mock_sb, _, mock_result = make_mock_sb(data=[])
     mock_result.data = []
@@ -1099,6 +1429,7 @@ def test_upsert_profile_db_failure_returns_500():
     assert response.status_code == 500
 
 
+# Verifies partial profile updates exclude unspecified fields.
 def test_upsert_profile_partial_fields():
     """Only provided fields are sent; unprovided fields are excluded from payload."""
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
@@ -1113,6 +1444,7 @@ def test_upsert_profile_partial_fields():
     assert "full_name" not in upserted
 
 
+# Verifies explicit null can clear a stored profile field.
 def test_upsert_profile_can_clear_field():
     """Sending null for a field explicitly sets it to None in the payload."""
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PROFILE])
@@ -1131,6 +1463,7 @@ def test_upsert_profile_can_clear_field():
 # ---------------------------------------------------------------------------
 
 
+# Verifies completion helper output for an empty profile object.
 def test_get_profile_completion_empty_profile():
     completion = get_profile_completion({})
     assert set(completion.keys()) == {
@@ -1151,6 +1484,7 @@ def test_get_profile_completion_empty_profile():
     assert completion["is_complete"] is False
 
 
+# Verifies completion helper output for fully populated profile.
 def test_get_profile_completion_fully_populated_profile():
     completion = get_profile_completion(SAMPLE_PROFILE)
     assert completion["required_fields"] == list(PROFILE_REQUIRED_FIELDS)
@@ -1162,6 +1496,7 @@ def test_get_profile_completion_fully_populated_profile():
     assert completion["is_complete"] is True
 
 
+# Verifies profile value normalization handles blank/non-string inputs.
 def test_normalize_profile_value_edge_cases():
     assert _normalize_profile_value("   ") == ""
     assert _normalize_profile_value("") == ""
@@ -1174,6 +1509,7 @@ def test_normalize_profile_value_edge_cases():
 # ---------------------------------------------------------------------------
 
 
+# Verifies ProfileUpsert schema initializes optional fields to None.
 def test_profile_upsert_all_optional():
     profile = ProfileUpsert()
     assert profile.full_name is None
@@ -1186,6 +1522,7 @@ def test_profile_upsert_all_optional():
     assert profile.summary is None
 
 
+# Verifies ProfileUpsert schema stores all provided field values.
 def test_profile_upsert_all_fields():
     profile = ProfileUpsert(
         full_name="Jane Smith",

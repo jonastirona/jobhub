@@ -41,6 +41,49 @@
   border-bottom: 1px solid var(--border);
 }
 
+.table-search-row {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.dashboard-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 50px;
+  padding: 8px 18px;
+  width: 100%;
+  max-width: 440px;
+  transition: border-color 0.2s;
+}
+
+.dashboard-search-box:focus-within {
+  border-color: var(--orange-400);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.08);
+}
+
+.dashboard-search-box input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.dashboard-search-box input::placeholder {
+  color: var(--text-muted);
+}
+
+.dashboard-search-icon {
+  color: var(--text-muted);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
 .table-title {
   font-weight: 700;
   font-size: 16px;
@@ -175,6 +218,20 @@
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.date-text--deadline {
+  color: var(--orange-400, #fb923c);
+}
+
+.table-recruiter-cell {
+  display: block;
+  max-width: 14rem;
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Action buttons */

@@ -9,8 +9,10 @@ create table if not exists jobs (
   location     text,
   status       text        not null default 'applied',
   applied_date date,
+  deadline     date,
   description  text,
   notes        text,
+  recruiter_notes text,
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
 );

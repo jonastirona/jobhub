@@ -6,6 +6,8 @@ import StatCard from '../components/common/StatCard';
 import StatusBadge from '../components/common/StatusBadge';
 import JobForm from '../components/JobForm/JobForm';
 import JobHistory from '../components/JobHistory/JobHistory';
+import JobOverviewModal from '../components/JobOverviewModal/JobOverviewModal';
+import { jobMatchesSearchQuery } from '../utils/jobSearch';
 import '../styles/Dashboard.css';
 
 const COMPANY_GRADIENTS = {
@@ -32,6 +34,13 @@ function formatDate(dateStr) {
   const d = isDateOnly ? new Date(`${dateStr}T00:00:00`) : new Date(dateStr);
   if (isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function truncateTableNote(text, maxLen = 56) {
+  if (!text?.trim()) return '—';
+  const t = text.trim();
+  if (t.length <= maxLen) return t;
+  return `${t.slice(0, maxLen - 1)}…`;
 }
 
 const STAT_BARS = {
@@ -68,7 +77,8 @@ const PAGE_NUMBERS = [1, 2, 3, 4, 5];
 
 export default function Dashboard() {
   const { session } = useAuth();
-  const { jobs, loading, error, refetch } = useJobs(session?.access_token);
+  const [searchTerm, setSearchTerm] = useState('');
+  const { jobs, loading, error, refetch } = useJobs(session?.access_token, searchTerm);
   const [formState, setFormState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', job }
   const [historyJob, setHistoryJob] = useState(null);
   const [deleteError, setDeleteError] = useState('');
@@ -77,12 +87,13 @@ export default function Dashboard() {
   const deleteOverlayRef = useRef(null);
   const deleteModalRef = useRef(null);
   const deleteCancelButtonRef = useRef(null);
-
-  const totalApplications = jobs.length;
-  const interviews = jobs.filter(
+  const [viewJob, setViewJob] = useState(null);
+  const filteredJobs = jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm));
+  const totalApplications = filteredJobs.length;
+  const interviews = filteredJobs.filter(
     (j) => j.status === 'interviewing' || j.status === 'interview'
   ).length;
-  const offers = jobs.filter(
+  const offers = filteredJobs.filter(
     (j) => j.status === 'offered' || j.status === 'offer' || j.status === 'accepted'
   ).length;
 
@@ -117,15 +128,35 @@ export default function Dashboard() {
   ];
 
   function openCreate() {
+    setViewJob(null);
+    setHistoryJob(null);
     setFormState({ mode: 'create' });
   }
 
   function openEdit(job) {
+    setViewJob(null);
+    setHistoryJob(null);
     setFormState({ mode: 'edit', job });
+  }
+
+  function openView(job) {
+    setFormState(null);
+    setHistoryJob(null);
+    setViewJob(job);
+  }
+
+  function openHistory(job) {
+    setFormState(null);
+    setViewJob(null);
+    setHistoryJob(job);
   }
 
   function closeForm() {
     setFormState(null);
+  }
+
+  function closeView() {
+    setViewJob(null);
   }
 
   function handleSaved() {
@@ -243,6 +274,20 @@ export default function Dashboard() {
               + Add Job
             </button>
           </div>
+          <div className="table-search-row">
+            <div className="dashboard-search-box">
+              <span className="dashboard-search-icon" aria-hidden="true">
+                🔍
+              </span>
+              <input
+                type="text"
+                placeholder="Search title, company, status, description, notes, recruiter, dates (month, year, day)..."
+                aria-label="Search job applications"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+            </div>
+          </div>
 
           {loading && <p className="table-state">Loading jobs...</p>}
           {error && <p className="table-state table-state--error">{error}</p>}
@@ -258,19 +303,23 @@ export default function Dashboard() {
                   <th>Job Title</th>
                   <th>Company</th>
                   <th>Applied</th>
+                  <th>Deadline</th>
+                  <th>Recruiter</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {jobs.length === 0 ? (
+                {filteredJobs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="table-empty">
-                      No applications yet. Add your first job!
+                    <td colSpan={8} className="table-empty">
+                      {jobs.length === 0
+                        ? 'No applications yet. Add your first job!'
+                        : 'No matches found. Try another keyword.'}
                     </td>
                   </tr>
                 ) : (
-                  jobs.map((job, index) => (
+                  filteredJobs.map((job, index) => (
                     <tr key={job.id}>
                       <td className="row-number">{index + 1}</td>
                       <td>
@@ -293,6 +342,23 @@ export default function Dashboard() {
                         <span className="date-text">{formatDate(job.applied_date)}</span>
                       </td>
                       <td>
+                        <span className="date-text date-text--deadline">
+                          {formatDate(job.deadline)}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className="table-recruiter-cell"
+                          title={
+                            job.recruiter_notes && String(job.recruiter_notes).trim()
+                              ? String(job.recruiter_notes).trim()
+                              : undefined
+                          }
+                        >
+                          {truncateTableNote(job.recruiter_notes)}
+                        </span>
+                      </td>
+                      <td>
                         <StatusBadge status={job.status} />
                       </td>
                       <td>
@@ -300,11 +366,19 @@ export default function Dashboard() {
                           <button
                             type="button"
                             className="action-btn"
-                            aria-label="View stage history"
-                            onClick={() => setHistoryJob(job)}
+                            aria-label="View application"
+                            onClick={() => openView(job)}
                             disabled={deletingJobId === job.id}
                           >
                             👁
+                          </button>
+                          <button
+                            type="button"
+                            className="action-btn"
+                            aria-label="View stage history"
+                            onClick={() => openHistory(job)}
+                          >
+                            📜
                           </button>
                           <button
                             type="button"
@@ -366,6 +440,8 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {viewJob && <JobOverviewModal job={viewJob} onClose={closeView} />}
 
       {formState && (
         <JobForm
