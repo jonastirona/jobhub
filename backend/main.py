@@ -413,6 +413,10 @@ def update_document(
         payload["content"] = (payload["content"] or "").strip()
         if not payload["content"]:
             raise HTTPException(status_code=422, detail="content must not be blank")
+    if "doc_type" in payload:
+        payload["doc_type"] = (payload["doc_type"] or "").strip()
+        if not payload["doc_type"]:
+            raise HTTPException(status_code=422, detail="doc_type must not be blank")
     if "job_id" in payload and payload["job_id"] is not None:
         _assert_linked_job_exists_for_user(sb, user_id, payload["job_id"])
     response = (
