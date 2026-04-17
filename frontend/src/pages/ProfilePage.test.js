@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { ProfileAvatarProvider } from '../context/ProfileAvatarContext';
@@ -921,7 +921,8 @@ describe('experience section', () => {
 
     await userEvent.type(screen.getByLabelText(/^title$/i), 'Software Engineer');
     await userEvent.type(screen.getByLabelText(/^company$/i), 'Acme Corp');
-    await userEvent.type(screen.getByLabelText(/^start year$/i), '2021');
+    const expSection = screen.getByRole('region', { name: /^experience$/i });
+    await userEvent.type(within(expSection).getByLabelText(/^start year$/i), '2021');
 
     fireEvent.click(screen.getByRole('button', { name: /add experience/i }));
 
@@ -1053,10 +1054,11 @@ describe('education section', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/institution/i)).toBeInTheDocument());
 
+    const eduSection = screen.getByRole('region', { name: /^education$/i });
     await userEvent.type(screen.getByLabelText(/institution/i), 'NJIT');
     await userEvent.type(screen.getByLabelText(/^degree$/i), 'BS');
     await userEvent.type(screen.getByLabelText(/field of study/i), 'CS');
-    await userEvent.type(screen.getByLabelText(/start year/i), '2020');
+    await userEvent.type(within(eduSection).getByLabelText(/start year/i), '2020');
 
     expect(screen.getByRole('button', { name: /add education/i })).not.toBeDisabled();
   });
@@ -1086,10 +1088,11 @@ describe('education section', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/institution/i)).toBeInTheDocument());
 
+    const eduSection = screen.getByRole('region', { name: /^education$/i });
     await userEvent.type(screen.getByLabelText(/institution/i), 'NJIT');
     await userEvent.type(screen.getByLabelText(/^degree$/i), 'BS');
     await userEvent.type(screen.getByLabelText(/field of study/i), 'CS');
-    await userEvent.type(screen.getByLabelText(/start year/i), '2020');
+    await userEvent.type(within(eduSection).getByLabelText(/start year/i), '2020');
     fireEvent.click(screen.getByRole('button', { name: /add education/i }));
 
     await waitFor(() => {
@@ -1195,10 +1198,11 @@ describe('education section', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/institution/i)).toBeInTheDocument());
 
+    const eduSection = screen.getByRole('region', { name: /^education$/i });
     await userEvent.type(screen.getByLabelText(/institution/i), 'NJIT');
     await userEvent.type(screen.getByLabelText(/^degree$/i), 'BS');
     await userEvent.type(screen.getByLabelText(/field of study/i), 'CS');
-    await userEvent.type(screen.getByLabelText(/start year/i), '1800');
+    await userEvent.type(within(eduSection).getByLabelText(/start year/i), '1800');
 
     expect(screen.getByRole('button', { name: /add education/i })).toBeDisabled();
   });
