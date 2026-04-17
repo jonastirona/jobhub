@@ -491,7 +491,8 @@ def test_create_job_serializes_deadline_in_insert_payload():
             },
             headers={"authorization": AUTH_HEADER},
         )
-    inserted = mock_query.insert.call_args[0][0]
+    # First insert call is for `jobs`; later insert calls may target history.
+    inserted = mock_query.insert.call_args_list[0][0][0]
     assert inserted["deadline"] == "2026-08-20"
     assert inserted["recruiter_notes"] == "  HR: Pat  "
 
