@@ -1,29 +1,26 @@
 {
-    "extends": [
-      "eslint:recommended",
-      "plugin:@typescript-eslint/recommended"
-    ],
-    "env": {
-      "browser": true,
-      "jest": true,
-      "node": true
-    },
-    "rules": {
-      "@typescript-eslint/no-explicit-any": "error",
-      "no-console": "error",
-      "@typescript-eslint/no-floating-promises": "off",
-      "quotes": ["error", "single"],
-      "react-hooks/exhaustive-deps": "error"
-    },
-    "plugins": ["@typescript-eslint", "react-hooks"],
-    "parser": "@typescript-eslint/parser",
-    "parserOptions": {
-      "project": "./tsconfig.json",
-      "ecmaFeatures": {
-        "jsx": true
-      }
-    },
-    "overrides": [
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
+  "env": {
+    "browser": true,
+    "jest": true,
+    "node": true
+  },
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "error",
+    "no-console": "error",
+    "@typescript-eslint/no-floating-promises": "off",
+    "quotes": ["error", "single"],
+    "react-hooks/exhaustive-deps": "error"
+  },
+  "plugins": ["@typescript-eslint", "react-hooks"],
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "project": "./tsconfig.json",
+    "ecmaFeatures": {
+      "jsx": true
+    }
+  },
+  "overrides": [
     {
       "files": ["**/*.test.js", "**/*.test.ts"],
       "rules": {
@@ -31,4 +28,4 @@
       }
     }
   ]
-  }
+}
