@@ -75,6 +75,10 @@ export function useDocuments(accessToken, loadOnMount = true) {
     fetchDocuments(controller.signal);
   }, [fetchDocuments]);
 
+  const clearSaveError = useCallback(() => {
+    setSaveError(null);
+  }, []);
+
   const createDocument = useCallback(
     async (values) => {
       const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
@@ -133,6 +137,7 @@ export function useDocuments(accessToken, loadOnMount = true) {
     error,
     saving,
     saveError,
+    clearSaveError,
     refetch,
     createDocument,
   };

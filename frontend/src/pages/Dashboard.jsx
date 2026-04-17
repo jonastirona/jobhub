@@ -100,6 +100,7 @@ export default function Dashboard() {
   const { jobs, loading, error, refetch } = useJobs(session?.access_token, searchTerm);
   const {
     createDocument,
+    clearSaveError,
     saving: savingDraft,
     saveError: draftSaveError,
   } = useDocuments(session?.access_token, false);
@@ -189,6 +190,7 @@ export default function Dashboard() {
   }
 
   function openDraft(job) {
+    clearSaveError();
     setDraftJob(job);
     setDraftName(`${job.company}_${job.title}_Draft`.replace(/\s+/g, '_'));
     setDraftType('Cover Letter Draft');
@@ -198,6 +200,7 @@ export default function Dashboard() {
 
   function closeDraft() {
     if (savingDraft) return;
+    clearSaveError();
     setDraftJob(null);
     setDraftValidationError('');
   }
