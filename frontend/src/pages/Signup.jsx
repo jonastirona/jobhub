@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import jobhubLogo from '../assets/jobhub_logo.svg';
 import '../AuthPages.css';
 
 export default function Signup() {
@@ -50,6 +51,7 @@ export default function Signup() {
   return (
     <div className="AuthScreen">
       <div className="AuthCard">
+        <img src={jobhubLogo} alt="JobHub" className="AuthLogo" />
         <h1>Sign up</h1>
         <p className="AuthSubtitle">Create a JobHub account</p>
 

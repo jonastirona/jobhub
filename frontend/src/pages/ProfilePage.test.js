@@ -7,6 +7,18 @@ import ProfilePage from './ProfilePage';
 const ACCESS_TOKEN = 'test-token';
 const BACKEND = 'http://localhost:8000';
 
+const SAMPLE_EXPERIENCE_ENTRY = {
+  id: 'exp-uuid-0001',
+  user_id: 'user-1',
+  title: 'Software Engineer',
+  company: 'Acme Corp',
+  location: 'New York, NY',
+  start_year: 2021,
+  end_year: null,
+  description: null,
+  position: 0,
+};
+
 const mockAuthValue = {
   session: { access_token: ACCESS_TOKEN },
   user: { id: 'user-1', email: 'jane@example.com' },
@@ -20,6 +32,10 @@ const mockAuthValue = {
 jest.mock('../context/AuthContext', () => ({
   AuthProvider: ({ children }) => children,
   useAuth: () => mockAuthValue,
+}));
+
+jest.mock('../hooks/useReminders', () => ({
+  useReminders: () => ({ reminders: [], loading: false, error: null, refetch: jest.fn() }),
 }));
 
 const SAMPLE_PROFILE = {
@@ -58,6 +74,18 @@ const COMPLETE_COMPLETION = {
   required_count: REQUIRED_FIELD_KEYS.length,
 };
 
+function resolveExperienceUrl(url, opts = {}, { getExperience = [], saveExperience = null } = {}) {
+  if (!url.includes('/experience')) return null;
+  if (opts.method === 'POST') {
+    const entry = saveExperience ?? { ...SAMPLE_EXPERIENCE_ENTRY, id: 'exp-new' };
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(entry) });
+  }
+  if (opts.method === 'PUT' || opts.method === 'DELETE') {
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(saveExperience ?? {}) });
+  }
+  return Promise.resolve({ ok: true, json: () => Promise.resolve(getExperience) });
+}
+
 const SAMPLE_PREFS = {
   id: 'prefs-1',
   user_id: 'user-1',
@@ -71,17 +99,21 @@ const SAMPLE_PREFS = {
 function mockFetch({
   getProfile = {},
   saveProfile = SAMPLE_PROFILE,
+  getExperience = [],
+  saveExperience = null,
   getPrefs = {},
   savePrefs = SAMPLE_PREFS,
 } = {}) {
   global.fetch = jest.fn((url, opts = {}) => {
+    const exp = resolveExperienceUrl(url, opts, { getExperience, saveExperience });
+    if (exp) return exp;
     if (url.includes('/career-preferences')) {
       if (opts.method === 'PUT') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(savePrefs) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve(getPrefs) });
     }
-    if (opts.method === 'PUT') {
+    if (opts.method === 'PUT' && url.endsWith('/profile')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(saveProfile) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve(getProfile) });
@@ -89,7 +121,9 @@ function mockFetch({
 }
 
 function mockFetchGetError(status = 500, message = 'Internal Server Error') {
-  global.fetch = jest.fn((url) => {
+  global.fetch = jest.fn((url, opts = {}) => {
+    const exp = resolveExperienceUrl(url, opts);
+    if (exp) return exp;
     if (url.includes('/career-preferences')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     }
@@ -99,7 +133,9 @@ function mockFetchGetError(status = 500, message = 'Internal Server Error') {
 
 function mockFetchSaveError(status = 500, text = 'Server Error') {
   global.fetch = jest.fn((url, opts = {}) => {
-    if (opts.method === 'PUT') {
+    const exp = resolveExperienceUrl(url, opts);
+    if (exp) return exp;
+    if (opts.method === 'PUT' && url.endsWith('/profile')) {
       return Promise.resolve({ ok: false, status, text: () => Promise.resolve(text) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
@@ -107,7 +143,9 @@ function mockFetchSaveError(status = 500, text = 'Server Error') {
 }
 
 function mockFetchNetworkError(message = 'Network error') {
-  global.fetch = jest.fn((url) => {
+  global.fetch = jest.fn((url, opts = {}) => {
+    const exp = resolveExperienceUrl(url, opts);
+    if (exp) return exp;
     if (url.includes('/career-preferences')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     }
@@ -121,7 +159,9 @@ function makePendingSave() {
     resolve = res;
   });
   global.fetch = jest.fn((url, opts = {}) => {
-    if (opts.method === 'PUT') return promise;
+    const exp = resolveExperienceUrl(url, opts);
+    if (exp) return exp;
+    if (opts.method === 'PUT' && url.endsWith('/profile')) return promise;
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
   });
   return () => resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
@@ -602,7 +642,10 @@ describe('save — error', () => {
 
   test('shows network error message when fetch rejects on save', async () => {
     global.fetch = jest.fn((url, opts = {}) => {
-      if (opts.method === 'PUT') return Promise.reject(new Error('Connection refused'));
+      const exp = resolveExperienceUrl(url, opts);
+      if (exp) return exp;
+      if (opts.method === 'PUT' && url.endsWith('/profile'))
+        return Promise.reject(new Error('Connection refused'));
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
     renderPage();
@@ -628,7 +671,9 @@ describe('save — error', () => {
     // First save succeeds, second fails
     let callCount = 0;
     global.fetch = jest.fn((url, opts = {}) => {
-      if (opts.method === 'PUT') {
+      const exp = resolveExperienceUrl(url, opts);
+      if (exp) return exp;
+      if (opts.method === 'PUT' && url.endsWith('/profile')) {
         callCount++;
         if (callCount === 1) {
           return Promise.resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
@@ -819,6 +864,133 @@ describe('fetch payload', () => {
     const body = JSON.parse(opts.body);
     expect(body.full_name).toBeNull();
     expect(body.summary).toBeNull();
+  });
+});
+
+// ─── Experience section ───────────────────────────────────────────────────────
+
+describe('experience section', () => {
+  test('renders "Experience" section heading', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /^experience$/i })).toBeInTheDocument();
+    });
+  });
+
+  test('shows "No experience added yet." when list is empty', async () => {
+    mockFetch({ getExperience: [] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/no experience added yet/i)).toBeInTheDocument();
+    });
+  });
+
+  test('renders loaded experience entries', async () => {
+    mockFetch({ getExperience: [SAMPLE_EXPERIENCE_ENTRY] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('Software Engineer')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Acme Corp')).toBeInTheDocument();
+  });
+
+  test('experience section is a labeled region', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('region', { name: /^experience$/i })).toBeInTheDocument();
+    });
+  });
+
+  test('Add Experience form is always present', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /add experience/i })).toBeInTheDocument();
+    });
+  });
+
+  test('Add Experience button is disabled when form is empty', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /add experience/i })).toBeDisabled();
+    });
+  });
+
+  test('submitting the add form POSTs to /experience', async () => {
+    const newEntry = { ...SAMPLE_EXPERIENCE_ENTRY, id: 'exp-new' };
+    mockFetch({ saveExperience: newEntry });
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/^title$/i)).toBeInTheDocument());
+
+    await userEvent.type(screen.getByLabelText(/^title$/i), 'Software Engineer');
+    await userEvent.type(screen.getByLabelText(/^company$/i), 'Acme Corp');
+    await userEvent.type(screen.getByLabelText(/^start year$/i), '2021');
+
+    fireEvent.click(screen.getByRole('button', { name: /add experience/i }));
+
+    await waitFor(() => {
+      const postCall = global.fetch.mock.calls.find(
+        ([url, opts = {}]) => opts.method === 'POST' && url.includes('/experience')
+      );
+      expect(postCall).toBeDefined();
+    });
+    const [url, opts] = global.fetch.mock.calls.find(
+      ([url, opts = {}]) => opts.method === 'POST' && url.includes('/experience')
+    );
+    expect(url).toBe(`${BACKEND}/experience`);
+    const body = JSON.parse(opts.body);
+    expect(body.title).toBe('Software Engineer');
+    expect(body.company).toBe('Acme Corp');
+    expect(body.start_year).toBe(2021);
+  });
+
+  test('clicking Edit populates the form fields', async () => {
+    mockFetch({ getExperience: [SAMPLE_EXPERIENCE_ENTRY] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Software Engineer')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /edit software engineer/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^title$/i)).toHaveValue('Software Engineer');
+    });
+    expect(screen.getByLabelText(/^company$/i)).toHaveValue('Acme Corp');
+    expect(screen.getByRole('button', { name: /update experience/i })).toBeInTheDocument();
+  });
+
+  test('clicking Delete sends DELETE to /experience/:id', async () => {
+    mockFetch({ getExperience: [SAMPLE_EXPERIENCE_ENTRY] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Software Engineer')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /delete software engineer/i }));
+
+    await waitFor(() => {
+      const deleteCall = global.fetch.mock.calls.find(
+        ([url, opts = {}]) => opts.method === 'DELETE' && url.includes('/experience/')
+      );
+      expect(deleteCall).toBeDefined();
+    });
+    const [url] = global.fetch.mock.calls.find(
+      ([url, opts = {}]) => opts.method === 'DELETE' && url.includes('/experience/')
+    );
+    expect(url).toBe(`${BACKEND}/experience/${SAMPLE_EXPERIENCE_ENTRY.id}`);
+  });
+
+  test('shows experience load error with role=alert', async () => {
+    global.fetch = jest.fn((url) => {
+      if (url.includes('/experience')) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          text: () => Promise.resolve('Failed to load experience'),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/failed to load experience/i)).toBeInTheDocument();
+    });
   });
 });
 

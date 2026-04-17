@@ -1,4 +1,4 @@
--- 001_create_jobs
+-- 008_create_jobs
 -- Run once in the Supabase SQL editor.
 
 create table if not exists jobs (
