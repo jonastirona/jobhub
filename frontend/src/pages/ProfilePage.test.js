@@ -1857,4 +1857,3 @@ describe('career preferences section', () => {
     expect(screen.queryByText(/career preferences saved successfully/i)).not.toBeInTheDocument();
   });
 });
-
