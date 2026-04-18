@@ -68,6 +68,17 @@ SAMPLE_DOCUMENT = {
     "updated_at": "2026-01-01T00:00:00+00:00",
 }
 
+SAMPLE_DOCUMENT = {
+    "id": "doc-uuid-3322",
+    "user_id": MOCK_USER_ID,
+    "job_id": SAMPLE_JOB["id"],
+    "name": "Datadog_Backend_Engineer_Draft",
+    "doc_type": "Cover Letter Draft",
+    "content": "Draft content",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-01T00:00:00+00:00",
+}
+
 
 def make_mock_sb(data=None):
     """
