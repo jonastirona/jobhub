@@ -81,6 +81,12 @@ const DEADLINE_STATE_OPTIONS = [
   { value: 'no_deadline', label: 'No deadline set' },
 ];
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
+const SORT_OPTIONS = [
+  { value: 'last_activity', label: 'Last Activity' },
+  { value: 'deadline', label: 'Deadline' },
+  { value: 'created_at', label: 'Created Date' },
+  { value: 'company', label: 'Company' },
+];
 
 function toggleFilterValue(currentValues, value) {
   return currentValues.includes(value)
@@ -136,10 +142,12 @@ export default function Dashboard() {
   const [isDeadlineOpen, setIsDeadlineOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [selectedSortBy, setSelectedSortBy] = useState('created_at');
   const { jobs, meta, loading, error, refetch } = useJobs(session?.access_token, searchTerm, {
     statuses: selectedStatuses,
     locations: selectedLocations,
     deadlineStates: selectedDeadlineStates,
+    sortBy: selectedSortBy,
     page: currentPage,
     pageSize,
   });
@@ -174,7 +182,14 @@ export default function Dashboard() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedStatuses, selectedLocations, selectedDeadlineStates, pageSize]);
+  }, [
+    searchTerm,
+    selectedStatuses,
+    selectedLocations,
+    selectedDeadlineStates,
+    pageSize,
+    selectedSortBy,
+  ]);
 
   useEffect(() => {
     function handleOutsideClick(event) {
@@ -474,112 +489,134 @@ export default function Dashboard() {
                 onChange={(event) => setSearchTerm(event.target.value)}
               />
             </div>
-            <div className="dashboard-filter-controls" ref={filterControlsRef}>
-              <div className="dashboard-filter-dropdown">
-                <button
-                  type="button"
-                  className="dashboard-filter-trigger"
-                  aria-haspopup="true"
-                  aria-expanded={isStageOpen}
-                  onClick={() => {
-                    setIsStageOpen((prev) => !prev);
-                    setIsLocationOpen(false);
-                    setIsDeadlineOpen(false);
-                  }}
-                >
-                  {getDropdownLabel('Stage', selectedStatuses.length)}
-                </button>
-                {isStageOpen && (
-                  <div className="dashboard-filter-panel" role="group" aria-label="Filter by stage">
-                    {meta.availableStatuses.map((status) => (
-                      <label key={status} className="dashboard-filter-option">
-                        <input
-                          type="checkbox"
-                          checked={selectedStatuses.includes(status)}
-                          onChange={() =>
-                            setSelectedStatuses((prev) => toggleFilterValue(prev, status))
-                          }
-                        />
-                        <span>{status}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
+            <div className="dashboard-table-controls">
+              <div className="dashboard-filter-controls" ref={filterControlsRef}>
+                <div className="dashboard-filter-dropdown">
+                  <button
+                    type="button"
+                    className="dashboard-filter-trigger"
+                    aria-haspopup="true"
+                    aria-expanded={isStageOpen}
+                    onClick={() => {
+                      setIsStageOpen((prev) => !prev);
+                      setIsLocationOpen(false);
+                      setIsDeadlineOpen(false);
+                    }}
+                  >
+                    {getDropdownLabel('Stage', selectedStatuses.length)}
+                  </button>
+                  {isStageOpen && (
+                    <div
+                      className="dashboard-filter-panel"
+                      role="group"
+                      aria-label="Filter by stage"
+                    >
+                      {meta.availableStatuses.map((status) => (
+                        <label key={status} className="dashboard-filter-option">
+                          <input
+                            type="checkbox"
+                            checked={selectedStatuses.includes(status)}
+                            onChange={() =>
+                              setSelectedStatuses((prev) => toggleFilterValue(prev, status))
+                            }
+                          />
+                          <span>{status}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="dashboard-filter-dropdown">
+                  <button
+                    type="button"
+                    className="dashboard-filter-trigger"
+                    aria-haspopup="true"
+                    aria-expanded={isLocationOpen}
+                    onClick={() => {
+                      setIsLocationOpen((prev) => !prev);
+                      setIsStageOpen(false);
+                      setIsDeadlineOpen(false);
+                    }}
+                  >
+                    {getDropdownLabel('Location', selectedLocations.length)}
+                  </button>
+                  {isLocationOpen && (
+                    <div
+                      className="dashboard-filter-panel"
+                      role="group"
+                      aria-label="Filter by location"
+                    >
+                      {meta.availableLocations.map((location) => (
+                        <label key={location} className="dashboard-filter-option">
+                          <input
+                            type="checkbox"
+                            checked={selectedLocations.includes(location)}
+                            onChange={() =>
+                              setSelectedLocations((prev) => toggleFilterValue(prev, location))
+                            }
+                          />
+                          <span>{location}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="dashboard-filter-dropdown">
+                  <button
+                    type="button"
+                    className="dashboard-filter-trigger"
+                    aria-haspopup="true"
+                    aria-expanded={isDeadlineOpen}
+                    onClick={() => {
+                      setIsDeadlineOpen((prev) => !prev);
+                      setIsStageOpen(false);
+                      setIsLocationOpen(false);
+                    }}
+                  >
+                    {getDropdownLabel('Deadline', selectedDeadlineStates.length)}
+                  </button>
+                  {isDeadlineOpen && (
+                    <div
+                      className="dashboard-filter-panel"
+                      role="group"
+                      aria-label="Filter by deadline state"
+                    >
+                      {DEADLINE_STATE_OPTIONS.map((state) => (
+                        <label key={state.value} className="dashboard-filter-option">
+                          <input
+                            type="checkbox"
+                            checked={selectedDeadlineStates.includes(state.value)}
+                            onChange={() =>
+                              setSelectedDeadlineStates((prev) =>
+                                toggleFilterValue(prev, state.value)
+                              )
+                            }
+                          />
+                          <span>{state.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="dashboard-filter-dropdown">
-                <button
-                  type="button"
-                  className="dashboard-filter-trigger"
-                  aria-haspopup="true"
-                  aria-expanded={isLocationOpen}
-                  onClick={() => {
-                    setIsLocationOpen((prev) => !prev);
-                    setIsStageOpen(false);
-                    setIsDeadlineOpen(false);
-                  }}
+              <label className="dashboard-sort-control" htmlFor="jobs-sort-by">
+                <span className="dashboard-sort-label">Sort by</span>
+                <select
+                  id="jobs-sort-by"
+                  aria-label="Sort jobs by"
+                  value={selectedSortBy}
+                  onChange={(event) => setSelectedSortBy(event.target.value)}
                 >
-                  {getDropdownLabel('Location', selectedLocations.length)}
-                </button>
-                {isLocationOpen && (
-                  <div
-                    className="dashboard-filter-panel"
-                    role="group"
-                    aria-label="Filter by location"
-                  >
-                    {meta.availableLocations.map((location) => (
-                      <label key={location} className="dashboard-filter-option">
-                        <input
-                          type="checkbox"
-                          checked={selectedLocations.includes(location)}
-                          onChange={() =>
-                            setSelectedLocations((prev) => toggleFilterValue(prev, location))
-                          }
-                        />
-                        <span>{location}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="dashboard-filter-dropdown">
-                <button
-                  type="button"
-                  className="dashboard-filter-trigger"
-                  aria-haspopup="true"
-                  aria-expanded={isDeadlineOpen}
-                  onClick={() => {
-                    setIsDeadlineOpen((prev) => !prev);
-                    setIsStageOpen(false);
-                    setIsLocationOpen(false);
-                  }}
-                >
-                  {getDropdownLabel('Deadline', selectedDeadlineStates.length)}
-                </button>
-                {isDeadlineOpen && (
-                  <div
-                    className="dashboard-filter-panel"
-                    role="group"
-                    aria-label="Filter by deadline state"
-                  >
-                    {DEADLINE_STATE_OPTIONS.map((state) => (
-                      <label key={state.value} className="dashboard-filter-option">
-                        <input
-                          type="checkbox"
-                          checked={selectedDeadlineStates.includes(state.value)}
-                          onChange={() =>
-                            setSelectedDeadlineStates((prev) =>
-                              toggleFilterValue(prev, state.value)
-                            )
-                          }
-                        />
-                        <span>{state.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
+                  {SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           </div>
 

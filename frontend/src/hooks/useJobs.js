@@ -15,11 +15,23 @@ function mergeUniqueValues(previousValues = [], nextValues = []) {
   return Array.from(new Set([...(previousValues || []), ...(nextValues || [])]));
 }
 
+function normalizeStatusValue(value) {
+  if (typeof value !== 'string') return null;
+  const cleaned = value.trim();
+  return cleaned || null;
+}
+
 function normalizeLocationValue(value) {
   if (typeof value !== 'string') return null;
   const cleaned = value.trim();
   if (!cleaned) return null;
-  return cleaned;
+  const hasLower = /[a-z]/.test(cleaned);
+  const hasUpper = /[A-Z]/.test(cleaned);
+  if (hasLower && hasUpper) return cleaned;
+  return cleaned
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
 }
 
 function mergeUniqueLocations(previousValues = [], nextValues = []) {
@@ -39,6 +51,7 @@ export function useJobs(accessToken, searchTerm = '', options = {}) {
   const statuses = options.statuses ?? EMPTY_ARRAY;
   const locations = options.locations ?? EMPTY_ARRAY;
   const deadlineStates = options.deadlineStates ?? EMPTY_ARRAY;
+  const sortBy = options.sortBy ?? 'created_at';
   const page = options.page ?? 1;
   const pageSize = options.pageSize ?? 10;
   const [jobs, setJobs] = useState([]);
@@ -48,6 +61,7 @@ export function useJobs(accessToken, searchTerm = '', options = {}) {
   const pendingRef = useRef(null);
   const authContextRef = useRef(null);
   const hasLoadedForAuthContextRef = useRef(false);
+  const unfilteredStatusesRef = useRef([]);
 
   const fetchJobs = useCallback(async () => {
     const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
@@ -57,6 +71,7 @@ export function useJobs(accessToken, searchTerm = '', options = {}) {
       pendingRef.current = null;
       authContextRef.current = null;
       hasLoadedForAuthContextRef.current = false;
+      unfilteredStatusesRef.current = [];
       setJobs([]);
       setError(null);
       setLoading(false);
@@ -85,6 +100,7 @@ export function useJobs(accessToken, searchTerm = '', options = {}) {
       if (query) params.set('q', query);
       params.set('page', String(page));
       params.set('page_size', String(pageSize));
+      params.set('sort_by', sortBy);
       statuses.forEach((status) => params.append('statuses', status));
       locations.forEach((location) => params.append('locations', location));
       deadlineStates.forEach((deadlineState) => params.append('deadline_states', deadlineState));
@@ -102,18 +118,34 @@ export function useJobs(accessToken, searchTerm = '', options = {}) {
       if (signal.aborted) return;
       const items = Array.isArray(data) ? data : data.items || [];
       setJobs(items);
+      const hasActiveFilters =
+        statuses.length > 0 || locations.length > 0 || deadlineStates.length > 0 || Boolean(query);
       setMeta((prev) => ({
         total: Array.isArray(data) ? items.length : data.total ?? items.length,
         page: Array.isArray(data) ? 1 : data.page ?? page,
         pageSize: Array.isArray(data) ? items.length || pageSize : data.page_size ?? pageSize,
         totalPages: Array.isArray(data) ? 1 : data.total_pages ?? 1,
-        // Keep discovered values visible so selecting one filter doesn't hide others.
         availableStatuses: Array.isArray(data)
           ? prev.availableStatuses
-          : mergeUniqueValues(prev.availableStatuses, data.available_statuses || []),
+          : (() => {
+              const serverStatuses = (data.available_statuses || [])
+                .map(normalizeStatusValue)
+                .filter(Boolean);
+              if (!hasActiveFilters) {
+                unfilteredStatusesRef.current = serverStatuses;
+                return serverStatuses;
+              }
+              return mergeUniqueValues(
+                mergeUniqueValues(unfilteredStatusesRef.current, serverStatuses),
+                statuses
+              );
+            })(),
         availableLocations: Array.isArray(data)
           ? prev.availableLocations
-          : mergeUniqueLocations(prev.availableLocations, data.available_locations || []),
+          : (() => {
+              const serverLocations = data.available_locations || [];
+              return mergeUniqueLocations([], serverLocations);
+            })(),
         statusCounts: Array.isArray(data)
           ? DEFAULT_META.statusCounts
           : data.status_counts || DEFAULT_META.statusCounts,
@@ -127,7 +159,7 @@ export function useJobs(accessToken, searchTerm = '', options = {}) {
         setLoading(false);
       }
     }
-  }, [accessToken, deadlineStates, locations, page, pageSize, searchTerm, statuses]);
+  }, [accessToken, deadlineStates, locations, page, pageSize, searchTerm, sortBy, statuses]);
 
   useEffect(() => {
     fetchJobs();

@@ -86,6 +86,36 @@
   gap: 12px;
 }
 
+.dashboard-table-controls {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.dashboard-sort-control {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dashboard-sort-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.dashboard-sort-control select {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 10px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-white);
+  min-width: 170px;
+}
+
 .dashboard-filter-dropdown {
   position: relative;
   min-width: 180px;
@@ -445,6 +475,15 @@
 
   .dashboard-filter-dropdown {
     min-width: 160px;
+  }
+
+  .dashboard-table-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dashboard-sort-control {
+    margin-left: 0;
   }
 }
 

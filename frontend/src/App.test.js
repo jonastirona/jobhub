@@ -461,6 +461,62 @@ test('confirming delete calls endpoint and refetches jobs', async () => {
   });
 });
 
+test('location filter options only show locations still present after delete', async () => {
+  let getJobsCallCount = 0;
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      getJobsCallCount += 1;
+      if (getJobsCallCount <= 2) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              items: [
+                { id: 'job-1', title: 'Boston Role', company: 'Acme', status: 'applied' },
+                { id: 'job-2', title: 'Remote Role', company: 'Beta', status: 'applied' },
+              ],
+              total: 2,
+              page: 1,
+              page_size: 10,
+              total_pages: 1,
+              available_statuses: ['applied'],
+              available_locations: ['Boston, MA', 'Remote'],
+              status_counts: { interviewing: 0, offered: 0 },
+            }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            items: [{ id: 'job-2', title: 'Remote Role', company: 'Beta', status: 'applied' }],
+            total: 1,
+            page: 1,
+            page_size: 10,
+            total_pages: 1,
+            available_statuses: ['applied'],
+            available_locations: ['Remote'],
+            status_counts: { interviewing: 0, offered: 0 },
+          }),
+      });
+    }
+    if (options.method === 'DELETE') {
+      return Promise.resolve({ ok: true, status: 204 });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Boston Role'));
+  fireEvent.click(screen.getByRole('button', { name: /delete application boston role/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+  await waitFor(() => expect(screen.queryByText('Boston Role')).not.toBeInTheDocument());
+
+  fireEvent.click(screen.getByRole('button', { name: 'Location' }));
+  expect(await screen.findByRole('checkbox', { name: 'Remote' })).toBeInTheDocument();
+  expect(screen.queryByRole('checkbox', { name: 'Boston, MA' })).not.toBeInTheDocument();
+});
+
 test('shows delete error when delete request fails', async () => {
   global.fetch = jest.fn((url, options = {}) => {
     if (!options.method) {
@@ -1200,6 +1256,41 @@ test('location and deadline dropdown selections persist and clear by unchecking'
   await waitFor(() => {
     expect(global.fetch).toHaveBeenLastCalledWith(
       expect.not.stringContaining('deadline_states=upcoming'),
+      expect.anything()
+    );
+  });
+});
+
+test('sort dropdown sends selected sort mode to backend', async () => {
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          items: [{ id: 'job-1', title: 'Role 1', company: 'Acme', status: 'applied' }],
+          total: 1,
+          page: 1,
+          page_size: 10,
+          total_pages: 1,
+          available_statuses: ['applied'],
+          available_locations: ['Remote'],
+          status_counts: { interviewing: 0, offered: 0 },
+        }),
+    })
+  );
+
+  render(<App />);
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('sort_by=created_at'),
+      expect.anything()
+    );
+  });
+
+  fireEvent.change(screen.getByLabelText(/sort jobs by/i), { target: { value: 'company' } });
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining('sort_by=company'),
       expect.anything()
     );
   });

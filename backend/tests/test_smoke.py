@@ -106,7 +106,17 @@ def make_mock_sb(data=None):
     mock_result.data = data if data is not None else []
 
     mock_query = MagicMock()
-    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order", "in_", "or_"):
+    for method in (
+        "select",
+        "insert",
+        "update",
+        "delete",
+        "upsert",
+        "eq",
+        "order",
+        "in_",
+        "or_",
+    ):
         getattr(mock_query, method).return_value = mock_query
     mock_query.execute.return_value = mock_result
 
@@ -150,6 +160,38 @@ def _make_mock_sb_with_side_effects(*data_list):
 
     mock_sb.table.return_value = mock_query
     return mock_sb, mock_query
+
+
+def make_mock_sb_by_table(table_rows: dict[str, list[dict]]):
+    """Return a mock Supabase client that can return per-table datasets."""
+    mock_sb = MagicMock()
+    mock_user_resp = MagicMock()
+    mock_user_resp.user.id = MOCK_USER_ID
+    mock_sb.auth.get_user.return_value = mock_user_resp
+
+    def table_side_effect(table_name):
+        rows = table_rows.get(table_name, [])
+        result = MagicMock()
+        result.data = rows
+        query = MagicMock()
+        for method in (
+            "select",
+            "insert",
+            "update",
+            "delete",
+            "upsert",
+            "eq",
+            "order",
+            "limit",
+            "in_",
+            "or_",
+        ):
+            getattr(query, method).return_value = query
+        query.execute.return_value = result
+        return query
+
+    mock_sb.table.side_effect = table_side_effect
+    return mock_sb
 
 
 # ---------------------------------------------------------------------------
@@ -511,7 +553,7 @@ def test_list_jobs_filters_status_location_deadline_state_and_paginates():
         "location": "Onsite",
         "deadline": None,
     }
-    mock_sb, mock_query, _ = make_mock_sb(
+    mock_sb, _mock_query, _ = make_mock_sb(
         data=[upcoming, due_today, overdue, no_deadline, excluded]
     )
     with patch("main.get_supabase", return_value=mock_sb):
@@ -526,8 +568,9 @@ def test_list_jobs_filters_status_location_deadline_state_and_paginates():
     assert body["page_size"] == 2
     assert body["total_pages"] == 2
     assert len(body["items"]) == 2
-    mock_query.in_.assert_any_call("status", ["interviewing", "offered"])
-    mock_query.or_.assert_called_once()
+    # The excluded job (status=applied, location=Onsite) must not appear.
+    returned_ids = {row["id"] for row in body["items"]}
+    assert "job-excluded" not in returned_ids
 
 
 def test_list_jobs_locations_filter_is_case_insensitive_and_dedupes_available_locations():
@@ -543,8 +586,167 @@ def test_list_jobs_locations_filter_is_case_insensitive_and_dedupes_available_lo
     assert response.status_code == 200
     body = response.json()
     assert body["total"] == 2
-    assert {job["id"] for job in body["items"]} == {"job-montreal-title", "job-montreal-lower"}
-    assert body["available_locations"] == ["Montreal"]
+    assert {job["id"] for job in body["items"]} == {
+        "job-montreal-title",
+        "job-montreal-lower",
+    }
+    # available_locations is faceted (excludes the location filter itself),
+    # so the other locations in the dataset remain visible for multi-select.
+    assert body["available_locations"] == ["Montreal", "New York City"]
+
+
+def test_list_jobs_rejects_unsupported_sort_by():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/jobs?sort_by=priority", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 422
+
+
+def test_list_jobs_sort_by_company_applies_globally_before_pagination():
+    jobs = [
+        {**SAMPLE_JOB, "id": "job-c", "company": "Zeta"},
+        {**SAMPLE_JOB, "id": "job-a", "company": "Acme"},
+        {**SAMPLE_JOB, "id": "job-b", "company": "Beta"},
+    ]
+    mock_sb, _, _ = make_mock_sb(data=jobs)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/jobs?sort_by=company&page=2&page_size=2",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 3
+    assert [row["id"] for row in body["items"]] == ["job-c"]
+
+
+def test_list_jobs_sort_by_deadline_puts_null_deadlines_last():
+    jobs = [
+        {**SAMPLE_JOB, "id": "job-null", "deadline": None},
+        {**SAMPLE_JOB, "id": "job-old", "deadline": "2026-01-01"},
+        {**SAMPLE_JOB, "id": "job-new", "deadline": "2026-12-31"},
+    ]
+    mock_sb, _, _ = make_mock_sb(data=jobs)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/jobs?sort_by=deadline", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()["items"]] == [
+        "job-new",
+        "job-old",
+        "job-null",
+    ]
+
+
+def test_list_jobs_sort_by_last_activity_uses_history_and_puts_missing_bottom():
+    jobs = [
+        {**SAMPLE_JOB, "id": "job-1"},
+        {**SAMPLE_JOB, "id": "job-2"},
+        {**SAMPLE_JOB, "id": "job-3"},
+    ]
+    history_rows = [
+        {"job_id": "job-2", "changed_at": "2026-04-10T12:00:00+00:00"},
+        {"job_id": "job-1", "changed_at": "2026-04-05T12:00:00+00:00"},
+    ]
+    mock_sb = make_mock_sb_by_table(
+        {
+            "jobs": jobs,
+            "job_status_history": history_rows,
+        }
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/jobs?sort_by=last_activity&page=2&page_size=2",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 3
+    # Global sort is [job-2, job-1, job-3], so page 2 contains only job-3.
+    assert [row["id"] for row in body["items"]] == ["job-3"]
+
+
+def test_list_jobs_available_locations_excludes_location_filter_to_allow_multi_select():
+    """Selecting one location must not hide other available locations."""
+    jobs = [
+        {**SAMPLE_JOB, "id": "job-remote", "location": "Remote"},
+        {**SAMPLE_JOB, "id": "job-boston", "location": "Boston, MA"},
+        {**SAMPLE_JOB, "id": "job-nyc", "location": "New York City"},
+    ]
+    mock_sb, _, _ = make_mock_sb(data=jobs)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/jobs?locations=Remote",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert {row["id"] for row in body["items"]} == {"job-remote"}
+    # Facet must still expose the other locations so the user can multi-select.
+    assert body["available_locations"] == ["Boston, MA", "New York City", "Remote"]
+
+
+def test_list_jobs_location_filter_accepts_values_containing_commas():
+    """Locations like 'Boston, MA' must match as a single value, not be split on ','."""
+    jobs = [
+        {**SAMPLE_JOB, "id": "job-boston", "location": "Boston, MA"},
+        {**SAMPLE_JOB, "id": "job-remote", "location": "Remote"},
+    ]
+    mock_sb, _, _ = make_mock_sb(data=jobs)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/jobs?locations=Boston%2C+MA",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert [row["id"] for row in body["items"]] == ["job-boston"]
+
+
+def test_list_jobs_available_locations_reflect_only_current_jobs():
+    """Locations that no longer appear on any job must not be returned."""
+    jobs = [
+        {**SAMPLE_JOB, "id": "job-remote", "location": "Remote"},
+    ]
+    mock_sb, _, _ = make_mock_sb(data=jobs)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/jobs", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    assert response.json()["available_locations"] == ["Remote"]
+
+
+def test_list_jobs_available_statuses_excludes_status_filter_to_allow_multi_select():
+    """Selecting one status must not hide other available statuses."""
+    jobs = [
+        {**SAMPLE_JOB, "id": "job-a", "status": "applied"},
+        {**SAMPLE_JOB, "id": "job-b", "status": "interviewing"},
+        {**SAMPLE_JOB, "id": "job-c", "status": "offered"},
+    ]
+    mock_sb, _, _ = make_mock_sb(data=jobs)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/jobs?statuses=applied",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert {row["id"] for row in body["items"]} == {"job-a"}
+    assert body["available_statuses"] == ["applied", "interviewing", "offered"]
+
+
+def test_list_jobs_available_locations_stay_title_cased_when_sort_reorders_rows():
+    jobs = [
+        {**SAMPLE_JOB, "id": "a", "location": "montreal", "company": "Acme"},
+        {**SAMPLE_JOB, "id": "z", "location": "Montreal", "company": "Acme"},
+    ]
+    mock_sb, _, _ = make_mock_sb(data=jobs)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/jobs?sort_by=company",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["available_locations"] == ["Montreal"]
 
 
 # Verifies user_id ownership filtering remains enforced when q is provided.
@@ -911,7 +1113,16 @@ def _make_mock_sb_for_interview_create(event_data=None, job_exists=True):
     insert_result.data = [event_data] if event_data else []
 
     mock_query = MagicMock()
-    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order", "limit"):
+    for method in (
+        "select",
+        "insert",
+        "update",
+        "delete",
+        "upsert",
+        "eq",
+        "order",
+        "limit",
+    ):
         getattr(mock_query, method).return_value = mock_query
     mock_query.execute.side_effect = [job_result, insert_result]
 
@@ -927,7 +1138,10 @@ def test_get_interviews_requires_auth():
 def test_create_interview_requires_auth():
     response = client.post(
         f"/jobs/{SAMPLE_JOB['id']}/interviews",
-        json={"round_type": "Phone Screen", "scheduled_at": "2026-05-10T15:00:00+00:00"},
+        json={
+            "round_type": "Phone Screen",
+            "scheduled_at": "2026-05-10T15:00:00+00:00",
+        },
     )
     assert response.status_code == 401
 
@@ -959,7 +1173,10 @@ def test_get_interviews_success():
 def test_get_interviews_scoped_to_user_and_job():
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_INTERVIEW_EVENT])
     with patch("main.get_supabase", return_value=mock_sb):
-        client.get(f"/jobs/{SAMPLE_JOB['id']}/interviews", headers={"authorization": AUTH_HEADER})
+        client.get(
+            f"/jobs/{SAMPLE_JOB['id']}/interviews",
+            headers={"authorization": AUTH_HEADER},
+        )
     eq_calls = [call[0] for call in mock_query.eq.call_args_list]
     assert ("user_id", MOCK_USER_ID) in eq_calls
     assert ("job_id", SAMPLE_JOB["id"]) in eq_calls
@@ -972,7 +1189,10 @@ def test_create_interview_success():
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             f"/jobs/{SAMPLE_JOB['id']}/interviews",
-            json={"round_type": "Phone Screen", "scheduled_at": "2026-05-10T15:00:00+00:00"},
+            json={
+                "round_type": "Phone Screen",
+                "scheduled_at": "2026-05-10T15:00:00+00:00",
+            },
             headers={"authorization": AUTH_HEADER},
         )
     assert response.status_code == 201
@@ -986,7 +1206,10 @@ def test_create_interview_job_not_found():
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             f"/jobs/{SAMPLE_JOB['id']}/interviews",
-            json={"round_type": "Phone Screen", "scheduled_at": "2026-05-10T15:00:00+00:00"},
+            json={
+                "round_type": "Phone Screen",
+                "scheduled_at": "2026-05-10T15:00:00+00:00",
+            },
             headers={"authorization": AUTH_HEADER},
         )
     assert response.status_code == 404
@@ -2045,7 +2268,11 @@ def test_create_experience_success():
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             "/experience",
-            json={"title": "Software Engineer", "company": "TechCorp", "start_year": 2020},
+            json={
+                "title": "Software Engineer",
+                "company": "TechCorp",
+                "start_year": 2020,
+            },
             headers={"authorization": AUTH_HEADER},
         )
     assert response.status_code == 201
@@ -2141,7 +2368,11 @@ def test_create_experience_trims_title_before_insert():
     with patch("main.get_supabase", return_value=mock_sb):
         client.post(
             "/experience",
-            json={"title": "  Software Engineer  ", "company": "Acme", "start_year": 2020},
+            json={
+                "title": "  Software Engineer  ",
+                "company": "Acme",
+                "start_year": 2020,
+            },
             headers={"authorization": AUTH_HEADER},
         )
     insert_payload = mock_query.insert.call_args[0][0]
@@ -2191,7 +2422,12 @@ def test_create_experience_retries_on_position_conflict():
 
 
 def test_reorder_experience_success():
-    exp2 = {**SAMPLE_EXPERIENCE, "id": "exp-uuid-2222", "title": "Senior Engineer", "position": 1}
+    exp2 = {
+        **SAMPLE_EXPERIENCE,
+        "id": "exp-uuid-2222",
+        "title": "Senior Engineer",
+        "position": 1,
+    }
     reordered = [{**exp2, "position": 0}, {**SAMPLE_EXPERIENCE, "position": 1}]
     # 1 select existing IDs + 1 temp upsert + 1 final upsert + 1 final select
     mock_sb, _ = _make_mock_sb_with_side_effects(
@@ -2438,7 +2674,11 @@ def test_list_reminders_requires_auth():
 def test_create_reminder_requires_auth():
     response = client.post(
         "/reminders",
-        json={"job_id": SAMPLE_JOB["id"], "title": "Follow up", "due_date": "2026-04-20"},
+        json={
+            "job_id": SAMPLE_JOB["id"],
+            "title": "Follow up",
+            "due_date": "2026-04-20",
+        },
     )
     assert response.status_code == 401
 
