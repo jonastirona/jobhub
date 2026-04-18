@@ -1207,4 +1207,3 @@ describe('education section', () => {
     expect(screen.getByRole('button', { name: /add education/i })).toBeDisabled();
   });
 });
-

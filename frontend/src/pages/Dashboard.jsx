@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useDocuments } from '../hooks/useDocuments';
 import { useJobs } from '../hooks/useJobs';
 import AppShell from '../components/layout/AppShell';
 import StatCard from '../components/common/StatCard';
@@ -75,18 +76,49 @@ const STAT_BARS = {
 
 const PAGE_NUMBERS = [1, 2, 3, 4, 5];
 
+function buildDraftTemplate(job) {
+  return [
+    `Dear Hiring Team at ${job.company},`,
+    '',
+    `I am excited to apply for the ${job.title} position.`,
+    '',
+    'I am writing to highlight how my experience aligns with your needs:',
+    '- Relevant experience and achievements',
+    '- Why this role and company are a strong fit',
+    '- How I can contribute quickly in this position',
+    '',
+    'Thank you for your time and consideration.',
+    '',
+    'Sincerely,',
+    '[Your Name]',
+  ].join('\n');
+}
+
 export default function Dashboard() {
   const { session } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const { jobs, loading, error, refetch } = useJobs(session?.access_token, searchTerm);
+  const {
+    createDocument,
+    clearSaveError,
+    saving: savingDraft,
+    saveError: draftSaveError,
+  } = useDocuments(session?.access_token, false);
   const [formState, setFormState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', job }
   const [historyJob, setHistoryJob] = useState(null);
   const [deleteError, setDeleteError] = useState('');
   const [deletingJobId, setDeletingJobId] = useState(null);
   const [jobPendingDelete, setJobPendingDelete] = useState(null);
+  const [draftJob, setDraftJob] = useState(null);
+  const [draftName, setDraftName] = useState('');
+  const [draftType, setDraftType] = useState('Cover Letter Draft');
+  const [draftContent, setDraftContent] = useState('');
+  const [draftValidationError, setDraftValidationError] = useState('');
   const deleteOverlayRef = useRef(null);
   const deleteModalRef = useRef(null);
   const deleteCancelButtonRef = useRef(null);
+  const draftModalRef = useRef(null);
+  const draftCancelButtonRef = useRef(null);
   const [viewJob, setViewJob] = useState(null);
   const filteredJobs = jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm));
   const totalApplications = filteredJobs.length;
@@ -159,6 +191,49 @@ export default function Dashboard() {
     setViewJob(null);
   }
 
+  function openDraft(job) {
+    clearSaveError();
+    setDraftJob(job);
+    setDraftName(`${job.company}_${job.title}_Draft`.replace(/\s+/g, '_'));
+    setDraftType('Cover Letter Draft');
+    setDraftContent(buildDraftTemplate(job));
+    setDraftValidationError('');
+  }
+
+  const closeDraft = useCallback(() => {
+    if (savingDraft) return;
+    clearSaveError();
+    setDraftJob(null);
+    setDraftValidationError('');
+  }, [clearSaveError, savingDraft]);
+
+  async function saveDraftFromJob() {
+    if (!draftJob || savingDraft) return;
+    const trimmedName = draftName.trim();
+    const trimmedContent = draftContent.trim();
+
+    if (!trimmedName) {
+      setDraftValidationError('Document name is required.');
+      return;
+    }
+    if (!trimmedContent) {
+      setDraftValidationError('Draft content is required.');
+      return;
+    }
+
+    setDraftValidationError('');
+    const created = await createDocument({
+      name: trimmedName,
+      doc_type: draftType.trim() || 'Draft',
+      content: trimmedContent,
+      job_id: draftJob.id,
+    });
+
+    if (created) {
+      setDraftJob(null);
+    }
+  }
+
   function handleSaved() {
     refetch();
   }
@@ -205,6 +280,41 @@ export default function Dashboard() {
     [deleteModalRef]
   );
 
+  const handleDraftModalKeyDown = useCallback(
+    (e) => {
+      const modal = draftModalRef.current;
+      if (e.key !== 'Tab' || !modal) return;
+
+      const focusable = Array.from(
+        modal.querySelectorAll(
+          'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      );
+
+      if (focusable.length === 0) {
+        e.preventDefault();
+        if (!modal.hasAttribute('tabindex')) {
+          modal.setAttribute('tabindex', '-1');
+        }
+        modal.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    },
+    [draftModalRef]
+  );
+
   function handleDeleteOverlayClick(e) {
     if (e.target === deleteOverlayRef.current) {
       cancelDelete();
@@ -228,6 +338,24 @@ export default function Dashboard() {
       deleteModalRef.current?.focus();
     }
   }, [jobPendingDelete, deletingJobId]);
+
+  useEffect(() => {
+    if (!draftJob) return undefined;
+    draftCancelButtonRef.current?.focus();
+    function handleEscape(e) {
+      if (e.key === 'Escape') {
+        closeDraft();
+      }
+    }
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [draftJob, closeDraft]);
+
+  useEffect(() => {
+    if (draftJob && savingDraft) {
+      draftModalRef.current?.focus();
+    }
+  }, [draftJob, savingDraft]);
 
   async function confirmDelete() {
     if (!jobPendingDelete || deletingJobId) return;
@@ -392,6 +520,15 @@ export default function Dashboard() {
                           <button
                             type="button"
                             className="action-btn"
+                            aria-label={`Save draft for ${job.title}`}
+                            onClick={() => openDraft(job)}
+                            disabled={deletingJobId === job.id}
+                          >
+                            📝
+                          </button>
+                          <button
+                            type="button"
+                            className="action-btn"
                             aria-label={`Delete application ${job.title}`}
                             onClick={() => requestDelete(job)}
                             disabled={deletingJobId === job.id}
@@ -513,6 +650,91 @@ export default function Dashboard() {
                 disabled={Boolean(deletingJobId)}
               >
                 {deletingJobId ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {draftJob && (
+        <div className="delete-modal-overlay" role="presentation" onClick={closeDraft}>
+          <div
+            className="draft-modal"
+            ref={draftModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="draft-modal-title"
+            onKeyDown={handleDraftModalKeyDown}
+            onClick={(e) => e.stopPropagation()}
+            tabIndex={-1}
+          >
+            <h2 className="delete-modal-title" id="draft-modal-title">
+              Save Draft from Job Context
+            </h2>
+            <p className="delete-modal-text">
+              This draft will be linked to <strong>{draftJob.title}</strong> at{' '}
+              <strong>{draftJob.company}</strong> and shown in your document library.
+            </p>
+
+            <label className="draft-field-label" htmlFor="draft-name">
+              Document Name
+            </label>
+            <input
+              id="draft-name"
+              className="draft-input"
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              placeholder="Example: Stripe_Backend_Engineer_Draft"
+              disabled={savingDraft}
+            />
+
+            <label className="draft-field-label" htmlFor="draft-type">
+              Type
+            </label>
+            <input
+              id="draft-type"
+              className="draft-input"
+              value={draftType}
+              onChange={(e) => setDraftType(e.target.value)}
+              placeholder="Cover Letter Draft"
+              disabled={savingDraft}
+            />
+
+            <label className="draft-field-label" htmlFor="draft-content">
+              Draft Content
+            </label>
+            <textarea
+              id="draft-content"
+              className="draft-textarea"
+              value={draftContent}
+              onChange={(e) => setDraftContent(e.target.value)}
+              rows={12}
+              disabled={savingDraft}
+            />
+
+            {(draftValidationError || draftSaveError) && (
+              <p className="delete-modal-error" role="alert" aria-live="assertive">
+                {draftValidationError || draftSaveError}
+              </p>
+            )}
+
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="delete-modal-btn delete-modal-btn--cancel"
+                onClick={closeDraft}
+                ref={draftCancelButtonRef}
+                disabled={savingDraft}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="delete-modal-btn"
+                onClick={saveDraftFromJob}
+                disabled={savingDraft}
+              >
+                {savingDraft ? 'Saving...' : 'Save to Documents'}
               </button>
             </div>
           </div>

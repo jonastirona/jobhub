@@ -14,6 +14,8 @@ from pydantic import ValidationError
 from main import (
     JOB_STATUSES,
     PROFILE_REQUIRED_FIELDS,
+    DocumentCreate,
+    DocumentUpdate,
     EducationCreate,
     EducationUpdate,
     ExperienceCreate,
@@ -53,6 +55,28 @@ SAMPLE_JOB = {
     "description": None,
     "notes": None,
     "recruiter_notes": None,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-01T00:00:00+00:00",
+}
+
+SAMPLE_DOCUMENT = {
+    "id": "doc-uuid-3322",
+    "user_id": MOCK_USER_ID,
+    "job_id": SAMPLE_JOB["id"],
+    "name": "Datadog_Backend_Engineer_Draft",
+    "doc_type": "Cover Letter Draft",
+    "content": "Draft content",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-01T00:00:00+00:00",
+}
+
+SAMPLE_DOCUMENT = {
+    "id": "doc-uuid-3322",
+    "user_id": MOCK_USER_ID,
+    "job_id": SAMPLE_JOB["id"],
+    "name": "Datadog_Backend_Engineer_Draft",
+    "doc_type": "Cover Letter Draft",
+    "content": "Draft content",
     "created_at": "2026-01-01T00:00:00+00:00",
     "updated_at": "2026-01-01T00:00:00+00:00",
 }
@@ -1183,6 +1207,303 @@ def test_delete_job_scoped_to_user():
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_JOB])
     with patch("main.get_supabase", return_value=mock_sb):
         client.delete(f"/jobs/{SAMPLE_JOB['id']}", headers={"authorization": AUTH_HEADER})
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+# ---------------------------------------------------------------------------
+# Document routes
+# ---------------------------------------------------------------------------
+
+
+def test_list_documents_requires_auth():
+    response = client.get("/documents")
+    assert response.status_code == 401
+
+
+def test_get_document_requires_auth():
+    response = client.get(f"/documents/{SAMPLE_DOCUMENT['id']}")
+    assert response.status_code == 401
+
+
+def test_update_document_requires_auth():
+    response = client.put(
+        f"/documents/{SAMPLE_DOCUMENT['id']}",
+        json={"name": "Updated Draft"},
+    )
+    assert response.status_code == 401
+
+
+def test_delete_document_requires_auth():
+    response = client.delete(f"/documents/{SAMPLE_DOCUMENT['id']}")
+    assert response.status_code == 401
+
+
+def test_create_document_requires_auth():
+    response = client.post(
+        "/documents",
+        json={
+            "name": "Draft",
+            "doc_type": "Cover Letter Draft",
+            "content": "Draft content",
+        },
+    )
+    assert response.status_code == 401
+
+
+def test_list_documents_returns_user_documents():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/documents", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == SAMPLE_DOCUMENT["id"]
+    assert body[0]["name"] == SAMPLE_DOCUMENT["name"]
+
+
+def test_get_document_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            f"/documents/{SAMPLE_DOCUMENT['id']}", headers={"authorization": AUTH_HEADER}
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == SAMPLE_DOCUMENT["id"]
+    assert body["job_id"] == SAMPLE_JOB["id"]
+
+
+def test_get_document_not_found():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/documents/nonexistent-id",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_get_document_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get(f"/documents/{SAMPLE_DOCUMENT['id']}", headers={"authorization": AUTH_HEADER})
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+def test_create_document_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            json={
+                "name": "Datadog_Backend_Engineer_Draft",
+                "doc_type": "Cover Letter Draft",
+                "content": "Draft content",
+                "job_id": SAMPLE_JOB["id"],
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    assert response.json()["job_id"] == SAMPLE_JOB["id"]
+
+
+def test_create_document_from_job_context_inserts_linked_job_id():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([SAMPLE_JOB], [SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            json={
+                "name": "Datadog_Backend_Engineer_Draft",
+                "doc_type": "Cover Letter Draft",
+                "content": "Draft content",
+                "job_id": SAMPLE_JOB["id"],
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+
+    assert response.status_code == 201
+    inserted_payload = mock_query.insert.call_args[0][0]
+    assert inserted_payload["job_id"] == SAMPLE_JOB["id"]
+    assert inserted_payload["user_id"] == MOCK_USER_ID
+
+
+def test_create_document_sets_user_id():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/documents",
+            json={"name": "Draft", "content": "Draft content"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    inserted_payload = mock_query.insert.call_args[0][0]
+    assert inserted_payload["user_id"] == MOCK_USER_ID
+
+
+def test_create_document_rejects_blank_content():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            json={"name": "Draft", "content": "    "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "content must not be blank" in response.json()["detail"]
+
+
+def test_update_document_success():
+    updated_document = {**SAMPLE_DOCUMENT, "name": "Updated Draft"}
+    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT], [updated_document])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"name": "Updated Draft"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["id"] == SAMPLE_DOCUMENT["id"]
+    assert mock_sb.table.return_value.update.call_args[0][0] == {"name": "Updated Draft"}
+
+
+def test_update_document_not_found():
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/documents/nonexistent-id",
+            json={"name": "Updated Draft"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_update_document_rejects_empty_payload():
+    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 400
+
+
+def test_update_document_rejects_blank_name():
+    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"name": "   "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "name must not be blank" in response.json()["detail"]
+
+
+def test_update_document_rejects_blank_content():
+    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"content": "   "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "content must not be blank" in response.json()["detail"]
+
+
+def test_update_document_validates_linked_job_ownership():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([SAMPLE_JOB], [SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"job_id": SAMPLE_JOB["id"]},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("id", SAMPLE_JOB["id"]) in eq_calls
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+def test_update_document_rejects_unknown_linked_job():
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"job_id": "missing-job-id"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Linked job not found"
+
+
+def test_update_document_scoped_to_user():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT], [SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"name": "Updated Draft"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+def test_create_document_rejects_unknown_linked_job():
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            json={"name": "Draft", "content": "Body", "job_id": "missing-job-id"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Linked job not found"
+
+
+def test_document_create_defaults():
+    document = DocumentCreate(name="Draft", content="Body")
+    assert document.doc_type == "Draft"
+    assert document.job_id is None
+
+
+def test_document_update_all_optional():
+    document = DocumentUpdate()
+    assert document.name is None
+    assert document.doc_type is None
+    assert document.content is None
+    assert document.job_id is None
+
+
+def test_delete_document_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 204
+
+
+def test_delete_document_not_found():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            "/documents/nonexistent-id",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_delete_document_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.delete(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            headers={"authorization": AUTH_HEADER},
+        )
     eq_calls = [call[0] for call in mock_query.eq.call_args_list]
     assert ("user_id", MOCK_USER_ID) in eq_calls
 

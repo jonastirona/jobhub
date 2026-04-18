@@ -436,6 +436,12 @@
   cursor: pointer;
 }
 
+.delete-modal-btn:not(.delete-modal-btn--cancel):not(.delete-modal-btn--danger) {
+  background: linear-gradient(135deg, var(--orange-500), var(--orange-600));
+  color: var(--text-white);
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.25);
+}
+
 .delete-modal-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -451,4 +457,49 @@
   background: linear-gradient(135deg, #ef4444, #dc2626);
   color: var(--text-white);
   box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+}
+
+.draft-modal {
+  width: min(680px, 100%);
+  max-height: min(90vh, 760px);
+  overflow: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 22px;
+}
+
+.draft-field-label {
+  display: block;
+  margin-top: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.draft-input,
+.draft-textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  margin-top: 6px;
+}
+
+.draft-textarea {
+  resize: vertical;
+  min-height: 220px;
+  line-height: 1.5;
+}
+
+.draft-input:focus,
+.draft-textarea:focus {
+  outline: none;
+  border-color: var(--orange-400);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
 }
