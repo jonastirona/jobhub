@@ -1753,7 +1753,7 @@ describe('career preferences section', () => {
     });
   });
 
-  test('keeps salary text visible after save when API returns null salary fields', async () => {
+  test('keeps salary input values after save when API returns null salary fields', async () => {
     mockFetch({
       getPrefs: {},
       savePrefs: {
@@ -1777,11 +1777,10 @@ describe('career preferences section', () => {
     });
     expect(screen.getByLabelText(/minimum salary/i)).toHaveValue('90000');
     expect(screen.getByLabelText(/maximum salary/i)).toHaveValue('130000');
-    expect(screen.queryByText(/saved text: 90000/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/saved text: 130000/i)).toBeInTheDocument();
+    expect(screen.queryByText(/saved text:/i)).not.toBeInTheDocument();
   });
 
-  test('restores saved salary text after remount when backend salary fields are null', async () => {
+  test('restores salary input values after remount when backend salary fields are null', async () => {
     mockFetch({
       getPrefs: {},
       savePrefs: {
@@ -1810,8 +1809,7 @@ describe('career preferences section', () => {
       expect(screen.getByLabelText(/minimum salary/i)).toHaveValue('$95,000');
     });
     expect(screen.getByLabelText(/maximum salary/i)).toHaveValue('$140,000');
-    expect(screen.queryByText(/saved text: \$95,000/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/saved text: \$140,000/i)).toBeInTheDocument();
+    expect(screen.queryByText(/saved text:/i)).not.toBeInTheDocument();
   });
 
   test('shows save error when PUT /career-preferences fails', async () => {
