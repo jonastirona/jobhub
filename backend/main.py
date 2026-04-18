@@ -187,6 +187,20 @@ class ExperienceReorder(BaseModel):
     ids: list[str]
 
 
+class DocumentCreate(BaseModel):
+    name: str
+    doc_type: Optional[str] = "Draft"
+    content: str
+    job_id: Optional[str] = None
+
+
+class DocumentUpdate(BaseModel):
+    name: Optional[str] = None
+    doc_type: Optional[str] = None
+    content: Optional[str] = None
+    job_id: Optional[str] = None
+
+
 def _validate_experience_years(start_year: Optional[int], end_year: Optional[int]) -> None:
     if start_year is not None and start_year < 1900:
         raise HTTPException(status_code=422, detail="start_year must be 1900 or later")
@@ -207,6 +221,14 @@ def _normalize_job_status_alias(status: Optional[str]) -> Optional[str]:
     if status is None:
         return None
     return JOB_STATUS_ALIAS.get(status, status)
+
+
+def _assert_linked_job_exists_for_user(sb, user_id: str, job_id: Optional[str]) -> None:
+    if not job_id:
+        return
+    response = sb.table("jobs").select("id").eq("id", job_id).eq("user_id", user_id).execute()
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Linked job not found")
 
 
 # Job list search: text fields plus expanded tokens for applied_date / deadline
@@ -519,6 +541,103 @@ def delete_job(job_id: str, authorization: Optional[str] = Header(default=None))
     response = sb.table("jobs").delete().eq("id", job_id).eq("user_id", user_id).execute()
     if not response.data:
         raise HTTPException(status_code=404, detail="Job not found")
+    return Response(status_code=204)
+
+
+# --- Document routes ---
+
+
+@app.get("/documents")
+def list_documents(authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = (
+        sb.table("documents")
+        .select("*, jobs(title, company)")
+        .eq("user_id", user_id)
+        .order("updated_at", desc=True)
+        .execute()
+    )
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch documents")
+    return response.data or []
+
+
+@app.post("/documents", status_code=201)
+def create_document(document: DocumentCreate, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    payload = document.model_dump(exclude_none=True)
+    payload["name"] = (payload.get("name") or "").strip()
+    payload["content"] = (payload.get("content") or "").strip()
+    if not payload["name"]:
+        raise HTTPException(status_code=422, detail="name must not be blank")
+    if not payload["content"]:
+        raise HTTPException(status_code=422, detail="content must not be blank")
+    _assert_linked_job_exists_for_user(sb, user_id, payload.get("job_id"))
+    payload["user_id"] = user_id
+    response = sb.table("documents").insert(payload).execute()
+    if not response.data:
+        raise HTTPException(status_code=500, detail="Failed to create document")
+    return response.data[0]
+
+
+@app.get("/documents/{document_id}")
+def get_document(document_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = (
+        sb.table("documents")
+        .select("*, jobs(title, company)")
+        .eq("id", document_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return response.data[0]
+
+
+@app.put("/documents/{document_id}")
+def update_document(
+    document_id: str,
+    document: DocumentUpdate,
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    payload = document.model_dump(exclude_unset=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    if "name" in payload:
+        payload["name"] = (payload["name"] or "").strip()
+        if not payload["name"]:
+            raise HTTPException(status_code=422, detail="name must not be blank")
+    if "content" in payload:
+        payload["content"] = (payload["content"] or "").strip()
+        if not payload["content"]:
+            raise HTTPException(status_code=422, detail="content must not be blank")
+    if "doc_type" in payload:
+        payload["doc_type"] = (payload["doc_type"] or "").strip()
+        if not payload["doc_type"]:
+            raise HTTPException(status_code=422, detail="doc_type must not be blank")
+    if "job_id" in payload and payload["job_id"] is not None:
+        _assert_linked_job_exists_for_user(sb, user_id, payload["job_id"])
+    response = (
+        sb.table("documents").update(payload).eq("id", document_id).eq("user_id", user_id).execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return response.data[0]
+
+
+@app.delete("/documents/{document_id}")
+def delete_document(document_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = sb.table("documents").delete().eq("id", document_id).eq("user_id", user_id).execute()
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Document not found")
     return Response(status_code=204)
 
 
