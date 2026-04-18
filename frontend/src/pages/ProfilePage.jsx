@@ -6,12 +6,19 @@ import { useEducation } from '../hooks/useEducation';
 import { useExperience } from '../hooks/useExperience';
 import { useProfile } from '../hooks/useProfile';
 import { useSkills } from '../hooks/useSkills';
-import { EMPTY_CAREER_PREFERENCES, WORK_MODES } from '../models/career';
+import {
+  EMPTY_CAREER_PREFERENCES,
+  PREFERRED_LOCATION_SUGGESTIONS,
+  TARGET_ROLE_SUGGESTIONS,
+  WORK_MODES,
+} from '../models/career';
 import { EMPTY_EDUCATION } from '../models/education';
 import { EMPTY_EXPERIENCE } from '../models/experience';
 import { EMPTY_PROFILE, REQUIRED_PROFILE_FIELDS } from '../models/profile';
 import { EMPTY_SKILL, PROFICIENCY_LEVELS } from '../models/skill';
 import './ProfilePage.css';
+
+const SALARY_TEXT_STORAGE_KEY_PREFIX = 'jobhub:career-preferences:salary-text:';
 
 function asText(value) {
   return typeof value === 'string' ? value : '';
@@ -27,6 +34,54 @@ function toNullableInt(value) {
   if (trimmed === '') return null;
   const n = Number(trimmed);
   return Number.isInteger(n) ? n : null;
+}
+
+function parseMultiValueList(value, { allowComma = true } = {}) {
+  if (!value) return [];
+  const seen = new Set();
+  const separator = allowComma ? /[\n,;]+/ : /[\n;]+/;
+  return asText(value)
+    .split(separator)
+    .map((item) => item.trim())
+    .filter((item) => {
+      if (!item) return false;
+      const normalized = item.toLowerCase();
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+}
+
+function addUniqueListItem(items, value) {
+  const nextValue = asText(value).trim();
+  if (!nextValue) return items;
+  const exists = items.some((item) => item.toLowerCase() === nextValue.toLowerCase());
+  if (exists) return items;
+  return [...items, nextValue];
+}
+
+function removeListItem(items, value) {
+  return items.filter((item) => item !== value);
+}
+
+function toNullableJoinedList(items) {
+  return toNullableString(items.join('; '));
+}
+
+function createEmptyPreferencesFormState() {
+  return {
+    ...EMPTY_CAREER_PREFERENCES,
+    target_roles: [],
+    preferred_locations: [],
+    target_roles_input: '',
+    preferred_locations_input: '',
+  };
+}
+
+function formatStoredSalaryText(value) {
+  const trimmed = asText(value).trim();
+  if (!trimmed) return '';
+  return trimmed;
 }
 
 function getInitials(fullName, email) {
@@ -61,6 +116,52 @@ function formatYearRange(startYear, endYear) {
   return `${startYear} – ${endYear}`;
 }
 
+function validateUrl(value, label) {
+  const trimmed = asText(value).trim();
+  if (trimmed === '') return '';
+  try {
+    new URL(trimmed);
+    return '';
+  } catch {
+    return `${label} must be a valid URL.`;
+  }
+}
+
+function getIdentityFieldErrors(values) {
+  return {
+    full_name: asText(values.full_name).trim() ? '' : 'Full Name is required.',
+    headline: asText(values.headline).trim() ? '' : 'Headline is required.',
+    location: asText(values.location).trim() ? '' : 'Location is required.',
+    phone: asText(values.phone).trim() ? '' : 'Phone is required.',
+  };
+}
+
+function getSummaryFieldErrors(values) {
+  return {
+    website: validateUrl(values.website, 'Website'),
+    linkedin_url: validateUrl(values.linkedin_url, 'LinkedIn URL'),
+    github_url: validateUrl(values.github_url, 'GitHub URL'),
+  };
+}
+
+function buildIdentityPayload(values) {
+  return {
+    full_name: toNullableString(values.full_name),
+    headline: toNullableString(values.headline),
+    location: toNullableString(values.location),
+    phone: toNullableString(values.phone),
+  };
+}
+
+function buildSummaryPayload(values) {
+  return {
+    website: toNullableString(values.website),
+    linkedin_url: toNullableString(values.linkedin_url),
+    github_url: toNullableString(values.github_url),
+    summary: toNullableString(values.summary),
+  };
+}
+
 const parseYear = (value) => {
   const trimmed = String(value ?? '').trim();
   if (!/^\d+$/.test(trimmed)) return null;
@@ -70,7 +171,7 @@ const parseYear = (value) => {
 export default function ProfilePage() {
   const { session, user } = useAuth();
   const accessToken = session?.access_token;
-  const { profile, loading, error, saving, saveError, saveProfile } = useProfile(accessToken);
+  const { profile, loading, error, saving, saveProfile } = useProfile(accessToken);
   const {
     experience,
     loading: experienceLoading,
@@ -113,10 +214,16 @@ export default function ProfilePage() {
   } = useCareerPreferences(accessToken);
 
   const [formData, setFormData] = useState(EMPTY_PROFILE);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [identitySaveSuccess, setIdentitySaveSuccess] = useState(false);
+  const [identitySaveError, setIdentitySaveError] = useState('');
+  const [identityValidationAttempted, setIdentityValidationAttempted] = useState(false);
+  const [summarySaveSuccess, setSummarySaveSuccess] = useState(false);
+  const [summarySaveError, setSummarySaveError] = useState('');
+  const [summaryValidationAttempted, setSummaryValidationAttempted] = useState(false);
 
-  const [prefsData, setPrefsData] = useState(EMPTY_CAREER_PREFERENCES);
+  const [prefsData, setPrefsData] = useState(createEmptyPreferencesFormState);
   const [prefsSaveSuccess, setPrefsSaveSuccess] = useState(false);
+  const [salaryTextDisplay, setSalaryTextDisplay] = useState({ min: '', max: '' });
 
   const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
   const [editingExperienceId, setEditingExperienceId] = useState(null);
@@ -142,17 +249,57 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (preferences) {
-      setPrefsData({
-        target_roles: asText(preferences.target_roles),
-        preferred_locations: asText(preferences.preferred_locations),
+      let persistedSalaryText = { min: '', max: '' };
+      if (user?.id) {
+        const storageKey = `${SALARY_TEXT_STORAGE_KEY_PREFIX}${user.id}`;
+        try {
+          const raw = window.localStorage.getItem(storageKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            persistedSalaryText = {
+              min: asText(parsed?.min),
+              max: asText(parsed?.max),
+            };
+          }
+        } catch {
+          persistedSalaryText = { min: '', max: '' };
+        }
+      }
+
+      const nextMinSalary =
+        preferences.salary_min != null
+          ? String(preferences.salary_min)
+          : persistedSalaryText.min || '';
+      const nextMaxSalary =
+        preferences.salary_max != null
+          ? String(preferences.salary_max)
+          : persistedSalaryText.max || '';
+
+      setPrefsData((prev) => ({
+        ...EMPTY_CAREER_PREFERENCES,
+        target_roles: parseMultiValueList(preferences.target_roles, { allowComma: true }),
+        preferred_locations: parseMultiValueList(preferences.preferred_locations, {
+          allowComma: false,
+        }),
+        target_roles_input: '',
+        preferred_locations_input: '',
         work_mode: asText(preferences.work_mode),
-        salary_min: preferences.salary_min ?? '',
-        salary_max: preferences.salary_max ?? '',
+        salary_min: nextMinSalary || prev.salary_min || '',
+        salary_max: nextMaxSalary || prev.salary_max || '',
+      }));
+      setSalaryTextDisplay({
+        min: formatStoredSalaryText(nextMinSalary),
+        max: formatStoredSalaryText(nextMaxSalary),
       });
     }
-  }, [preferences]);
+  }, [preferences, user?.id]);
 
   const draftCompletion = useMemo(() => getCompletionState(formData), [formData]);
+  const identityFieldErrors = useMemo(() => getIdentityFieldErrors(formData), [formData]);
+  const summaryFieldErrors = useMemo(() => getSummaryFieldErrors(formData), [formData]);
+
+  const hasIdentityValidationErrors = Object.values(identityFieldErrors).some(Boolean);
+  const hasSummaryValidationErrors = Object.values(summaryFieldErrors).some(Boolean);
 
   const avatarInitials = useMemo(
     () => getInitials(formData.full_name, user?.email),
@@ -165,32 +312,53 @@ export default function ProfilePage() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setSaveSuccess(false);
+    if (['full_name', 'headline', 'location', 'phone'].includes(name)) {
+      setIdentitySaveSuccess(false);
+      setIdentitySaveError('');
+    } else {
+      setSummarySaveSuccess(false);
+      setSummarySaveError('');
+    }
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleIdentitySubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
 
-    setSaveSuccess(false);
+    setIdentityValidationAttempted(true);
+    setIdentitySaveSuccess(false);
+    setIdentitySaveError('');
 
-    const payload = {
-      full_name: toNullableString(formData.full_name),
-      headline: toNullableString(formData.headline),
-      location: toNullableString(formData.location),
-      phone: toNullableString(formData.phone),
-      website: toNullableString(formData.website),
-      linkedin_url: toNullableString(formData.linkedin_url),
-      github_url: toNullableString(formData.github_url),
-      summary: toNullableString(formData.summary),
-    };
+    if (hasIdentityValidationErrors) return;
 
-    const saved = await saveProfile(payload);
-    if (saved) setSaveSuccess(true);
+    const saved = await saveProfile(buildIdentityPayload(formData));
+    if (saved.ok) {
+      setIdentitySaveSuccess(true);
+    } else {
+      setIdentitySaveError(saved.error || 'Unable to save identity right now.');
+    }
+  };
+
+  const handleSummarySubmit = async (e) => {
+    e.preventDefault();
+    if (saving) return;
+
+    setSummaryValidationAttempted(true);
+    setSummarySaveSuccess(false);
+    setSummarySaveError('');
+
+    if (hasSummaryValidationErrors) return;
+
+    const saved = await saveProfile(buildSummaryPayload(formData));
+    if (saved.ok) {
+      setSummarySaveSuccess(true);
+    } else {
+      setSummarySaveError(saved.error || 'Unable to save summary right now.');
+    }
   };
 
   const handlePrefsChange = (e) => {
@@ -199,19 +367,93 @@ export default function ProfilePage() {
     setPrefsData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handlePrefsListInputChange = (field) => (e) => {
+    const inputField = `${field}_input`;
+    setPrefsSaveSuccess(false);
+    setPrefsData((prev) => ({ ...prev, [inputField]: e.target.value }));
+  };
+
+  const addPrefsListItem = (field, rawValue) => {
+    const inputField = `${field}_input`;
+    setPrefsSaveSuccess(false);
+    setPrefsData((prev) => {
+      const list = prev[field];
+      const nextList = addUniqueListItem(list, rawValue ?? prev[inputField]);
+      return {
+        ...prev,
+        [field]: nextList,
+        [inputField]: '',
+      };
+    });
+  };
+
+  const removePrefsListValue = (field, value) => {
+    setPrefsSaveSuccess(false);
+    setPrefsData((prev) => ({
+      ...prev,
+      [field]: removeListItem(prev[field], value),
+    }));
+  };
+
+  const handlePrefsListKeyDown = (field) => (e) => {
+    const shouldAdd =
+      e.key === 'Enter' || e.key === ';' || (field === 'target_roles' && e.key === ',');
+    if (shouldAdd) {
+      e.preventDefault();
+      addPrefsListItem(field);
+    }
+  };
+
   const handlePrefsSubmit = async (e) => {
     e.preventDefault();
     if (prefsSaving) return;
     setPrefsSaveSuccess(false);
+
+    const finalizedTargetRoles = addUniqueListItem(
+      prefsData.target_roles,
+      prefsData.target_roles_input
+    );
+    const finalizedPreferredLocations = addUniqueListItem(
+      prefsData.preferred_locations,
+      prefsData.preferred_locations_input
+    );
+
+    if (
+      finalizedTargetRoles.length !== prefsData.target_roles.length ||
+      finalizedPreferredLocations.length !== prefsData.preferred_locations.length
+    ) {
+      setPrefsData((prev) => ({
+        ...prev,
+        target_roles: finalizedTargetRoles,
+        preferred_locations: finalizedPreferredLocations,
+        target_roles_input: '',
+        preferred_locations_input: '',
+      }));
+    }
+
     const payload = {
-      target_roles: toNullableString(prefsData.target_roles),
-      preferred_locations: toNullableString(prefsData.preferred_locations),
+      target_roles: toNullableJoinedList(finalizedTargetRoles),
+      preferred_locations: toNullableJoinedList(finalizedPreferredLocations),
       work_mode: toNullableString(prefsData.work_mode),
       salary_min: toNullableInt(prefsData.salary_min),
       salary_max: toNullableInt(prefsData.salary_max),
     };
     const saved = await savePreferences(payload);
-    if (saved) setPrefsSaveSuccess(true);
+    if (saved) {
+      setPrefsSaveSuccess(true);
+      const minText = formatStoredSalaryText(prefsData.salary_min);
+      const maxText = formatStoredSalaryText(prefsData.salary_max);
+      setSalaryTextDisplay({ min: minText, max: maxText });
+
+      if (user?.id) {
+        const storageKey = `${SALARY_TEXT_STORAGE_KEY_PREFIX}${user.id}`;
+        try {
+          window.localStorage.setItem(storageKey, JSON.stringify({ min: minText, max: maxText }));
+        } catch {
+          // Ignore storage write failures; backend persistence still applies.
+        }
+      }
+    }
   };
 
   const expStartYear = parseYear(experienceForm.start_year);
@@ -452,166 +694,245 @@ export default function ProfilePage() {
           </section>
         )}
 
-        <form className="profile-form" onSubmit={handleSubmit}>
-          <section className="profile-card" role="region" aria-labelledby="profile-identity-title">
-            <div className="profile-card-header">
-              <h2 id="profile-identity-title" className="profile-card-title">
-                Identity
-              </h2>
-            </div>
-
-            <div className="profile-avatar-row">
-              <div className="profile-avatar">{avatarInitials}</div>
-              <div className="profile-avatar-meta">
-                <div className="profile-avatar-name">{displayName}</div>
-                <div className="profile-avatar-headline">{displayHeadline}</div>
-              </div>
-            </div>
-
-            <div className="profile-grid">
-              <div className="profile-field">
-                <label htmlFor="full_name" className="profile-label">
-                  Full Name
-                </label>
-                <input
-                  id="full_name"
-                  type="text"
-                  name="full_name"
-                  value={formData.full_name}
-                  onChange={handleChange}
-                  className="profile-input"
-                />
+        <div className="profile-form">
+          <form className="profile-form" onSubmit={handleIdentitySubmit} noValidate>
+            <section className="profile-card" role="region" aria-labelledby="profile-identity-title">
+              <div className="profile-card-header">
+                <h2 id="profile-identity-title" className="profile-card-title">
+                  Identity
+                </h2>
               </div>
 
-              <div className="profile-field">
-                <label htmlFor="headline" className="profile-label">
-                  Headline
-                </label>
-                <input
-                  id="headline"
-                  type="text"
-                  name="headline"
-                  value={formData.headline}
-                  onChange={handleChange}
-                  className="profile-input"
-                />
-              </div>
-
-              <div className="profile-field">
-                <label htmlFor="location" className="profile-label">
-                  Location
-                </label>
-                <input
-                  id="location"
-                  type="text"
-                  name="location"
-                  value={formData.location}
-                  onChange={handleChange}
-                  className="profile-input"
-                />
-              </div>
-
-              <div className="profile-field">
-                <label htmlFor="phone" className="profile-label">
-                  Phone
-                </label>
-                <input
-                  id="phone"
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  className="profile-input"
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="profile-card" role="region" aria-labelledby="profile-summary-title">
-            <div className="profile-card-header">
-              <h2 id="profile-summary-title" className="profile-card-title">
-                Professional Summary
-              </h2>
-            </div>
-
-            <div className="profile-grid">
-              <div className="profile-field">
-                <label htmlFor="website" className="profile-label">
-                  Website
-                </label>
-                <input
-                  id="website"
-                  type="url"
-                  name="website"
-                  value={formData.website}
-                  onChange={handleChange}
-                  className="profile-input"
-                />
-              </div>
-
-              <div className="profile-field">
-                <label htmlFor="linkedin_url" className="profile-label">
-                  LinkedIn URL
-                </label>
-                <input
-                  id="linkedin_url"
-                  type="url"
-                  name="linkedin_url"
-                  value={formData.linkedin_url}
-                  onChange={handleChange}
-                  className="profile-input"
-                />
-              </div>
-
-              <div className="profile-field profile-field--full">
-                <label htmlFor="github_url" className="profile-label">
-                  GitHub URL
-                </label>
-                <input
-                  id="github_url"
-                  type="url"
-                  name="github_url"
-                  value={formData.github_url}
-                  onChange={handleChange}
-                  className="profile-input"
-                />
-              </div>
-
-              <div className="profile-field profile-field--full">
-                <label htmlFor="summary" className="profile-label">
-                  Summary
-                </label>
-                <textarea
-                  id="summary"
-                  name="summary"
-                  value={formData.summary}
-                  onChange={handleChange}
-                  rows="6"
-                  className="profile-textarea"
-                />
-                <div className="profile-char-count" aria-live="polite">
-                  {summaryCount} characters
+              <div className="profile-avatar-row">
+                <div className="profile-avatar">{avatarInitials}</div>
+                <div className="profile-avatar-meta">
+                  <div className="profile-avatar-name">{displayName}</div>
+                  <div className="profile-avatar-headline">{displayHeadline}</div>
                 </div>
               </div>
-            </div>
-          </section>
 
-          <div className="profile-actions">
-            {saveError && (
-              <p className="profile-save-error" role="alert">
-                {saveError}
-              </p>
-            )}
-            {saveSuccess && !saveError && (
-              <p className="profile-save-success" role="status">
-                Profile saved successfully.
-              </p>
-            )}
-            <button type="submit" disabled={saving} className="profile-btn-save">
-              {saving ? 'Saving...' : 'Save Profile'}
-            </button>
-          </div>
-        </form>
+              <div className="profile-grid">
+                <div className="profile-field">
+                  <label htmlFor="full_name" className="profile-label">
+                    Full Name
+                  </label>
+                  <input
+                    id="full_name"
+                    type="text"
+                    name="full_name"
+                    value={formData.full_name}
+                    onChange={handleChange}
+                    className={`profile-input${identityValidationAttempted && identityFieldErrors.full_name ? ' profile-input--error' : ''}`}
+                    aria-invalid={identityValidationAttempted && identityFieldErrors.full_name ? true : undefined}
+                    aria-describedby={identityValidationAttempted && identityFieldErrors.full_name ? 'profile-full-name-error' : undefined}
+                  />
+                  {identityValidationAttempted && identityFieldErrors.full_name && (
+                    <p id="profile-full-name-error" className="profile-field-error" role="alert">
+                      {identityFieldErrors.full_name}
+                    </p>
+                  )}
+                </div>
+
+                <div className="profile-field">
+                  <label htmlFor="headline" className="profile-label">
+                    Headline
+                  </label>
+                  <input
+                    id="headline"
+                    type="text"
+                    name="headline"
+                    value={formData.headline}
+                    onChange={handleChange}
+                    className={`profile-input${identityValidationAttempted && identityFieldErrors.headline ? ' profile-input--error' : ''}`}
+                    aria-invalid={identityValidationAttempted && identityFieldErrors.headline ? true : undefined}
+                    aria-describedby={identityValidationAttempted && identityFieldErrors.headline ? 'profile-headline-error' : undefined}
+                  />
+                  {identityValidationAttempted && identityFieldErrors.headline && (
+                    <p id="profile-headline-error" className="profile-field-error" role="alert">
+                      {identityFieldErrors.headline}
+                    </p>
+                  )}
+                </div>
+
+                <div className="profile-field">
+                  <label htmlFor="location" className="profile-label">
+                    Location
+                  </label>
+                  <input
+                    id="location"
+                    type="text"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleChange}
+                    className={`profile-input${identityValidationAttempted && identityFieldErrors.location ? ' profile-input--error' : ''}`}
+                    aria-invalid={identityValidationAttempted && identityFieldErrors.location ? true : undefined}
+                    aria-describedby={identityValidationAttempted && identityFieldErrors.location ? 'profile-location-error' : undefined}
+                  />
+                  {identityValidationAttempted && identityFieldErrors.location && (
+                    <p id="profile-location-error" className="profile-field-error" role="alert">
+                      {identityFieldErrors.location}
+                    </p>
+                  )}
+                </div>
+
+                <div className="profile-field">
+                  <label htmlFor="phone" className="profile-label">
+                    Phone
+                  </label>
+                  <input
+                    id="phone"
+                    type="tel"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    className={`profile-input${identityValidationAttempted && identityFieldErrors.phone ? ' profile-input--error' : ''}`}
+                    aria-invalid={identityValidationAttempted && identityFieldErrors.phone ? true : undefined}
+                    aria-describedby={identityValidationAttempted && identityFieldErrors.phone ? 'profile-phone-error' : undefined}
+                  />
+                  {identityValidationAttempted && identityFieldErrors.phone && (
+                    <p id="profile-phone-error" className="profile-field-error" role="alert">
+                      {identityFieldErrors.phone}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="profile-actions profile-actions--section">
+                {identityValidationAttempted && hasIdentityValidationErrors && (
+                  <p className="profile-save-error" role="alert">
+                    Complete the highlighted identity fields before saving.
+                  </p>
+                )}
+                {identitySaveError && (
+                  <p className="profile-save-error" role="alert">
+                    {identitySaveError}
+                  </p>
+                )}
+                {identitySaveSuccess && !identitySaveError && (
+                  <p className="profile-save-success" role="status">
+                    Identity saved successfully.
+                  </p>
+                )}
+                <button type="submit" disabled={saving} className="profile-btn-save">
+                  {saving ? 'Saving...' : 'Save Identity'}
+                </button>
+              </div>
+            </section>
+          </form>
+
+          <form className="profile-form" onSubmit={handleSummarySubmit} noValidate>
+            <section className="profile-card" role="region" aria-labelledby="profile-summary-title">
+              <div className="profile-card-header">
+                <h2 id="profile-summary-title" className="profile-card-title">
+                  Professional Summary
+                </h2>
+              </div>
+
+              <div className="profile-grid">
+                <div className="profile-field">
+                  <label htmlFor="website" className="profile-label">
+                    Website
+                  </label>
+                  <input
+                    id="website"
+                    type="url"
+                    name="website"
+                    value={formData.website}
+                    onChange={handleChange}
+                    className={`profile-input${summaryValidationAttempted && summaryFieldErrors.website ? ' profile-input--error' : ''}`}
+                    aria-invalid={summaryValidationAttempted && summaryFieldErrors.website ? true : undefined}
+                    aria-describedby={summaryValidationAttempted && summaryFieldErrors.website ? 'profile-website-error' : undefined}
+                  />
+                  {summaryValidationAttempted && summaryFieldErrors.website && (
+                    <p id="profile-website-error" className="profile-field-error" role="alert">
+                      {summaryFieldErrors.website}
+                    </p>
+                  )}
+                </div>
+
+                <div className="profile-field">
+                  <label htmlFor="linkedin_url" className="profile-label">
+                    LinkedIn URL
+                  </label>
+                  <input
+                    id="linkedin_url"
+                    type="url"
+                    name="linkedin_url"
+                    value={formData.linkedin_url}
+                    onChange={handleChange}
+                    className={`profile-input${summaryValidationAttempted && summaryFieldErrors.linkedin_url ? ' profile-input--error' : ''}`}
+                    aria-invalid={summaryValidationAttempted && summaryFieldErrors.linkedin_url ? true : undefined}
+                    aria-describedby={summaryValidationAttempted && summaryFieldErrors.linkedin_url ? 'profile-linkedin-url-error' : undefined}
+                  />
+                  {summaryValidationAttempted && summaryFieldErrors.linkedin_url && (
+                    <p id="profile-linkedin-url-error" className="profile-field-error" role="alert">
+                      {summaryFieldErrors.linkedin_url}
+                    </p>
+                  )}
+                </div>
+
+                <div className="profile-field profile-field--full">
+                  <label htmlFor="github_url" className="profile-label">
+                    GitHub URL
+                  </label>
+                  <input
+                    id="github_url"
+                    type="url"
+                    name="github_url"
+                    value={formData.github_url}
+                    onChange={handleChange}
+                    className={`profile-input${summaryValidationAttempted && summaryFieldErrors.github_url ? ' profile-input--error' : ''}`}
+                    aria-invalid={summaryValidationAttempted && summaryFieldErrors.github_url ? true : undefined}
+                    aria-describedby={summaryValidationAttempted && summaryFieldErrors.github_url ? 'profile-github-url-error' : undefined}
+                  />
+                  {summaryValidationAttempted && summaryFieldErrors.github_url && (
+                    <p id="profile-github-url-error" className="profile-field-error" role="alert">
+                      {summaryFieldErrors.github_url}
+                    </p>
+                  )}
+                </div>
+
+                <div className="profile-field profile-field--full">
+                  <label htmlFor="summary" className="profile-label">
+                    Summary
+                  </label>
+                  <textarea
+                    id="summary"
+                    name="summary"
+                    value={formData.summary}
+                    onChange={handleChange}
+                    rows="6"
+                    className="profile-textarea"
+                  />
+                  <div className="profile-char-count" aria-live="polite">
+                    {summaryCount} characters
+                  </div>
+                </div>
+              </div>
+
+              <div className="profile-actions profile-actions--section">
+                {summaryValidationAttempted && hasSummaryValidationErrors && (
+                  <p className="profile-save-error" role="alert">
+                    Fix the highlighted summary fields before saving.
+                  </p>
+                )}
+                {summarySaveError && (
+                  <p className="profile-save-error" role="alert">
+                    {summarySaveError}
+                  </p>
+                )}
+                {summarySaveSuccess && !summarySaveError && (
+                  <p className="profile-save-success" role="status">
+                    Summary saved successfully.
+                  </p>
+                )}
+                <button type="submit" disabled={saving} className="profile-btn-save">
+                  {saving ? 'Saving...' : 'Save Summary'}
+                </button>
+              </div>
+            </section>
+          </form>
+        </div>
 
         <section className="profile-card" role="region" aria-labelledby="profile-experience-title">
           <div className="profile-card-header">
@@ -1206,33 +1527,105 @@ export default function ProfilePage() {
 
             <div className="profile-grid">
               <div className="profile-field profile-field--full">
-                <label htmlFor="target_roles" className="profile-label">
+                <label htmlFor="target_roles_input" className="profile-label">
                   Target Roles
                 </label>
-                <input
-                  id="target_roles"
-                  type="text"
-                  name="target_roles"
-                  value={prefsData.target_roles}
-                  onChange={handlePrefsChange}
-                  className="profile-input"
-                  placeholder="e.g. Software Engineer, Frontend Developer"
-                />
+                <div className="profile-multi-input-row">
+                  <input
+                    id="target_roles_input"
+                    type="text"
+                    list="target-role-suggestions"
+                    value={prefsData.target_roles_input}
+                    onChange={handlePrefsListInputChange('target_roles')}
+                    onKeyDown={handlePrefsListKeyDown('target_roles')}
+                    className="profile-input"
+                    placeholder="Type a role and press Enter or Add"
+                  />
+                  <button
+                    type="button"
+                    className="profile-chip-add-btn"
+                    onClick={() => addPrefsListItem('target_roles')}
+                    disabled={!prefsData.target_roles_input.trim()}
+                  >
+                    Add Role
+                  </button>
+                </div>
+                <datalist id="target-role-suggestions">
+                  {TARGET_ROLE_SUGGESTIONS.map((role) => (
+                    <option key={role} value={role} />
+                  ))}
+                </datalist>
+
+                {prefsData.target_roles.length > 0 ? (
+                  <ul className="profile-chip-list" aria-label="Selected target roles">
+                    {prefsData.target_roles.map((role) => (
+                      <li key={role} className="profile-chip-item">
+                        <span>{role}</span>
+                        <button
+                          type="button"
+                          className="profile-chip-remove-btn"
+                          onClick={() => removePrefsListValue('target_roles', role)}
+                          aria-label={`Remove ${role}`}
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="profile-chip-empty">No target roles added yet.</p>
+                )}
               </div>
 
               <div className="profile-field profile-field--full">
-                <label htmlFor="preferred_locations" className="profile-label">
+                <label htmlFor="preferred_locations_input" className="profile-label">
                   Preferred Locations
                 </label>
-                <input
-                  id="preferred_locations"
-                  type="text"
-                  name="preferred_locations"
-                  value={prefsData.preferred_locations}
-                  onChange={handlePrefsChange}
-                  className="profile-input"
-                  placeholder="e.g. New York, NY; Remote"
-                />
+                <div className="profile-multi-input-row">
+                  <input
+                    id="preferred_locations_input"
+                    type="text"
+                    list="preferred-location-suggestions"
+                    value={prefsData.preferred_locations_input}
+                    onChange={handlePrefsListInputChange('preferred_locations')}
+                    onKeyDown={handlePrefsListKeyDown('preferred_locations')}
+                    className="profile-input"
+                    placeholder="Type a location and press Enter or Add"
+                  />
+                  <button
+                    type="button"
+                    className="profile-chip-add-btn"
+                    onClick={() => addPrefsListItem('preferred_locations')}
+                    disabled={!prefsData.preferred_locations_input.trim()}
+                  >
+                    Add Location
+                  </button>
+                </div>
+                <datalist id="preferred-location-suggestions">
+                  {PREFERRED_LOCATION_SUGGESTIONS.map((location) => (
+                    <option key={location} value={location} />
+                  ))}
+                </datalist>
+
+                {prefsData.preferred_locations.length > 0 ? (
+                  <ul className="profile-chip-list" aria-label="Selected preferred locations">
+                    {prefsData.preferred_locations.map((location) => (
+                      <li key={location} className="profile-chip-item">
+                        <span>{location}</span>
+                        <button
+                          type="button"
+                          className="profile-chip-remove-btn"
+                          onClick={() => removePrefsListValue('preferred_locations', location)}
+                          aria-label={`Remove ${location}`}
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="profile-chip-empty">No preferred locations added yet.</p>
+                )}
               </div>
 
               <div className="profile-field">
@@ -1262,14 +1655,12 @@ export default function ProfilePage() {
                 </label>
                 <input
                   id="salary_min"
-                  type="number"
+                  type="text"
                   name="salary_min"
                   value={prefsData.salary_min}
                   onChange={handlePrefsChange}
                   className="profile-input"
                   placeholder="e.g. 80000"
-                  min="0"
-                  step="1"
                 />
               </div>
 
@@ -1279,34 +1670,32 @@ export default function ProfilePage() {
                 </label>
                 <input
                   id="salary_max"
-                  type="number"
+                  type="text"
                   name="salary_max"
                   value={prefsData.salary_max}
                   onChange={handlePrefsChange}
                   className="profile-input"
                   placeholder="e.g. 120000"
-                  min="0"
-                  step="1"
                 />
               </div>
             </div>
-          </section>
 
-          <div className="profile-actions">
-            {prefsSaveError && (
-              <p className="profile-save-error" role="alert">
-                {prefsSaveError}
-              </p>
-            )}
-            {prefsSaveSuccess && !prefsSaveError && (
-              <p className="profile-save-success" role="status">
-                Career preferences saved successfully.
-              </p>
-            )}
-            <button type="submit" disabled={prefsSaving} className="profile-btn-save">
-              {prefsSaving ? 'Saving...' : 'Save Preferences'}
-            </button>
-          </div>
+            <div className="profile-actions profile-actions--section">
+              {prefsSaveError && (
+                <p className="profile-save-error" role="alert">
+                  {prefsSaveError}
+                </p>
+              )}
+              {prefsSaveSuccess && !prefsSaveError && (
+                <p className="profile-save-success" role="status">
+                  Career preferences saved successfully.
+                </p>
+              )}
+              <button type="submit" disabled={prefsSaving} className="profile-btn-save">
+                {prefsSaving ? 'Saving...' : 'Save Preferences'}
+              </button>
+            </div>
+          </section>
         </form>
       </div>
     </AppShell>

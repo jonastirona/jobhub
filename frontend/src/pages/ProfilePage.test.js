@@ -200,7 +200,7 @@ function mockFetchGetError(status = 500, message = 'Internal Server Error') {
 function mockFetchSaveError(status = 500, text = 'Server Error') {
   global.fetch = jest.fn((url, opts = {}) => {
     if (url.includes('/career-preferences')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PREFS) });
     }
     const edu = resolveEducationUrl(url, opts);
     if (edu) return edu;
@@ -208,10 +208,13 @@ function mockFetchSaveError(status = 500, text = 'Server Error') {
     if (exp) return exp;
     const skl = resolveSkillsUrl(url, opts);
     if (skl) return skl;
+    if (url.endsWith('/profile') && !opts.method) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
+    }
     if (opts.method === 'PUT' && url.endsWith('/profile')) {
       return Promise.resolve({ ok: false, status, text: () => Promise.resolve(text) });
     }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
   });
 }
 
@@ -242,8 +245,11 @@ function makePendingSave() {
     if (exp) return exp;
     const skl = resolveSkillsUrl(url, opts);
     if (skl) return skl;
+    if (url.endsWith('/profile') && !opts.method) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
+    }
     if (opts.method === 'PUT' && url.endsWith('/profile')) return promise;
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
   });
   return () => resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
 }
@@ -272,6 +278,7 @@ afterEach(() => {
   } else {
     process.env.REACT_APP_BACKEND_URL = savedBackendUrl;
   }
+  window.localStorage.clear();
 });
 
 // ─── Page structure ───────────────────────────────────────────────────────────
@@ -298,10 +305,11 @@ describe('page structure', () => {
     });
   });
 
-  test('renders Save Profile button', async () => {
+  test('renders Save Identity button', async () => {
     renderPage();
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /save profile/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save identity/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save summary/i })).toBeInTheDocument();
     });
   });
 
@@ -353,7 +361,7 @@ describe('load error', () => {
     mockFetchGetError(500);
     renderPage();
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /save profile/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save identity/i })).toBeInTheDocument();
     });
   });
 
@@ -596,11 +604,11 @@ describe('form interaction', () => {
 // ─── Save — success ───────────────────────────────────────────────────────────
 
 describe('save — success', () => {
-  test('calls PUT /profile with trimmed payload on submit', async () => {
+  test('calls PUT /profile with trimmed identity payload on submit', async () => {
     mockFetch({ getProfile: SAMPLE_PROFILE });
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
       const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
       expect(putCall).toBeDefined();
@@ -610,13 +618,17 @@ describe('save — success', () => {
     expect(opts.method).toBe('PUT');
     const body = JSON.parse(opts.body);
     expect(body.full_name).toBe('Jane Smith');
+    expect(body.headline).toBe('Software Engineer');
+    expect(body.location).toBe('New York, NY');
+    expect(body.phone).toBe('555-123-4567');
+    expect(body.website).toBeUndefined();
   });
 
   test('sends Authorization header on PUT', async () => {
     mockFetch({ getProfile: SAMPLE_PROFILE });
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
       const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
       expect(putCall).toBeDefined();
@@ -625,64 +637,96 @@ describe('save — success', () => {
     expect(opts.headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
   });
 
-  test('shows "Profile saved successfully." after save', async () => {
+  test('shows "Identity saved successfully." after save', async () => {
     mockFetch({ getProfile: SAMPLE_PROFILE });
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
-      expect(screen.getByText(/profile saved successfully/i)).toBeInTheDocument();
+      expect(screen.getByText(/identity saved successfully/i)).toBeInTheDocument();
     });
   });
 
   test('success message has role=status', async () => {
     mockFetch({ getProfile: SAMPLE_PROFILE });
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
       expect(screen.getByRole('status')).toBeInTheDocument();
     });
   });
 
   test('sends null for whitespace-only fields', async () => {
-    mockFetch({ getProfile: {} });
+    mockFetch({ getProfile: SAMPLE_PROFILE });
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+    await userEvent.clear(screen.getByLabelText(/full name/i));
     await userEvent.type(screen.getByLabelText(/full name/i), '   ');
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
-      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
-      expect(putCall).toBeDefined();
+      expect(screen.getByText(/complete the highlighted identity fields before saving/i)).toBeInTheDocument();
     });
-    const [, opts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
-    const body = JSON.parse(opts.body);
-    expect(body.full_name).toBeNull();
+    const putCalls = global.fetch.mock.calls.filter(([, opts = {}]) => opts.method === 'PUT');
+    expect(putCalls).toHaveLength(0);
   });
 
   test('success message disappears after editing any field', async () => {
     mockFetch({ getProfile: SAMPLE_PROFILE });
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() =>
-      expect(screen.getByText(/profile saved successfully/i)).toBeInTheDocument()
+      expect(screen.getByText(/identity saved successfully/i)).toBeInTheDocument()
     );
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: 'John' } });
-    expect(screen.queryByText(/profile saved successfully/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/identity saved successfully/i)).not.toBeInTheDocument();
   });
 
   test('updates profile state with server response after save', async () => {
     const updated = { ...SAMPLE_PROFILE, full_name: 'John Doe' };
-    mockFetch({ getProfile: {}, saveProfile: updated });
+    mockFetch({ getProfile: SAMPLE_PROFILE, saveProfile: updated });
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+    await userEvent.clear(screen.getByLabelText(/full name/i));
     await userEvent.type(screen.getByLabelText(/full name/i), 'John Doe');
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() =>
-      expect(screen.getByText(/profile saved successfully/i)).toBeInTheDocument()
+      expect(screen.getByText(/identity saved successfully/i)).toBeInTheDocument()
     );
     expect(screen.getByLabelText(/full name/i)).toHaveValue('John Doe');
+  });
+});
+
+// ─── Save — validation ───────────────────────────────────────────────────────
+
+describe('save — validation', () => {
+  test('shows identity validation feedback when required fields are blank', async () => {
+    mockFetch({ getProfile: {} });
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/complete the highlighted identity fields before saving/i)).toBeInTheDocument();
+      expect(screen.getByText(/full name is required/i)).toBeInTheDocument();
+    });
+    const putCalls = global.fetch.mock.calls.filter(([, opts = {}]) => opts.method === 'PUT');
+    expect(putCalls).toHaveLength(0);
+  });
+
+  test('shows summary validation feedback for invalid URLs', async () => {
+    mockFetch({ getProfile: SAMPLE_PROFILE });
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/website/i)).toBeInTheDocument());
+    await userEvent.clear(screen.getByLabelText(/website/i));
+    await userEvent.type(screen.getByLabelText(/website/i), 'notaurl');
+    fireEvent.click(screen.getByRole('button', { name: /save summary/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/fix the highlighted summary fields before saving/i)).toBeInTheDocument();
+      expect(screen.getByText(/website must be a valid url/i)).toBeInTheDocument();
+    });
+    const putCalls = global.fetch.mock.calls.filter(([, opts = {}]) => opts.method === 'PUT');
+    expect(putCalls).toHaveLength(0);
   });
 });
 
@@ -692,8 +736,8 @@ describe('save — error', () => {
   test('shows API error text when PUT returns non-ok', async () => {
     mockFetchSaveError(500, 'Database connection failed');
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
       expect(screen.getByText('Database connection failed')).toBeInTheDocument();
     });
@@ -702,10 +746,10 @@ describe('save — error', () => {
   test('save error has role=alert', async () => {
     mockFetchSaveError(500, 'Error');
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByText('Error')).toBeInTheDocument();
     });
   });
 
@@ -717,13 +761,16 @@ describe('save — error', () => {
       if (exp) return exp;
       const skl = resolveSkillsUrl(url, opts);
       if (skl) return skl;
+      if (url.endsWith('/profile') && !opts.method) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
+      }
       if (opts.method === 'PUT' && url.endsWith('/profile'))
         return Promise.reject(new Error('Connection refused'));
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
     });
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
       expect(screen.getByText(/connection refused/i)).toBeInTheDocument();
     });
@@ -734,7 +781,11 @@ describe('save — error', () => {
     mockFetch({ getProfile: {} });
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    await userEvent.type(screen.getByLabelText(/full name/i), 'Jane Smith');
+    await userEvent.type(screen.getByLabelText(/headline/i), 'Software Engineer');
+    await userEvent.type(screen.getByLabelText(/^location$/i), 'New York, NY');
+    await userEvent.type(screen.getByLabelText(/phone/i), '555-123-4567');
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(/backend url is not configured/i);
     });
@@ -750,6 +801,9 @@ describe('save — error', () => {
       if (exp) return exp;
       const skl = resolveSkillsUrl(url, opts);
       if (skl) return skl;
+      if (url.endsWith('/profile') && !opts.method) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(SAMPLE_PROFILE) });
+      }
       if (opts.method === 'PUT' && url.endsWith('/profile')) {
         callCount++;
         if (callCount === 1) {
@@ -764,16 +818,16 @@ describe('save — error', () => {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     // First save
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() =>
-      expect(screen.getByText(/profile saved successfully/i)).toBeInTheDocument()
+      expect(screen.getByText(/identity saved successfully/i)).toBeInTheDocument()
     );
     // Second save fails
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
-    expect(screen.queryByText(/profile saved successfully/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/identity saved successfully/i)).not.toBeInTheDocument();
   });
 });
 
@@ -783,41 +837,44 @@ describe('saving state', () => {
   test('button shows "Saving..." while request is in flight', async () => {
     const settle = makePendingSave();
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+    const saveButton = screen.getByRole('button', { name: /save identity/i });
+    fireEvent.click(saveButton);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /saving/i })).toBeInTheDocument();
+      expect(saveButton).toBeDisabled();
     });
     settle();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /save profile/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /save identity/i })).toBeInTheDocument()
     );
   });
 
   test('save button is disabled while saving', async () => {
     const settle = makePendingSave();
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+    const saveButton = screen.getByRole('button', { name: /save identity/i });
+    fireEvent.click(saveButton);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /saving/i })).toBeDisabled();
+      expect(saveButton).toBeDisabled();
     });
     settle();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /save profile/i })).not.toBeDisabled()
+      expect(screen.getByRole('button', { name: /save identity/i })).not.toBeDisabled()
     );
   });
 
   test('does not dispatch duplicate fetch on re-submit while saving', async () => {
     const settle = makePendingSave();
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
-    await waitFor(() => screen.getByRole('button', { name: /saving/i }));
-    fireEvent.click(screen.getByRole('button', { name: /saving/i }));
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+    const saveButton = screen.getByRole('button', { name: /save identity/i });
+    fireEvent.click(saveButton);
+    await waitFor(() => expect(saveButton).toBeDisabled());
+    fireEvent.click(saveButton);
     settle();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /save profile/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /save identity/i })).toBeInTheDocument()
     );
     const putCalls = global.fetch.mock.calls.filter(([, opts = {}]) => opts.method === 'PUT');
     expect(putCalls).toHaveLength(1);
@@ -863,20 +920,21 @@ describe('accessibility', () => {
   test('save error has role=alert for screen readers', async () => {
     mockFetchSaveError(500, 'Oops');
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('Oops');
+      expect(screen.getByText('Oops')).toBeInTheDocument();
     });
+    expect(screen.getByText('Oops')).toHaveAttribute('role', 'alert');
   });
 
   test('success message has role=status', async () => {
-    mockFetch({ getProfile: {} });
+    mockFetch({ getProfile: SAMPLE_PROFILE });
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent(/profile saved successfully/i);
+      expect(screen.getByRole('status')).toHaveTextContent(/identity saved successfully/i);
     });
   });
 });
@@ -884,29 +942,42 @@ describe('accessibility', () => {
 // ─── Fetch payload ────────────────────────────────────────────────────────────
 
 describe('fetch payload', () => {
-  test('PUT includes all eight profile fields', async () => {
-    mockFetch({ getProfile: {} });
+  test('PUT for identity includes only identity fields', async () => {
+    mockFetch({ getProfile: SAMPLE_PROFILE });
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
       const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
       expect(putCall).toBeDefined();
     });
     const [, putOpts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
     const body = JSON.parse(putOpts.body);
-    for (const field of [
-      'full_name',
-      'headline',
-      'location',
-      'phone',
-      'website',
-      'linkedin_url',
-      'github_url',
-      'summary',
-    ]) {
-      expect(body).toHaveProperty(field);
-    }
+    expect(body).toEqual({
+      full_name: 'Jane Smith',
+      headline: 'Software Engineer',
+      location: 'New York, NY',
+      phone: '555-123-4567',
+    });
+  });
+
+  test('PUT for summary includes only summary fields', async () => {
+    mockFetch({ getProfile: SAMPLE_PROFILE });
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/website/i)).toHaveValue('https://janesmith.dev'));
+    fireEvent.click(screen.getByRole('button', { name: /save summary/i }));
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+      expect(putCall).toBeDefined();
+    });
+    const [, putOpts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+    const body = JSON.parse(putOpts.body);
+    expect(body).toEqual({
+      website: 'https://janesmith.dev',
+      linkedin_url: 'https://linkedin.com/in/janesmith',
+      github_url: 'https://github.com/janesmith',
+      summary: 'Experienced engineer.',
+    });
   });
 
   test('GET /profile is called with Authorization header', async () => {
@@ -920,18 +991,17 @@ describe('fetch payload', () => {
   });
 
   test('empty string fields are sent as null', async () => {
-    mockFetch({ getProfile: {} });
+    mockFetch({ getProfile: SAMPLE_PROFILE });
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+    await userEvent.clear(screen.getByLabelText(/full name/i));
+    await userEvent.type(screen.getByLabelText(/full name/i), '   ');
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
-      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
-      expect(putCall).toBeDefined();
+      expect(screen.getByText(/complete the highlighted identity fields before saving/i)).toBeInTheDocument();
     });
-    const [, putOpts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
-    const body = JSON.parse(putOpts.body);
-    expect(body.full_name).toBeNull();
-    expect(body.summary).toBeNull();
+    const putCalls = global.fetch.mock.calls.filter(([, opts = {}]) => opts.method === 'PUT');
+    expect(putCalls).toHaveLength(0);
   });
 });
 
@@ -1554,23 +1624,81 @@ describe('career preferences section', () => {
 
   test('renders all career preferences fields', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/target roles/i)).toBeInTheDocument());
-    expect(screen.getByLabelText(/preferred locations/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText(/^target roles$/i)).toBeInTheDocument());
+    expect(screen.getByLabelText(/^preferred locations$/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add role/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add location/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/work mode/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/minimum salary/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/maximum salary/i)).toBeInTheDocument();
   });
 
+  test('target roles and preferred locations inputs are linked to suggestion options', async () => {
+    renderPage();
+    const targetRolesInput = await screen.findByLabelText(/^target roles$/i);
+    expect(targetRolesInput).toHaveAttribute('list', 'target-role-suggestions');
+
+    const roleSuggestions = document.getElementById('target-role-suggestions');
+    expect(roleSuggestions).toBeInTheDocument();
+    const roleOptionValues = Array.from(roleSuggestions.querySelectorAll('option')).map((opt) =>
+      opt.getAttribute('value')
+    );
+    expect(roleOptionValues).toContain('Software Engineer');
+    expect(roleOptionValues).toContain('Frontend Developer');
+
+    const preferredLocationsInput = screen.getByLabelText(/^preferred locations$/i);
+    expect(preferredLocationsInput).toHaveAttribute('list', 'preferred-location-suggestions');
+    const locationSuggestions = document.getElementById('preferred-location-suggestions');
+    expect(locationSuggestions).toBeInTheDocument();
+    const locationOptionValues = Array.from(locationSuggestions.querySelectorAll('option')).map(
+      (opt) => opt.getAttribute('value')
+    );
+    expect(locationOptionValues).toContain('New York, NY');
+    expect(locationOptionValues).toContain('Remote');
+  });
+
+  test('adds and removes target role chips', async () => {
+    renderPage();
+    const targetRolesInput = await screen.findByLabelText(/^target roles$/i);
+
+    await userEvent.type(targetRolesInput, 'Platform Reliability Engineer{enter}');
+
+    const selectedRoles = screen.getByRole('list', { name: /selected target roles/i });
+    expect(within(selectedRoles).getByText('Platform Reliability Engineer')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /remove platform reliability engineer/i }));
+
+    expect(
+      within(selectedRoles).queryByText('Platform Reliability Engineer')
+    ).not.toBeInTheDocument();
+  });
+
+  test('adds and removes preferred location chips', async () => {
+    renderPage();
+    const preferredLocationsInput = await screen.findByLabelText(/^preferred locations$/i);
+
+    await userEvent.type(preferredLocationsInput, 'Remote{enter}');
+
+    const selectedLocations = screen.getByRole('list', { name: /selected preferred locations/i });
+    expect(within(selectedLocations).getByText('Remote')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /remove remote/i }));
+    expect(within(selectedLocations).queryByText('Remote')).not.toBeInTheDocument();
+  });
+
   test('pre-fills career preferences from fetched data', async () => {
     mockFetch({ getPrefs: SAMPLE_PREFS });
     renderPage();
-    await waitFor(() =>
-      expect(screen.getByLabelText(/target roles/i)).toHaveValue('Software Engineer')
-    );
-    expect(screen.getByLabelText(/preferred locations/i)).toHaveValue('New York, NY');
+
+    await waitFor(() => {
+      const selectedRoles = screen.getByRole('list', { name: /selected target roles/i });
+      expect(within(selectedRoles).getByText('Software Engineer')).toBeInTheDocument();
+    });
+    const selectedLocations = screen.getByRole('list', { name: /selected preferred locations/i });
+    expect(within(selectedLocations).getByText('New York, NY')).toBeInTheDocument();
     expect(screen.getByLabelText(/work mode/i)).toHaveValue('hybrid');
-    expect(screen.getByLabelText(/minimum salary/i)).toHaveValue(80000);
-    expect(screen.getByLabelText(/maximum salary/i)).toHaveValue(120000);
+    expect(screen.getByLabelText(/minimum salary/i)).toHaveValue('80000');
+    expect(screen.getByLabelText(/maximum salary/i)).toHaveValue('120000');
   });
 
   test('renders Save Preferences button', async () => {
@@ -1583,10 +1711,20 @@ describe('career preferences section', () => {
   test('submits PUT to /career-preferences on save', async () => {
     mockFetch({ getPrefs: SAMPLE_PREFS });
     renderPage();
-    await waitFor(() =>
-      expect(screen.getByLabelText(/target roles/i)).toHaveValue('Software Engineer')
-    );
+
+    await waitFor(() => {
+      const selectedRoles = screen.getByRole('list', { name: /selected target roles/i });
+      expect(within(selectedRoles).getByText('Software Engineer')).toBeInTheDocument();
+    });
+
+    await userEvent.type(screen.getByLabelText(/^target roles$/i), 'Frontend Developer');
+    fireEvent.click(screen.getByRole('button', { name: /add role/i }));
+
+    await userEvent.type(screen.getByLabelText(/^preferred locations$/i), 'Remote');
+    fireEvent.click(screen.getByRole('button', { name: /add location/i }));
+
     fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+
     await waitFor(() => {
       const putCall = global.fetch.mock.calls.find(
         ([url, opts = {}]) => url === `${BACKEND}/career-preferences` && opts.method === 'PUT'
@@ -1598,7 +1736,8 @@ describe('career preferences section', () => {
     );
     expect(url).toBe(`${BACKEND}/career-preferences`);
     const body = JSON.parse(opts.body);
-    expect(body).toHaveProperty('target_roles');
+    expect(body.target_roles).toBe('Software Engineer; Frontend Developer');
+    expect(body.preferred_locations).toBe('New York, NY; Remote');
     expect(body).toHaveProperty('salary_min');
     expect(body).toHaveProperty('salary_max');
   });
@@ -1612,6 +1751,67 @@ describe('career preferences section', () => {
     await waitFor(() => {
       expect(screen.getByText(/career preferences saved successfully/i)).toBeInTheDocument();
     });
+  });
+
+  test('keeps salary text visible after save when API returns null salary fields', async () => {
+    mockFetch({
+      getPrefs: {},
+      savePrefs: {
+        ...SAMPLE_PREFS,
+        salary_min: null,
+        salary_max: null,
+      },
+    });
+    renderPage();
+
+    const minSalaryInput = await screen.findByLabelText(/minimum salary/i);
+    const maxSalaryInput = screen.getByLabelText(/maximum salary/i);
+
+    fireEvent.change(minSalaryInput, { target: { value: '90000' } });
+    fireEvent.change(maxSalaryInput, { target: { value: '130000' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/career preferences saved successfully/i)).toBeInTheDocument();
+    });
+    expect(screen.getByLabelText(/minimum salary/i)).toHaveValue('90000');
+    expect(screen.getByLabelText(/maximum salary/i)).toHaveValue('130000');
+    expect(screen.queryByText(/saved text: 90000/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/saved text: 130000/i)).toBeInTheDocument();
+  });
+
+  test('restores saved salary text after remount when backend salary fields are null', async () => {
+    mockFetch({
+      getPrefs: {},
+      savePrefs: {
+        ...SAMPLE_PREFS,
+        salary_min: null,
+        salary_max: null,
+      },
+    });
+
+    const { unmount } = renderPage();
+    const minSalaryInput = await screen.findByLabelText(/minimum salary/i);
+    const maxSalaryInput = screen.getByLabelText(/maximum salary/i);
+
+    fireEvent.change(minSalaryInput, { target: { value: '$95,000' } });
+    fireEvent.change(maxSalaryInput, { target: { value: '$140,000' } });
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/career preferences saved successfully/i)).toBeInTheDocument();
+    });
+
+    unmount();
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/minimum salary/i)).toHaveValue('$95,000');
+    });
+    expect(screen.getByLabelText(/maximum salary/i)).toHaveValue('$140,000');
+    expect(screen.queryByText(/saved text: \$95,000/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/saved text: \$140,000/i)).toBeInTheDocument();
   });
 
   test('shows save error when PUT /career-preferences fails', async () => {
@@ -1645,9 +1845,7 @@ describe('career preferences section', () => {
     await waitFor(() =>
       expect(screen.getByText(/career preferences saved successfully/i)).toBeInTheDocument()
     );
-    fireEvent.change(screen.getByLabelText(/target roles/i), {
-      target: { value: 'Frontend Engineer' },
-    });
+    fireEvent.change(screen.getByLabelText(/^target roles$/i), { target: { value: 'Frontend' } });
     expect(screen.queryByText(/career preferences saved successfully/i)).not.toBeInTheDocument();
   });
 });

@@ -90,11 +90,11 @@ export function useProfile(accessToken) {
       const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
       if (!backendBase) {
         setSaveError('Backend URL is not configured.');
-        return false;
+        return { ok: false, error: 'Backend URL is not configured.' };
       }
       if (!accessToken) {
         setSaveError('You are not authenticated. Please sign in again.');
-        return false;
+        return { ok: false, error: 'You are not authenticated. Please sign in again.' };
       }
       pendingSaveRef.current?.abort();
       const controller = new AbortController();
@@ -116,15 +116,16 @@ export function useProfile(accessToken) {
           throw new Error(text || `Save failed (${res.status})`);
         }
         const saved = await res.json();
-        if (controller.signal.aborted) return false;
+        if (controller.signal.aborted) return { ok: false, error: null };
         const normalized = normalizeProfileResponse(saved);
         setProfile(normalized.profile);
         setCompletion(normalized.completion);
-        return true;
+        return { ok: true, profile: normalized.profile, completion: normalized.completion };
       } catch (err) {
-        if (controller.signal.aborted) return false;
-        setSaveError(err instanceof Error ? err.message : String(err));
-        return false;
+        if (controller.signal.aborted) return { ok: false, error: null };
+        const message = err instanceof Error ? err.message : String(err);
+        setSaveError(message);
+        return { ok: false, error: message };
       } finally {
         if (!controller.signal.aborted) setSaving(false);
       }
