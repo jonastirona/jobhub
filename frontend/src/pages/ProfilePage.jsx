@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { useAuth } from '../context/AuthContext';
+import { useEducation } from '../hooks/useEducation';
 import { useExperience } from '../hooks/useExperience';
 import { useProfile } from '../hooks/useProfile';
+import { EMPTY_EDUCATION } from '../models/education';
 import { EMPTY_EXPERIENCE } from '../models/experience';
 import { EMPTY_PROFILE, REQUIRED_PROFILE_FIELDS } from '../models/profile';
 import './ProfilePage.css';
@@ -69,12 +71,25 @@ export default function ProfilePage() {
     deleteExperience,
     reorderExperience,
   } = useExperience(accessToken);
+  const {
+    education,
+    loading: educationLoading,
+    error: educationError,
+    saving: educationSaving,
+    saveError: educationSaveError,
+    addEducation,
+    updateEducation,
+    deleteEducation,
+  } = useEducation(accessToken);
 
   const [formData, setFormData] = useState(EMPTY_PROFILE);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
   const [editingExperienceId, setEditingExperienceId] = useState(null);
+
+  const [educationForm, setEducationForm] = useState(EMPTY_EDUCATION);
+  const [editingEducationId, setEditingEducationId] = useState(null);
 
   useEffect(() => {
     setFormData({
@@ -185,6 +200,66 @@ export default function ProfilePage() {
   const handleExperienceDelete = async (id) => {
     if (editingExperienceId === id) handleExperienceCancelEdit();
     await deleteExperience(id);
+  };
+
+  const eduStartYear = parseYear(educationForm.start_year);
+  const eduEndYear = parseYear(educationForm.end_year);
+  const eduHasEndYear = String(educationForm.end_year ?? '').trim() !== '';
+  const isEducationFormValid =
+    educationForm.institution.trim().length > 0 &&
+    educationForm.degree.trim().length > 0 &&
+    educationForm.field_of_study.trim().length > 0 &&
+    eduStartYear !== null &&
+    eduStartYear >= 1900 &&
+    (!eduHasEndYear || (eduEndYear !== null && eduEndYear >= eduStartYear));
+
+  const handleEducationFormChange = (e) => {
+    const { name, value } = e.target;
+    setEducationForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleEducationEdit = (entry) => {
+    setEditingEducationId(entry.id);
+    setEducationForm({
+      institution: entry.institution || '',
+      degree: entry.degree || '',
+      field_of_study: entry.field_of_study || '',
+      start_year: entry.start_year != null ? String(entry.start_year) : '',
+      end_year: entry.end_year != null ? String(entry.end_year) : '',
+      gpa: entry.gpa != null ? String(entry.gpa) : '',
+      description: entry.description || '',
+    });
+  };
+
+  const handleEducationCancelEdit = () => {
+    setEditingEducationId(null);
+    setEducationForm(EMPTY_EDUCATION);
+  };
+
+  const handleEducationSubmit = async (e) => {
+    e.preventDefault();
+    if (educationSaving || !isEducationFormValid) return;
+    const payload = {
+      institution: educationForm.institution.trim(),
+      degree: educationForm.degree.trim(),
+      field_of_study: educationForm.field_of_study.trim(),
+      start_year: parseYear(educationForm.start_year),
+      end_year: eduHasEndYear ? parseYear(educationForm.end_year) : null,
+      gpa: educationForm.gpa.trim() !== '' ? parseFloat(educationForm.gpa) : null,
+      description: educationForm.description.trim() || null,
+    };
+    const saved = editingEducationId
+      ? await updateEducation(editingEducationId, payload)
+      : await addEducation(payload);
+    if (saved) {
+      setEducationForm(EMPTY_EDUCATION);
+      setEditingEducationId(null);
+    }
+  };
+
+  const handleEducationDelete = async (id) => {
+    if (editingEducationId === id) handleEducationCancelEdit();
+    await deleteEducation(id);
   };
 
   const handleExperienceMoveUp = async (index) => {
@@ -608,6 +683,211 @@ export default function ProfilePage() {
                       type="button"
                       className="experience-btn experience-btn--secondary"
                       onClick={handleExperienceCancelEdit}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </form>
+            </>
+          )}
+        </section>
+        <section className="profile-card" role="region" aria-labelledby="profile-education-title">
+          <div className="profile-card-header">
+            <h2 id="profile-education-title" className="profile-card-title">
+              Education
+            </h2>
+          </div>
+
+          {educationLoading && <p className="profile-state">Loading education...</p>}
+
+          {educationError && (
+            <p className="profile-state profile-state--error" role="alert">
+              {educationError}
+            </p>
+          )}
+
+          {!educationLoading && (
+            <>
+              {education.length === 0 && !educationError && (
+                <p className="education-empty">No education added yet.</p>
+              )}
+
+              {education.length > 0 && (
+                <ul className="education-list" aria-label="Education list">
+                  {education.map((entry) => (
+                    <li key={entry.id} className="education-item">
+                      <div className="education-item-info">
+                        <span className="education-item-institution">{entry.institution}</span>
+                        <span className="education-item-degree">
+                          {entry.degree}, {entry.field_of_study}
+                        </span>
+                        <span className="education-item-years">
+                          {formatYearRange(entry.start_year, entry.end_year)}
+                        </span>
+                        {entry.gpa != null && (
+                          <span className="education-item-gpa">GPA: {entry.gpa}</span>
+                        )}
+                      </div>
+                      <div className="education-item-actions">
+                        <button
+                          type="button"
+                          className="education-btn education-btn--secondary"
+                          onClick={() => handleEducationEdit(entry)}
+                          aria-label={`Edit ${entry.institution}`}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="education-btn education-btn--danger"
+                          onClick={() => handleEducationDelete(entry.id)}
+                          disabled={educationSaving}
+                          aria-label={`Delete ${entry.institution}`}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <form className="education-form" onSubmit={handleEducationSubmit}>
+                <div className="education-form-fields">
+                  <div className="profile-field">
+                    <label htmlFor="edu_institution" className="profile-label">
+                      Institution
+                    </label>
+                    <input
+                      id="edu_institution"
+                      type="text"
+                      name="institution"
+                      value={educationForm.institution}
+                      onChange={handleEducationFormChange}
+                      className="profile-input"
+                      placeholder="e.g. NJIT"
+                    />
+                  </div>
+
+                  <div className="profile-field">
+                    <label htmlFor="edu_degree" className="profile-label">
+                      Degree
+                    </label>
+                    <input
+                      id="edu_degree"
+                      type="text"
+                      name="degree"
+                      value={educationForm.degree}
+                      onChange={handleEducationFormChange}
+                      className="profile-input"
+                      placeholder="e.g. Bachelor of Science"
+                    />
+                  </div>
+
+                  <div className="profile-field">
+                    <label htmlFor="edu_field_of_study" className="profile-label">
+                      Field of Study
+                    </label>
+                    <input
+                      id="edu_field_of_study"
+                      type="text"
+                      name="field_of_study"
+                      value={educationForm.field_of_study}
+                      onChange={handleEducationFormChange}
+                      className="profile-input"
+                      placeholder="e.g. Computer Science"
+                    />
+                  </div>
+
+                  <div className="profile-field">
+                    <label htmlFor="edu_start_year" className="profile-label">
+                      Start Year
+                    </label>
+                    <input
+                      id="edu_start_year"
+                      type="number"
+                      name="start_year"
+                      value={educationForm.start_year}
+                      onChange={handleEducationFormChange}
+                      className="profile-input"
+                      placeholder="e.g. 2020"
+                      min="1900"
+                    />
+                  </div>
+
+                  <div className="profile-field">
+                    <label htmlFor="edu_end_year" className="profile-label">
+                      End Year
+                    </label>
+                    <input
+                      id="edu_end_year"
+                      type="number"
+                      name="end_year"
+                      value={educationForm.end_year}
+                      onChange={handleEducationFormChange}
+                      className="profile-input"
+                      placeholder="Leave blank if current"
+                      min="1900"
+                    />
+                  </div>
+
+                  <div className="profile-field">
+                    <label htmlFor="edu_gpa" className="profile-label">
+                      GPA
+                    </label>
+                    <input
+                      id="edu_gpa"
+                      type="number"
+                      name="gpa"
+                      value={educationForm.gpa}
+                      onChange={handleEducationFormChange}
+                      className="profile-input"
+                      placeholder="e.g. 3.8"
+                      step="0.01"
+                      min="0"
+                      max="9.99"
+                    />
+                  </div>
+
+                  <div className="profile-field profile-field--full">
+                    <label htmlFor="edu_description" className="profile-label">
+                      Description
+                    </label>
+                    <textarea
+                      id="edu_description"
+                      name="description"
+                      value={educationForm.description}
+                      onChange={handleEducationFormChange}
+                      rows="3"
+                      className="profile-textarea"
+                      placeholder="Activities, honors, relevant coursework…"
+                    />
+                  </div>
+                </div>
+
+                <div className="profile-actions">
+                  {educationSaveError && (
+                    <p className="profile-save-error" role="alert">
+                      {educationSaveError}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={educationSaving || !isEducationFormValid}
+                    className="profile-btn-save"
+                  >
+                    {educationSaving
+                      ? 'Saving...'
+                      : editingEducationId
+                        ? 'Update Education'
+                        : 'Add Education'}
+                  </button>
+                  {editingEducationId && (
+                    <button
+                      type="button"
+                      className="education-btn education-btn--secondary"
+                      onClick={handleEducationCancelEdit}
                     >
                       Cancel
                     </button>

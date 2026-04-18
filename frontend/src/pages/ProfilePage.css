@@ -522,3 +522,313 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Education section ───────────────────────────────────────────────────── */
+
+.education-empty {
+  padding: 16px 24px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.education-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.education-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.education-item:last-child {
+  border-bottom: none;
+}
+
+.education-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.education-item-institution {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.education-item-degree {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.education-item-years {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.education-item-gpa {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.education-item-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.education-btn {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    transform 0.1s;
+  border: 1px solid transparent;
+}
+
+.education-btn:hover:not(:disabled) {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.education-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.education-btn--secondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.education-btn--secondary:hover:not(:disabled) {
+  border-color: var(--border-orange);
+  color: var(--orange-600);
+}
+
+.education-btn--danger {
+  background: transparent;
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.education-btn--danger:hover:not(:disabled) {
+  background: var(--red-bg);
+}
+
+.education-form {
+  padding: 16px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.education-form-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* ── Experience section ──────────────────────────────────────────────────── */
+
+.experience-empty {
+  padding: 16px 24px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.experience-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.experience-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.experience-item:last-child {
+  border-bottom: none;
+}
+
+.experience-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.experience-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.experience-item-company {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.experience-item-location {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.experience-item-years {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.experience-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.experience-btn {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    transform 0.1s;
+  border: 1px solid transparent;
+}
+
+.experience-btn:hover:not(:disabled) {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.experience-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.experience-btn--icon {
+  padding: 4px 8px;
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.experience-btn--icon:hover:not(:disabled) {
+  border-color: var(--border-orange);
+  color: var(--orange-600);
+}
+
+.experience-btn--secondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.experience-btn--secondary:hover:not(:disabled) {
+  border-color: var(--border-orange);
+  color: var(--orange-600);
+}
+
+.experience-btn--danger {
+  background: transparent;
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.experience-btn--danger:hover:not(:disabled) {
+  background: var(--red-bg);
+}
+
+.experience-form {
+  padding: 16px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.experience-form-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 1024px) {
+  .profile-content {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-main {
+    margin-left: 0;
+  }
+
+  .profile-content {
+    padding: 16px;
+  }
+
+  .profile-completion {
+    padding: 16px;
+  }
+
+  .profile-completion-header {
+    flex-direction: column;
+  }
+
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-field--full {
+    grid-column: 1;
+  }
+
+  .profile-avatar-row {
+    padding: 16px 16px 0;
+  }
+
+  .profile-card-header,
+  .profile-grid,
+  .profile-card > .profile-field {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .education-form-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .experience-form-fields {
+    grid-template-columns: 1fr;
+  }
+}
