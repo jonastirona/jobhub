@@ -545,3 +545,472 @@
     grid-template-columns: 1fr;
   }
 }
+/* ── Skills ──────────────────────────────────────────────────────────────────── */
+
+.skills-empty {
+  padding: 16px 24px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.skills-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.skills-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.skills-item:last-child {
+  border-bottom: none;
+}
+
+.skills-item-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.skills-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.skills-item-category {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.skills-proficiency-badge {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px 8px;
+  text-transform: capitalize;
+}
+
+.skills-proficiency-badge--beginner {
+  background: var(--blue-bg);
+  color: var(--blue);
+}
+
+.skills-proficiency-badge--intermediate {
+  background: rgba(249, 115, 22, 0.12);
+  color: var(--orange-600);
+}
+
+.skills-proficiency-badge--advanced {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.skills-proficiency-badge--expert {
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--purple, #7c3aed);
+}
+
+.skills-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.skills-btn {
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.skills-btn:hover:not(:disabled) {
+  background: var(--bg-input);
+}
+
+.skills-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.skills-btn--icon {
+  padding: 4px 8px;
+  font-size: 10px;
+}
+
+.skills-btn--secondary {
+  color: var(--text-secondary);
+}
+
+.skills-btn--danger {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.skills-btn--danger:hover:not(:disabled) {
+  background: var(--red-bg);
+}
+
+.skills-form {
+  padding: 16px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.skills-form-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+/* ── Education section ───────────────────────────────────────────────────── */
+
+.education-empty {
+  padding: 16px 24px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.education-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.education-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.education-item:last-child {
+  border-bottom: none;
+}
+
+.education-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.education-item-institution {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.education-item-degree {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.education-item-years {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.education-item-gpa {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.education-item-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.education-btn {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    transform 0.1s;
+  border: 1px solid transparent;
+}
+
+.education-btn:hover:not(:disabled) {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.education-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.education-btn--secondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.education-btn--secondary:hover:not(:disabled) {
+  border-color: var(--border-orange);
+  color: var(--orange-600);
+}
+
+.education-btn--danger {
+  background: transparent;
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.education-btn--danger:hover:not(:disabled) {
+  background: var(--red-bg);
+}
+
+.education-form {
+  padding: 16px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.education-form-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* ── Experience section ──────────────────────────────────────────────────── */
+
+.experience-empty {
+  padding: 16px 24px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.experience-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.experience-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.experience-item:last-child {
+  border-bottom: none;
+}
+
+.experience-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.experience-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.experience-item-company {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.experience-item-location {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.experience-item-years {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.experience-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.experience-btn {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    transform 0.1s;
+  border: 1px solid transparent;
+}
+
+.experience-btn:hover:not(:disabled) {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.experience-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.experience-btn--icon {
+  padding: 4px 8px;
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.experience-btn--icon:hover:not(:disabled) {
+  border-color: var(--border-orange);
+  color: var(--orange-600);
+}
+
+.experience-btn--secondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.experience-btn--secondary:hover:not(:disabled) {
+  border-color: var(--border-orange);
+  color: var(--orange-600);
+}
+
+.experience-btn--danger {
+  background: transparent;
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.experience-btn--danger:hover:not(:disabled) {
+  background: var(--red-bg);
+}
+
+.experience-form {
+  padding: 16px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.experience-form-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 1024px) {
+  .profile-content {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-main {
+    margin-left: 0;
+  }
+
+  .profile-content {
+    padding: 16px;
+  }
+
+  .profile-completion {
+    padding: 16px;
+  }
+
+  .profile-completion-header {
+    flex-direction: column;
+  }
+
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-field--full {
+    grid-column: 1;
+  }
+
+  .profile-avatar-row {
+    padding: 16px 16px 0;
+  }
+
+  .profile-card-header,
+  .profile-grid,
+  .profile-card > .profile-field {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .skills-item {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px 16px;
+  }
+
+  .skills-item-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .skills-form {
+    padding: 16px;
+  }
+
+  .skills-form-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .education-form-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .experience-form-fields {
+    grid-template-columns: 1fr;
+  }
+}

@@ -17,6 +17,8 @@ from main import (
     CareerPreferencesUpsert,
     DocumentCreate,
     DocumentUpdate,
+    EducationCreate,
+    EducationUpdate,
     ExperienceCreate,
     ExperienceReorder,
     ExperienceUpdate,
@@ -27,6 +29,9 @@ from main import (
     ProfileUpsert,
     ReminderCreate,
     ReminderUpdate,
+    SkillCreate,
+    SkillReorder,
+    SkillUpdate,
     _normalize_profile_value,
     app,
     get_profile_completion,
@@ -2829,3 +2834,734 @@ def test_career_preferences_upsert_all_fields():
     assert prefs.work_mode == "remote"
     assert prefs.salary_min == 80000
     assert prefs.salary_max == 120000
+
+
+# Skills fixtures
+# ---------------------------------------------------------------------------
+
+SAMPLE_SKILL = {
+    "id": "skill-uuid-1111",
+    "user_id": MOCK_USER_ID,
+    "name": "React",
+    "category": "Frontend",
+    "proficiency": "advanced",
+    "position": 0,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-01T00:00:00+00:00",
+}
+
+# ---------------------------------------------------------------------------
+# Auth guard — every skills route must reject requests with no token
+# ---------------------------------------------------------------------------
+
+
+def test_list_skills_requires_auth():
+    response = client.get("/skills")
+    assert response.status_code == 401
+
+
+def test_create_skill_requires_auth():
+    response = client.post("/skills", json={"name": "React"})
+    assert response.status_code == 401
+
+
+def test_reorder_skills_requires_auth():
+    response = client.put("/skills/reorder", json={"ids": []})
+    assert response.status_code == 401
+
+
+def test_update_skill_requires_auth():
+    response = client.put("/skills/some-uuid", json={"name": "Vue"})
+    assert response.status_code == 401
+
+
+def test_delete_skill_requires_auth():
+    response = client.delete("/skills/some-uuid")
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# GET /skills
+# ---------------------------------------------------------------------------
+
+
+def test_list_skills_returns_user_skills():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/skills", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["name"] == "React"
+    assert body[0]["category"] == "Frontend"
+
+
+def test_list_skills_returns_empty_list():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/skills", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_skills_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get("/skills", headers={"authorization": AUTH_HEADER})
+    mock_query.eq.assert_any_call("user_id", MOCK_USER_ID)
+
+
+def test_list_skills_data_none_returns_500():
+    mock_sb, _, mock_result = make_mock_sb(data=[])
+    mock_result.data = None
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/skills", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# POST /skills
+# ---------------------------------------------------------------------------
+
+
+def test_create_skill_success():
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/skills",
+            json={"name": "React", "category": "Frontend", "proficiency": "advanced"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    assert response.json()["name"] == "React"
+
+
+def test_create_skill_sets_user_id():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([], [SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/skills",
+            json={"name": "React"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    insert_payload = mock_query.insert.call_args[0][0]
+    assert insert_payload["user_id"] == MOCK_USER_ID
+
+
+def test_create_skill_sets_position_from_count():
+    """position is max existing position + 1, fetched via order+limit."""
+    # The query returns only the highest-position row (order desc, limit 1).
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([{"position": 1}], [SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/skills",
+            json={"name": "React"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    insert_payload = mock_query.insert.call_args[0][0]
+    assert insert_payload["position"] == 2
+
+
+def test_create_skill_invalid_proficiency_returns_422():
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/skills",
+            json={"name": "React", "proficiency": "invalid"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_create_skill_missing_name_returns_422():
+    response = client.post(
+        "/skills",
+        json={"category": "Frontend"},
+        headers={"authorization": AUTH_HEADER},
+    )
+    assert response.status_code == 422
+
+
+def test_create_skill_blank_name_returns_422():
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/skills",
+            json={"name": "   "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "name" in response.json()["detail"]
+
+
+def test_create_skill_trims_name_before_insert():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([], [SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/skills",
+            json={"name": "  React  "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    insert_payload = mock_query.insert.call_args[0][0]
+    assert insert_payload["name"] == "React"
+
+
+def test_create_skill_blank_category_stored_as_null():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([], [SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/skills",
+            json={"name": "React", "category": "   "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    insert_payload = mock_query.insert.call_args[0][0]
+    assert insert_payload.get("category") is None
+
+
+def test_create_skill_db_failure_returns_500():
+    # insert returns empty data on both attempts (position read + insert, retried once)
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [], [], [])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/skills",
+            json={"name": "React"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# PUT /skills/reorder
+# ---------------------------------------------------------------------------
+
+
+def test_reorder_skills_success():
+    skill2 = {**SAMPLE_SKILL, "id": "skill-uuid-2222", "name": "Python", "position": 1}
+    reordered = [{**skill2, "position": 0}, {**SAMPLE_SKILL, "position": 1}]
+    # 1 select existing IDs + 1 temp upsert + 1 final upsert + 1 final select
+    mock_sb, _ = _make_mock_sb_with_side_effects(
+        [{"id": skill2["id"]}, {"id": SAMPLE_SKILL["id"]}],
+        reordered,
+        reordered,
+        reordered,
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/skills/reorder",
+            json={"ids": [skill2["id"], SAMPLE_SKILL["id"]]},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert body[0]["name"] == "Python"
+    assert body[1]["name"] == "React"
+
+
+def test_reorder_skills_empty_ids():
+    # select existing IDs (empty), skip upsert, final select
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/skills/reorder",
+            json={"ids": []},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+# ---------------------------------------------------------------------------
+# PUT /skills/{skill_id}
+# ---------------------------------------------------------------------------
+
+
+def test_update_skill_success():
+    updated = {**SAMPLE_SKILL, "name": "Vue"}
+    mock_sb, _, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            json={"name": "Vue"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["name"] == "Vue"
+
+
+def test_update_skill_not_found():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/skills/nonexistent-id",
+            json={"name": "Vue"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_update_skill_empty_body_returns_400():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            json={},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 400
+
+
+def test_update_skill_blank_name_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            json={"name": "   "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "name" in response.json()["detail"]
+
+
+def test_update_skill_trims_name_before_update():
+    updated = {**SAMPLE_SKILL, "name": "TypeScript"}
+    mock_sb, mock_query, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            json={"name": "  TypeScript  "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    update_payload = mock_query.update.call_args[0][0]
+    assert update_payload["name"] == "TypeScript"
+
+
+def test_update_skill_blank_category_stored_as_null():
+    updated = {**SAMPLE_SKILL, "category": None}
+    mock_sb, mock_query, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            json={"category": "   "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    update_payload = mock_query.update.call_args[0][0]
+    assert update_payload["category"] is None
+
+
+def test_update_skill_invalid_proficiency_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            json={"proficiency": "invalid"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_update_skill_scoped_to_user():
+    updated = {**SAMPLE_SKILL, "name": "Vue"}
+    mock_sb, mock_query, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            json={"name": "Vue"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+# ---------------------------------------------------------------------------
+# DELETE /skills/{skill_id}
+# ---------------------------------------------------------------------------
+
+
+def test_delete_skill_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            f"/skills/{SAMPLE_SKILL['id']}",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 204
+
+
+def test_delete_skill_not_found():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            "/skills/nonexistent-id",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_delete_skill_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_SKILL])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.delete(f"/skills/{SAMPLE_SKILL['id']}", headers={"authorization": AUTH_HEADER})
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+# ---------------------------------------------------------------------------
+# SkillCreate / SkillUpdate / SkillReorder schema validation
+# ---------------------------------------------------------------------------
+
+
+def test_skill_create_requires_name():
+    with pytest.raises(ValidationError):
+        SkillCreate()
+
+
+def test_skill_create_optional_fields():
+    skill = SkillCreate(name="React")
+    assert skill.name == "React"
+    assert skill.category is None
+    assert skill.proficiency is None
+
+
+def test_skill_update_all_optional():
+    skill = SkillUpdate()
+    assert skill.name is None
+    assert skill.category is None
+    assert skill.proficiency is None
+
+
+def test_skill_reorder_has_ids():
+    sr = SkillReorder(ids=["a", "b", "c"])
+    assert sr.ids == ["a", "b", "c"]
+
+
+SAMPLE_EDUCATION = {
+    "id": "edu-uuid-1111",
+    "user_id": MOCK_USER_ID,
+    "institution": "NJIT",
+    "degree": "Bachelor of Science",
+    "field_of_study": "Computer Science",
+    "start_year": 2022,
+    "end_year": 2026,
+    "gpa": 3.8,
+    "description": None,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-01T00:00:00+00:00",
+}
+
+# ---------------------------------------------------------------------------
+# Auth guard — every education route must reject requests with no token
+# ---------------------------------------------------------------------------
+
+
+def test_list_education_requires_auth():
+    response = client.get("/education")
+    assert response.status_code == 401
+
+
+def test_create_education_requires_auth():
+    response = client.post(
+        "/education",
+        json={"institution": "NJIT", "degree": "BS", "field_of_study": "CS", "start_year": 2022},
+    )
+    assert response.status_code == 401
+
+
+def test_update_education_requires_auth():
+    response = client.put("/education/some-uuid", json={"institution": "MIT"})
+    assert response.status_code == 401
+
+
+def test_delete_education_requires_auth():
+    response = client.delete("/education/some-uuid")
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# GET /education
+# ---------------------------------------------------------------------------
+
+
+def test_list_education_returns_user_education():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/education", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["institution"] == "NJIT"
+    assert body[0]["degree"] == "Bachelor of Science"
+
+
+def test_list_education_returns_empty_list():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/education", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_education_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get("/education", headers={"authorization": AUTH_HEADER})
+    mock_query.eq.assert_any_call("user_id", MOCK_USER_ID)
+
+
+# ---------------------------------------------------------------------------
+# POST /education
+# ---------------------------------------------------------------------------
+
+
+def test_create_education_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "Bachelor of Science",
+                "field_of_study": "Computer Science",
+                "start_year": 2022,
+                "end_year": 2026,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    assert response.json()["institution"] == "NJIT"
+
+
+def test_create_education_sets_user_id():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "BS",
+                "field_of_study": "CS",
+                "start_year": 2022,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    insert_payload = mock_query.insert.call_args[0][0]
+    assert insert_payload["user_id"] == MOCK_USER_ID
+
+
+def test_create_education_missing_required_fields_returns_422():
+    response = client.post(
+        "/education",
+        json={"institution": "NJIT"},
+        headers={"authorization": AUTH_HEADER},
+    )
+    assert response.status_code == 422
+
+
+def test_create_education_invalid_start_year_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "BS",
+                "field_of_study": "CS",
+                "start_year": 1800,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "start_year" in response.json()["detail"]
+
+
+def test_create_education_end_year_before_start_year_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "BS",
+                "field_of_study": "CS",
+                "start_year": 2022,
+                "end_year": 2020,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "end_year" in response.json()["detail"]
+
+
+def test_create_education_negative_gpa_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "BS",
+                "field_of_study": "CS",
+                "start_year": 2022,
+                "gpa": -0.1,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_create_education_gpa_too_large_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "BS",
+                "field_of_study": "CS",
+                "start_year": 2022,
+                "gpa": 10.0,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_create_education_db_failure_returns_500():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "BS",
+                "field_of_study": "CS",
+                "start_year": 2022,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# PUT /education/{entry_id}
+# ---------------------------------------------------------------------------
+
+
+def test_update_education_success():
+    updated = {**SAMPLE_EDUCATION, "institution": "MIT"}
+    mock_sb, _, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/education/{SAMPLE_EDUCATION['id']}",
+            json={"institution": "MIT"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["institution"] == "MIT"
+
+
+def test_update_education_not_found_returns_404():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/education/nonexistent-id",
+            json={"institution": "MIT"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_update_education_empty_body_returns_400():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/education/{SAMPLE_EDUCATION['id']}",
+            json={},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 400
+
+
+def test_update_education_required_field_null_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/education/{SAMPLE_EDUCATION['id']}",
+            json={"institution": None},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "institution" in response.json()["detail"]
+
+
+def test_update_education_end_year_before_start_year_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/education/{SAMPLE_EDUCATION['id']}",
+            json={"start_year": 2024, "end_year": 2020},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "end_year" in response.json()["detail"]
+
+
+def test_update_education_partial_end_year_before_existing_start_year_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/education/{SAMPLE_EDUCATION['id']}",
+            json={"end_year": SAMPLE_EDUCATION["start_year"] - 1},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "end_year" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# DELETE /education/{entry_id}
+# ---------------------------------------------------------------------------
+
+
+def test_delete_education_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            f"/education/{SAMPLE_EDUCATION['id']}",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 204
+
+
+def test_delete_education_not_found_returns_404():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            "/education/nonexistent-id",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# EducationCreate / EducationUpdate schema validation
+# ---------------------------------------------------------------------------
+
+
+def test_education_create_requires_required_fields():
+    with pytest.raises(ValidationError):
+        EducationCreate(institution="NJIT")
+
+
+def test_education_create_optional_fields_default_to_none():
+    entry = EducationCreate(institution="NJIT", degree="BS", field_of_study="CS", start_year=2022)
+    assert entry.end_year is None
+    assert entry.gpa is None
+    assert entry.description is None
+
+
+def test_education_update_all_optional():
+    entry = EducationUpdate()
+    assert entry.institution is None
+    assert entry.degree is None
+    assert entry.start_year is None
