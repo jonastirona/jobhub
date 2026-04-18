@@ -19,6 +19,16 @@ const SAMPLE_EXPERIENCE_ENTRY = {
   position: 0,
 };
 
+const SAMPLE_PREFS = {
+  id: 'prefs-1',
+  user_id: 'user-1',
+  target_roles: 'Software Engineer',
+  preferred_locations: 'New York, NY',
+  work_mode: 'hybrid',
+  salary_min: 80000,
+  salary_max: 120000,
+};
+
 const mockAuthValue = {
   session: { access_token: ACCESS_TOKEN },
   user: { id: 'user-1', email: 'jane@example.com' },
@@ -74,6 +84,10 @@ const COMPLETE_COMPLETION = {
   required_count: REQUIRED_FIELD_KEYS.length,
 };
 
+/** Returns an ok experience GET/mutation response, or null if the URL is not
+ *  an /experience endpoint. Centralising this keeps all mock helpers consistent
+ *  and prevents the /experience stub from drifting between them.
+ */
 function resolveExperienceUrl(url, opts = {}, { getExperience = [], saveExperience = null } = {}) {
   if (!url.includes('/experience')) return null;
   if (opts.method === 'POST') {
@@ -86,16 +100,6 @@ function resolveExperienceUrl(url, opts = {}, { getExperience = [], saveExperien
   return Promise.resolve({ ok: true, json: () => Promise.resolve(getExperience) });
 }
 
-const SAMPLE_PREFS = {
-  id: 'prefs-1',
-  user_id: 'user-1',
-  target_roles: 'Software Engineer',
-  preferred_locations: 'New York, NY',
-  work_mode: 'hybrid',
-  salary_min: 80000,
-  salary_max: 120000,
-};
-
 function mockFetch({
   getProfile = {},
   saveProfile = SAMPLE_PROFILE,
@@ -105,14 +109,14 @@ function mockFetch({
   savePrefs = SAMPLE_PREFS,
 } = {}) {
   global.fetch = jest.fn((url, opts = {}) => {
-    const exp = resolveExperienceUrl(url, opts, { getExperience, saveExperience });
-    if (exp) return exp;
     if (url.includes('/career-preferences')) {
       if (opts.method === 'PUT') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(savePrefs) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve(getPrefs) });
     }
+    const exp = resolveExperienceUrl(url, opts, { getExperience, saveExperience });
+    if (exp) return exp;
     if (opts.method === 'PUT' && url.endsWith('/profile')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(saveProfile) });
     }
@@ -122,17 +126,20 @@ function mockFetch({
 
 function mockFetchGetError(status = 500, message = 'Internal Server Error') {
   global.fetch = jest.fn((url, opts = {}) => {
-    const exp = resolveExperienceUrl(url, opts);
-    if (exp) return exp;
     if (url.includes('/career-preferences')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     }
+    const exp = resolveExperienceUrl(url, opts);
+    if (exp) return exp;
     return Promise.resolve({ ok: false, status, text: () => Promise.resolve(message) });
   });
 }
 
 function mockFetchSaveError(status = 500, text = 'Server Error') {
   global.fetch = jest.fn((url, opts = {}) => {
+    if (url.includes('/career-preferences')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }
     const exp = resolveExperienceUrl(url, opts);
     if (exp) return exp;
     if (opts.method === 'PUT' && url.endsWith('/profile')) {
@@ -144,11 +151,11 @@ function mockFetchSaveError(status = 500, text = 'Server Error') {
 
 function mockFetchNetworkError(message = 'Network error') {
   global.fetch = jest.fn((url, opts = {}) => {
-    const exp = resolveExperienceUrl(url, opts);
-    if (exp) return exp;
     if (url.includes('/career-preferences')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     }
+    const exp = resolveExperienceUrl(url, opts);
+    if (exp) return exp;
     return Promise.reject(new Error(message));
   });
 }
@@ -159,6 +166,9 @@ function makePendingSave() {
     resolve = res;
   });
   global.fetch = jest.fn((url, opts = {}) => {
+    if (url.includes('/career-preferences')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }
     const exp = resolveExperienceUrl(url, opts);
     if (exp) return exp;
     if (opts.method === 'PUT' && url.endsWith('/profile')) return promise;
@@ -295,7 +305,7 @@ describe('rendering — empty profile (no existing data)', () => {
       expect(screen.getByLabelText(/full name/i)).toHaveValue('');
     });
     expect(screen.getByLabelText(/headline/i)).toHaveValue('');
-    expect(screen.getByLabelText('Location')).toHaveValue('');
+    expect(screen.getByLabelText(/^location$/i)).toHaveValue('');
     expect(screen.getByLabelText(/phone/i)).toHaveValue('');
     expect(screen.getByLabelText(/website/i)).toHaveValue('');
     expect(screen.getByLabelText(/linkedin url/i)).toHaveValue('');
@@ -362,7 +372,7 @@ describe('rendering — existing profile', () => {
       expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith');
     });
     expect(screen.getByLabelText(/headline/i)).toHaveValue('Software Engineer');
-    expect(screen.getByLabelText('Location')).toHaveValue('New York, NY');
+    expect(screen.getByLabelText(/^location$/i)).toHaveValue('New York, NY');
     expect(screen.getByLabelText(/phone/i)).toHaveValue('555-123-4567');
     expect(screen.getByLabelText(/website/i)).toHaveValue('https://janesmith.dev');
     expect(screen.getByLabelText(/linkedin url/i)).toHaveValue('https://linkedin.com/in/janesmith');
@@ -430,7 +440,7 @@ describe('rendering — existing profile', () => {
     mockFetch({ getProfile: profile });
     renderPage();
     await waitFor(() => {
-      expect(screen.getByLabelText('Location')).toHaveValue('');
+      expect(screen.getByLabelText(/^location$/i)).toHaveValue('');
     });
     expect(screen.getByLabelText(/phone/i)).toHaveValue('');
     expect(screen.getByLabelText('Summary')).toHaveValue('');
@@ -482,7 +492,7 @@ describe('form interaction', () => {
 
     await userEvent.type(screen.getByLabelText(/full name/i), 'Jane Smith');
     await userEvent.type(screen.getByLabelText(/headline/i), 'Software Engineer');
-    await userEvent.type(screen.getByLabelText('Location'), 'New York, NY');
+    await userEvent.type(screen.getByLabelText(/^location$/i), 'New York, NY');
     await userEvent.type(screen.getByLabelText(/phone/i), '555-123-4567');
     await userEvent.type(screen.getByLabelText(/website/i), 'https://janesmith.dev');
     await userEvent.type(
@@ -521,14 +531,10 @@ describe('save — success', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
     await waitFor(() => {
-      const putCall = global.fetch.mock.calls.find(
-        ([url, opts = {}]) => url === `${BACKEND}/profile` && opts.method === 'PUT'
-      );
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
       expect(putCall).toBeDefined();
     });
-    const [url, opts] = global.fetch.mock.calls.find(
-      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-    );
+    const [url, opts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
     expect(url).toBe(`${BACKEND}/profile`);
     expect(opts.method).toBe('PUT');
     const body = JSON.parse(opts.body);
@@ -541,14 +547,10 @@ describe('save — success', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
     await waitFor(() => {
-      const putCall = global.fetch.mock.calls.find(
-        ([url, opts = {}]) => url === `${BACKEND}/profile` && opts.method === 'PUT'
-      );
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
       expect(putCall).toBeDefined();
     });
-    const [, opts] = global.fetch.mock.calls.find(
-      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-    );
+    const [, opts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
     expect(opts.headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
   });
 
@@ -579,14 +581,10 @@ describe('save — success', () => {
     await userEvent.type(screen.getByLabelText(/full name/i), '   ');
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
     await waitFor(() => {
-      const putCall = global.fetch.mock.calls.find(
-        ([url, opts = {}]) => url === `${BACKEND}/profile` && opts.method === 'PUT'
-      );
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
       expect(putCall).toBeDefined();
     });
-    const [, opts] = global.fetch.mock.calls.find(
-      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-    );
+    const [, opts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
     const body = JSON.parse(opts.body);
     expect(body.full_name).toBeNull();
   });
@@ -754,7 +752,7 @@ describe('accessibility', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     expect(screen.getByLabelText(/headline/i)).toBeInTheDocument();
-    expect(screen.getByLabelText('Location')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^location$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/phone/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/website/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/linkedin url/i)).toBeInTheDocument();
@@ -813,15 +811,11 @@ describe('fetch payload', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
     await waitFor(() => {
-      const putCall = global.fetch.mock.calls.find(
-        ([url, opts = {}]) => url === `${BACKEND}/profile` && opts.method === 'PUT'
-      );
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
       expect(putCall).toBeDefined();
     });
-    const [, opts] = global.fetch.mock.calls.find(
-      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-    );
-    const body = JSON.parse(opts.body);
+    const [, putOpts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+    const body = JSON.parse(putOpts.body);
     for (const field of [
       'full_name',
       'headline',
@@ -838,11 +832,8 @@ describe('fetch payload', () => {
 
   test('GET /profile is called with Authorization header', async () => {
     renderPage();
-    await waitFor(() => {
-      const profileCall = global.fetch.mock.calls.find(([u]) => u === `${BACKEND}/profile`);
-      expect(profileCall).toBeDefined();
-    });
-    const [url, opts] = global.fetch.mock.calls.find(([u]) => u === `${BACKEND}/profile`);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const [url, opts] = global.fetch.mock.calls[0];
     expect(url).toBe(`${BACKEND}/profile`);
     expect(opts.headers['Authorization']).toBe(`Bearer ${ACCESS_TOKEN}`);
   });
@@ -853,15 +844,11 @@ describe('fetch payload', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
     await waitFor(() => {
-      const putCall = global.fetch.mock.calls.find(
-        ([url, opts = {}]) => url === `${BACKEND}/profile` && opts.method === 'PUT'
-      );
+      const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
       expect(putCall).toBeDefined();
     });
-    const [, opts] = global.fetch.mock.calls.find(
-      ([u, o = {}]) => u === `${BACKEND}/profile` && o.method === 'PUT'
-    );
-    const body = JSON.parse(opts.body);
+    const [, putOpts] = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
+    const body = JSON.parse(putOpts.body);
     expect(body.full_name).toBeNull();
     expect(body.summary).toBeNull();
   });

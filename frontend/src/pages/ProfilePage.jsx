@@ -90,10 +90,11 @@ export default function ProfilePage() {
   const [formData, setFormData] = useState(EMPTY_PROFILE);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
-  const [editingExperienceId, setEditingExperienceId] = useState(null);
   const [prefsData, setPrefsData] = useState(EMPTY_CAREER_PREFERENCES);
   const [prefsSaveSuccess, setPrefsSaveSuccess] = useState(false);
+
+  const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
+  const [editingExperienceId, setEditingExperienceId] = useState(null);
 
   useEffect(() => {
     setFormData({
@@ -109,13 +110,15 @@ export default function ProfilePage() {
   }, [profile]);
 
   useEffect(() => {
-    setPrefsData({
-      target_roles: asText(preferences?.target_roles),
-      preferred_locations: asText(preferences?.preferred_locations),
-      work_mode: asText(preferences?.work_mode),
-      salary_min: preferences?.salary_min != null ? String(preferences.salary_min) : '',
-      salary_max: preferences?.salary_max != null ? String(preferences.salary_max) : '',
-    });
+    if (preferences) {
+      setPrefsData({
+        target_roles: asText(preferences.target_roles),
+        preferred_locations: asText(preferences.preferred_locations),
+        work_mode: asText(preferences.work_mode),
+        salary_min: preferences.salary_min != null ? String(preferences.salary_min) : '',
+        salary_max: preferences.salary_max != null ? String(preferences.salary_max) : '',
+      });
+    }
   }, [preferences]);
 
   const draftCompletion = useMemo(() => getCompletionState(formData), [formData]);
@@ -132,19 +135,18 @@ export default function ProfilePage() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setSaveSuccess(false);
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handlePrefsChange = (e) => {
-    const { name, value } = e.target;
-    setPrefsSaveSuccess(false);
-    setPrefsData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
+
     setSaveSuccess(false);
+
     const payload = {
       full_name: toNullableString(formData.full_name),
       headline: toNullableString(formData.headline),
@@ -155,8 +157,30 @@ export default function ProfilePage() {
       github_url: toNullableString(formData.github_url),
       summary: toNullableString(formData.summary),
     };
+
     const saved = await saveProfile(payload);
     if (saved) setSaveSuccess(true);
+  };
+
+  const handlePrefsChange = (e) => {
+    const { name, value } = e.target;
+    setPrefsSaveSuccess(false);
+    setPrefsData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handlePrefsSubmit = async (e) => {
+    e.preventDefault();
+    if (prefsSaving) return;
+    setPrefsSaveSuccess(false);
+    const payload = {
+      target_roles: toNullableString(prefsData.target_roles),
+      preferred_locations: toNullableString(prefsData.preferred_locations),
+      work_mode: toNullableString(prefsData.work_mode),
+      salary_min: toNullableInt(prefsData.salary_min),
+      salary_max: toNullableInt(prefsData.salary_max),
+    };
+    const saved = await savePreferences(payload);
+    if (saved) setPrefsSaveSuccess(true);
   };
 
   const expStartYear = parseYear(experienceForm.start_year);
@@ -228,21 +252,6 @@ export default function ProfilePage() {
     const newOrder = [...experience];
     [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
     await reorderExperience(newOrder.map((e) => e.id));
-  };
-
-  const handlePrefsSubmit = async (e) => {
-    e.preventDefault();
-    if (prefsSaving) return;
-    setPrefsSaveSuccess(false);
-    const payload = {
-      target_roles: toNullableString(prefsData.target_roles),
-      preferred_locations: toNullableString(prefsData.preferred_locations),
-      work_mode: toNullableString(prefsData.work_mode),
-      salary_min: toNullableInt(prefsData.salary_min),
-      salary_max: toNullableInt(prefsData.salary_max),
-    };
-    const saved = await savePreferences(payload);
-    if (saved) setPrefsSaveSuccess(true);
   };
 
   if (loading || prefsLoading) {
