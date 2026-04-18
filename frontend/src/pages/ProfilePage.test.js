@@ -665,7 +665,9 @@ describe('save — success', () => {
     await userEvent.type(screen.getByLabelText(/full name/i), '   ');
     fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
-      expect(screen.getByText(/complete the highlighted identity fields before saving/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/complete the highlighted identity fields before saving/i)
+      ).toBeInTheDocument();
     });
     const putCalls = global.fetch.mock.calls.filter(([, opts = {}]) => opts.method === 'PUT');
     expect(putCalls).toHaveLength(0);
@@ -707,7 +709,9 @@ describe('save — validation', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
-      expect(screen.getByText(/complete the highlighted identity fields before saving/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/complete the highlighted identity fields before saving/i)
+      ).toBeInTheDocument();
       expect(screen.getByText(/full name is required/i)).toBeInTheDocument();
     });
     const putCalls = global.fetch.mock.calls.filter(([, opts = {}]) => opts.method === 'PUT');
@@ -722,7 +726,9 @@ describe('save — validation', () => {
     await userEvent.type(screen.getByLabelText(/website/i), 'notaurl');
     fireEvent.click(screen.getByRole('button', { name: /save summary/i }));
     await waitFor(() => {
-      expect(screen.getByText(/fix the highlighted summary fields before saving/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/fix the highlighted summary fields before saving/i)
+      ).toBeInTheDocument();
       expect(screen.getByText(/website must be a valid url/i)).toBeInTheDocument();
     });
     const putCalls = global.fetch.mock.calls.filter(([, opts = {}]) => opts.method === 'PUT');
@@ -964,7 +970,9 @@ describe('fetch payload', () => {
   test('PUT for summary includes only summary fields', async () => {
     mockFetch({ getProfile: SAMPLE_PROFILE });
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText(/website/i)).toHaveValue('https://janesmith.dev'));
+    await waitFor(() =>
+      expect(screen.getByLabelText(/website/i)).toHaveValue('https://janesmith.dev')
+    );
     fireEvent.click(screen.getByRole('button', { name: /save summary/i }));
     await waitFor(() => {
       const putCall = global.fetch.mock.calls.find(([, opts = {}]) => opts.method === 'PUT');
@@ -998,7 +1006,9 @@ describe('fetch payload', () => {
     await userEvent.type(screen.getByLabelText(/full name/i), '   ');
     fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
-      expect(screen.getByText(/complete the highlighted identity fields before saving/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/complete the highlighted identity fields before saving/i)
+      ).toBeInTheDocument();
     });
     const putCalls = global.fetch.mock.calls.filter(([, opts = {}]) => opts.method === 'PUT');
     expect(putCalls).toHaveLength(0);

@@ -690,7 +690,11 @@ export default function ProfilePage() {
 
         <div className="profile-form">
           <form className="profile-form" onSubmit={handleIdentitySubmit} noValidate>
-            <section className="profile-card" role="region" aria-labelledby="profile-identity-title">
+            <section
+              className="profile-card"
+              role="region"
+              aria-labelledby="profile-identity-title"
+            >
               <div className="profile-card-header">
                 <h2 id="profile-identity-title" className="profile-card-title">
                   Identity
@@ -717,8 +721,16 @@ export default function ProfilePage() {
                     value={formData.full_name}
                     onChange={handleChange}
                     className={`profile-input${identityValidationAttempted && identityFieldErrors.full_name ? ' profile-input--error' : ''}`}
-                    aria-invalid={identityValidationAttempted && identityFieldErrors.full_name ? true : undefined}
-                    aria-describedby={identityValidationAttempted && identityFieldErrors.full_name ? 'profile-full-name-error' : undefined}
+                    aria-invalid={
+                      identityValidationAttempted && identityFieldErrors.full_name
+                        ? true
+                        : undefined
+                    }
+                    aria-describedby={
+                      identityValidationAttempted && identityFieldErrors.full_name
+                        ? 'profile-full-name-error'
+                        : undefined
+                    }
                   />
                   {identityValidationAttempted && identityFieldErrors.full_name && (
                     <p id="profile-full-name-error" className="profile-field-error" role="alert">
@@ -738,8 +750,14 @@ export default function ProfilePage() {
                     value={formData.headline}
                     onChange={handleChange}
                     className={`profile-input${identityValidationAttempted && identityFieldErrors.headline ? ' profile-input--error' : ''}`}
-                    aria-invalid={identityValidationAttempted && identityFieldErrors.headline ? true : undefined}
-                    aria-describedby={identityValidationAttempted && identityFieldErrors.headline ? 'profile-headline-error' : undefined}
+                    aria-invalid={
+                      identityValidationAttempted && identityFieldErrors.headline ? true : undefined
+                    }
+                    aria-describedby={
+                      identityValidationAttempted && identityFieldErrors.headline
+                        ? 'profile-headline-error'
+                        : undefined
+                    }
                   />
                   {identityValidationAttempted && identityFieldErrors.headline && (
                     <p id="profile-headline-error" className="profile-field-error" role="alert">
@@ -759,8 +777,14 @@ export default function ProfilePage() {
                     value={formData.location}
                     onChange={handleChange}
                     className={`profile-input${identityValidationAttempted && identityFieldErrors.location ? ' profile-input--error' : ''}`}
-                    aria-invalid={identityValidationAttempted && identityFieldErrors.location ? true : undefined}
-                    aria-describedby={identityValidationAttempted && identityFieldErrors.location ? 'profile-location-error' : undefined}
+                    aria-invalid={
+                      identityValidationAttempted && identityFieldErrors.location ? true : undefined
+                    }
+                    aria-describedby={
+                      identityValidationAttempted && identityFieldErrors.location
+                        ? 'profile-location-error'
+                        : undefined
+                    }
                   />
                   {identityValidationAttempted && identityFieldErrors.location && (
                     <p id="profile-location-error" className="profile-field-error" role="alert">
@@ -780,8 +804,14 @@ export default function ProfilePage() {
                     value={formData.phone}
                     onChange={handleChange}
                     className={`profile-input${identityValidationAttempted && identityFieldErrors.phone ? ' profile-input--error' : ''}`}
-                    aria-invalid={identityValidationAttempted && identityFieldErrors.phone ? true : undefined}
-                    aria-describedby={identityValidationAttempted && identityFieldErrors.phone ? 'profile-phone-error' : undefined}
+                    aria-invalid={
+                      identityValidationAttempted && identityFieldErrors.phone ? true : undefined
+                    }
+                    aria-describedby={
+                      identityValidationAttempted && identityFieldErrors.phone
+                        ? 'profile-phone-error'
+                        : undefined
+                    }
                   />
                   {identityValidationAttempted && identityFieldErrors.phone && (
                     <p id="profile-phone-error" className="profile-field-error" role="alert">
@@ -834,8 +864,14 @@ export default function ProfilePage() {
                     value={formData.website}
                     onChange={handleChange}
                     className={`profile-input${summaryValidationAttempted && summaryFieldErrors.website ? ' profile-input--error' : ''}`}
-                    aria-invalid={summaryValidationAttempted && summaryFieldErrors.website ? true : undefined}
-                    aria-describedby={summaryValidationAttempted && summaryFieldErrors.website ? 'profile-website-error' : undefined}
+                    aria-invalid={
+                      summaryValidationAttempted && summaryFieldErrors.website ? true : undefined
+                    }
+                    aria-describedby={
+                      summaryValidationAttempted && summaryFieldErrors.website
+                        ? 'profile-website-error'
+                        : undefined
+                    }
                   />
                   {summaryValidationAttempted && summaryFieldErrors.website && (
                     <p id="profile-website-error" className="profile-field-error" role="alert">
@@ -855,8 +891,16 @@ export default function ProfilePage() {
                     value={formData.linkedin_url}
                     onChange={handleChange}
                     className={`profile-input${summaryValidationAttempted && summaryFieldErrors.linkedin_url ? ' profile-input--error' : ''}`}
-                    aria-invalid={summaryValidationAttempted && summaryFieldErrors.linkedin_url ? true : undefined}
-                    aria-describedby={summaryValidationAttempted && summaryFieldErrors.linkedin_url ? 'profile-linkedin-url-error' : undefined}
+                    aria-invalid={
+                      summaryValidationAttempted && summaryFieldErrors.linkedin_url
+                        ? true
+                        : undefined
+                    }
+                    aria-describedby={
+                      summaryValidationAttempted && summaryFieldErrors.linkedin_url
+                        ? 'profile-linkedin-url-error'
+                        : undefined
+                    }
                   />
                   {summaryValidationAttempted && summaryFieldErrors.linkedin_url && (
                     <p id="profile-linkedin-url-error" className="profile-field-error" role="alert">
@@ -876,8 +920,14 @@ export default function ProfilePage() {
                     value={formData.github_url}
                     onChange={handleChange}
                     className={`profile-input${summaryValidationAttempted && summaryFieldErrors.github_url ? ' profile-input--error' : ''}`}
-                    aria-invalid={summaryValidationAttempted && summaryFieldErrors.github_url ? true : undefined}
-                    aria-describedby={summaryValidationAttempted && summaryFieldErrors.github_url ? 'profile-github-url-error' : undefined}
+                    aria-invalid={
+                      summaryValidationAttempted && summaryFieldErrors.github_url ? true : undefined
+                    }
+                    aria-describedby={
+                      summaryValidationAttempted && summaryFieldErrors.github_url
+                        ? 'profile-github-url-error'
+                        : undefined
+                    }
                   />
                   {summaryValidationAttempted && summaryFieldErrors.github_url && (
                     <p id="profile-github-url-error" className="profile-field-error" role="alert">
