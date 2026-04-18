@@ -16,6 +16,8 @@ from main import (
     PROFILE_REQUIRED_FIELDS,
     DocumentCreate,
     DocumentUpdate,
+    EducationCreate,
+    EducationUpdate,
     ExperienceCreate,
     ExperienceReorder,
     ExperienceUpdate,
@@ -2994,3 +2996,335 @@ def test_skill_update_all_optional():
 def test_skill_reorder_has_ids():
     sr = SkillReorder(ids=["a", "b", "c"])
     assert sr.ids == ["a", "b", "c"]
+
+
+SAMPLE_EDUCATION = {
+    "id": "edu-uuid-1111",
+    "user_id": MOCK_USER_ID,
+    "institution": "NJIT",
+    "degree": "Bachelor of Science",
+    "field_of_study": "Computer Science",
+    "start_year": 2022,
+    "end_year": 2026,
+    "gpa": 3.8,
+    "description": None,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-01T00:00:00+00:00",
+}
+
+# ---------------------------------------------------------------------------
+# Auth guard — every education route must reject requests with no token
+# ---------------------------------------------------------------------------
+
+
+def test_list_education_requires_auth():
+    response = client.get("/education")
+    assert response.status_code == 401
+
+
+def test_create_education_requires_auth():
+    response = client.post(
+        "/education",
+        json={"institution": "NJIT", "degree": "BS", "field_of_study": "CS", "start_year": 2022},
+    )
+    assert response.status_code == 401
+
+
+def test_update_education_requires_auth():
+    response = client.put("/education/some-uuid", json={"institution": "MIT"})
+    assert response.status_code == 401
+
+
+def test_delete_education_requires_auth():
+    response = client.delete("/education/some-uuid")
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# GET /education
+# ---------------------------------------------------------------------------
+
+
+def test_list_education_returns_user_education():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/education", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["institution"] == "NJIT"
+    assert body[0]["degree"] == "Bachelor of Science"
+
+
+def test_list_education_returns_empty_list():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/education", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_education_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get("/education", headers={"authorization": AUTH_HEADER})
+    mock_query.eq.assert_any_call("user_id", MOCK_USER_ID)
+
+
+# ---------------------------------------------------------------------------
+# POST /education
+# ---------------------------------------------------------------------------
+
+
+def test_create_education_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "Bachelor of Science",
+                "field_of_study": "Computer Science",
+                "start_year": 2022,
+                "end_year": 2026,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    assert response.json()["institution"] == "NJIT"
+
+
+def test_create_education_sets_user_id():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "BS",
+                "field_of_study": "CS",
+                "start_year": 2022,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    insert_payload = mock_query.insert.call_args[0][0]
+    assert insert_payload["user_id"] == MOCK_USER_ID
+
+
+def test_create_education_missing_required_fields_returns_422():
+    response = client.post(
+        "/education",
+        json={"institution": "NJIT"},
+        headers={"authorization": AUTH_HEADER},
+    )
+    assert response.status_code == 422
+
+
+def test_create_education_invalid_start_year_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "BS",
+                "field_of_study": "CS",
+                "start_year": 1800,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "start_year" in response.json()["detail"]
+
+
+def test_create_education_end_year_before_start_year_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "BS",
+                "field_of_study": "CS",
+                "start_year": 2022,
+                "end_year": 2020,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "end_year" in response.json()["detail"]
+
+
+def test_create_education_negative_gpa_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "BS",
+                "field_of_study": "CS",
+                "start_year": 2022,
+                "gpa": -0.1,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_create_education_gpa_too_large_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "BS",
+                "field_of_study": "CS",
+                "start_year": 2022,
+                "gpa": 10.0,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_create_education_db_failure_returns_500():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/education",
+            json={
+                "institution": "NJIT",
+                "degree": "BS",
+                "field_of_study": "CS",
+                "start_year": 2022,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# PUT /education/{entry_id}
+# ---------------------------------------------------------------------------
+
+
+def test_update_education_success():
+    updated = {**SAMPLE_EDUCATION, "institution": "MIT"}
+    mock_sb, _, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/education/{SAMPLE_EDUCATION['id']}",
+            json={"institution": "MIT"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["institution"] == "MIT"
+
+
+def test_update_education_not_found_returns_404():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/education/nonexistent-id",
+            json={"institution": "MIT"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_update_education_empty_body_returns_400():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/education/{SAMPLE_EDUCATION['id']}",
+            json={},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 400
+
+
+def test_update_education_required_field_null_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/education/{SAMPLE_EDUCATION['id']}",
+            json={"institution": None},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "institution" in response.json()["detail"]
+
+
+def test_update_education_end_year_before_start_year_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/education/{SAMPLE_EDUCATION['id']}",
+            json={"start_year": 2024, "end_year": 2020},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "end_year" in response.json()["detail"]
+
+
+def test_update_education_partial_end_year_before_existing_start_year_returns_422():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/education/{SAMPLE_EDUCATION['id']}",
+            json={"end_year": SAMPLE_EDUCATION["start_year"] - 1},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "end_year" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# DELETE /education/{entry_id}
+# ---------------------------------------------------------------------------
+
+
+def test_delete_education_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_EDUCATION])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            f"/education/{SAMPLE_EDUCATION['id']}",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 204
+
+
+def test_delete_education_not_found_returns_404():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            "/education/nonexistent-id",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# EducationCreate / EducationUpdate schema validation
+# ---------------------------------------------------------------------------
+
+
+def test_education_create_requires_required_fields():
+    with pytest.raises(ValidationError):
+        EducationCreate(institution="NJIT")
+
+
+def test_education_create_optional_fields_default_to_none():
+    entry = EducationCreate(institution="NJIT", degree="BS", field_of_study="CS", start_year=2022)
+    assert entry.end_year is None
+    assert entry.gpa is None
+    assert entry.description is None
+
+
+def test_education_update_all_optional():
+    entry = EducationUpdate()
+    assert entry.institution is None
+    assert entry.degree is None
+    assert entry.start_year is None

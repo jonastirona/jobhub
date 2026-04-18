@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { ProfileAvatarProvider } from '../context/ProfileAvatarContext';
@@ -51,15 +51,6 @@ const SAMPLE_PROFILE = {
   summary: 'Experienced engineer.',
 };
 
-const SAMPLE_SKILL = {
-  id: 'skill-1',
-  user_id: 'user-1',
-  name: 'React',
-  category: 'Frontend',
-  proficiency: 'advanced',
-  position: 0,
-};
-
 const REQUIRED_FIELD_KEYS = [
   'full_name',
   'headline',
@@ -82,6 +73,45 @@ const COMPLETE_COMPLETION = {
   missing_fields: [],
   required_count: REQUIRED_FIELD_KEYS.length,
 };
+
+const SAMPLE_EDUCATION = {
+  id: 'edu-1',
+  user_id: 'user-1',
+  institution: 'NJIT',
+  degree: 'Bachelor of Science',
+  field_of_study: 'Computer Science',
+  start_year: 2022,
+  end_year: 2026,
+  gpa: 3.8,
+  description: null,
+};
+
+const SAMPLE_SKILL = {
+  id: 'skill-1',
+  user_id: 'user-1',
+  name: 'React',
+  category: 'Frontend',
+  proficiency: 'advanced',
+  position: 0,
+};
+
+/** Returns an ok education GET/mutation response, or null if the URL is not
+ *  an /education endpoint.
+ */
+function resolveEducationUrl(url, opts = {}, { getEducation = [], saveEducation = null } = {}) {
+  if (!url.includes('/education')) return null;
+  if (opts.method === 'POST') {
+    const entry = saveEducation ?? { id: 'new-edu', user_id: 'user-1' };
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(entry) });
+  }
+  if (opts.method === 'PUT') {
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(saveEducation ?? {}) });
+  }
+  if (opts.method === 'DELETE') {
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(null) });
+  }
+  return Promise.resolve({ ok: true, json: () => Promise.resolve(getEducation) });
+}
 
 /** Returns an ok experience GET/mutation response, or null if the URL is not
  *  an /experience endpoint. Centralising this keeps all mock helpers consistent
@@ -116,10 +146,13 @@ function mockFetch({
   saveProfile = SAMPLE_PROFILE,
   getExperience = [],
   saveExperience = null,
+  education = [],
   skills = [],
   saveSkill = null,
 } = {}) {
   global.fetch = jest.fn((url, opts = {}) => {
+    const edu = resolveEducationUrl(url, opts, { getEducation: education });
+    if (edu) return edu;
     const exp = resolveExperienceUrl(url, opts, { getExperience, saveExperience });
     if (exp) return exp;
     const skl = resolveSkillsUrl(url, opts, { getSkills: skills, saveSkill });
@@ -133,6 +166,8 @@ function mockFetch({
 
 function mockFetchGetError(status = 500, message = 'Internal Server Error') {
   global.fetch = jest.fn((url, opts = {}) => {
+    const edu = resolveEducationUrl(url, opts);
+    if (edu) return edu;
     const exp = resolveExperienceUrl(url, opts);
     if (exp) return exp;
     const skl = resolveSkillsUrl(url, opts);
@@ -143,6 +178,8 @@ function mockFetchGetError(status = 500, message = 'Internal Server Error') {
 
 function mockFetchSaveError(status = 500, text = 'Server Error') {
   global.fetch = jest.fn((url, opts = {}) => {
+    const edu = resolveEducationUrl(url, opts);
+    if (edu) return edu;
     const exp = resolveExperienceUrl(url, opts);
     if (exp) return exp;
     const skl = resolveSkillsUrl(url, opts);
@@ -156,6 +193,8 @@ function mockFetchSaveError(status = 500, text = 'Server Error') {
 
 function mockFetchNetworkError(message = 'Network error') {
   global.fetch = jest.fn((url, opts = {}) => {
+    const edu = resolveEducationUrl(url, opts);
+    if (edu) return edu;
     const exp = resolveExperienceUrl(url, opts);
     if (exp) return exp;
     const skl = resolveSkillsUrl(url, opts);
@@ -170,6 +209,8 @@ function makePendingSave() {
     resolve = res;
   });
   global.fetch = jest.fn((url, opts = {}) => {
+    const edu = resolveEducationUrl(url, opts);
+    if (edu) return edu;
     const exp = resolveExperienceUrl(url, opts);
     if (exp) return exp;
     const skl = resolveSkillsUrl(url, opts);
@@ -643,6 +684,8 @@ describe('save — error', () => {
 
   test('shows network error message when fetch rejects on save', async () => {
     global.fetch = jest.fn((url, opts = {}) => {
+      const edu = resolveEducationUrl(url, opts);
+      if (edu) return edu;
       const exp = resolveExperienceUrl(url, opts);
       if (exp) return exp;
       const skl = resolveSkillsUrl(url, opts);
@@ -674,6 +717,8 @@ describe('save — error', () => {
     // First save succeeds, second fails
     let callCount = 0;
     global.fetch = jest.fn((url, opts = {}) => {
+      const edu = resolveEducationUrl(url, opts);
+      if (edu) return edu;
       const exp = resolveExperienceUrl(url, opts);
       if (exp) return exp;
       const skl = resolveSkillsUrl(url, opts);
@@ -919,7 +964,8 @@ describe('experience section', () => {
 
     await userEvent.type(screen.getByLabelText(/^title$/i), 'Software Engineer');
     await userEvent.type(screen.getByLabelText(/^company$/i), 'Acme Corp');
-    await userEvent.type(screen.getByLabelText(/^start year$/i), '2021');
+    const expSection = screen.getByRole('region', { name: /^experience$/i });
+    await userEvent.type(within(expSection).getByLabelText(/^start year$/i), '2021');
 
     fireEvent.click(screen.getByRole('button', { name: /add experience/i }));
 
@@ -974,6 +1020,8 @@ describe('experience section', () => {
 
   test('shows experience load error with role=alert', async () => {
     global.fetch = jest.fn((url, opts = {}) => {
+      const edu = resolveEducationUrl(url, opts);
+      if (edu) return edu;
       const skl = resolveSkillsUrl(url, opts);
       if (skl) return skl;
       if (url.includes('/experience')) {
@@ -989,6 +1037,221 @@ describe('experience section', () => {
     await waitFor(() => {
       expect(screen.getByText(/failed to load experience/i)).toBeInTheDocument();
     });
+  });
+});
+
+// ─── Education section ────────────────────────────────────────────────────────
+
+describe('education section', () => {
+  test('renders "Education" heading', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /^education$/i })).toBeInTheDocument();
+    });
+  });
+
+  test('renders institution input and Add Education button', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/institution/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /add education/i })).toBeInTheDocument();
+    });
+  });
+
+  test('Add Education button is disabled when required fields are empty', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /add education/i })).toBeDisabled();
+    });
+  });
+
+  test('shows "No education added yet." when list is empty', async () => {
+    mockFetch({ education: [] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/no education added yet/i)).toBeInTheDocument();
+    });
+  });
+
+  test('renders loaded education entry institution name', async () => {
+    mockFetch({ education: [SAMPLE_EDUCATION] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('NJIT')).toBeInTheDocument();
+    });
+  });
+
+  test('renders loaded education entry degree and field', async () => {
+    mockFetch({ education: [SAMPLE_EDUCATION] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText(/bachelor of science, computer science/i)).toBeInTheDocument();
+    });
+  });
+
+  test('renders loaded education year range', async () => {
+    mockFetch({ education: [SAMPLE_EDUCATION] });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('2022 – 2026')).toBeInTheDocument();
+    });
+  });
+
+  test('Add Education button enabled after filling required fields', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/institution/i)).toBeInTheDocument());
+
+    const eduSection = screen.getByRole('region', { name: /^education$/i });
+    await userEvent.type(screen.getByLabelText(/institution/i), 'NJIT');
+    await userEvent.type(screen.getByLabelText(/^degree$/i), 'BS');
+    await userEvent.type(screen.getByLabelText(/field of study/i), 'CS');
+    await userEvent.type(within(eduSection).getByLabelText(/start year/i), '2020');
+
+    expect(screen.getByRole('button', { name: /add education/i })).not.toBeDisabled();
+  });
+
+  test('adds education by POSTing to /education', async () => {
+    const newEntry = {
+      id: 'new-edu',
+      user_id: 'user-1',
+      institution: 'NJIT',
+      degree: 'BS',
+      field_of_study: 'CS',
+      start_year: 2020,
+      end_year: null,
+      gpa: null,
+      description: null,
+    };
+    global.fetch = jest.fn((url, opts = {}) => {
+      if (url && url.includes('/education')) {
+        if (opts.method === 'POST') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(newEntry) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/institution/i)).toBeInTheDocument());
+
+    const eduSection = screen.getByRole('region', { name: /^education$/i });
+    await userEvent.type(screen.getByLabelText(/institution/i), 'NJIT');
+    await userEvent.type(screen.getByLabelText(/^degree$/i), 'BS');
+    await userEvent.type(screen.getByLabelText(/field of study/i), 'CS');
+    await userEvent.type(within(eduSection).getByLabelText(/start year/i), '2020');
+    fireEvent.click(screen.getByRole('button', { name: /add education/i }));
+
+    await waitFor(() => {
+      const postCall = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/education` && o.method === 'POST'
+      );
+      expect(postCall).toBeDefined();
+      const body = JSON.parse(postCall[1].body);
+      expect(body.institution).toBe('NJIT');
+    });
+  });
+
+  test('edit button populates form with entry data', async () => {
+    mockFetch({ education: [SAMPLE_EDUCATION] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('NJIT')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /edit njit/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/institution/i)).toHaveValue('NJIT');
+    });
+    expect(screen.getByLabelText(/^degree$/i)).toHaveValue('Bachelor of Science');
+    expect(screen.getByLabelText(/field of study/i)).toHaveValue('Computer Science');
+  });
+
+  test('edit shows Update Education and Cancel buttons', async () => {
+    mockFetch({ education: [SAMPLE_EDUCATION] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('NJIT')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /edit njit/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /update education/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+    });
+  });
+
+  test('cancel edit resets form to empty', async () => {
+    mockFetch({ education: [SAMPLE_EDUCATION] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('NJIT')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /edit njit/i }));
+    await waitFor(() => expect(screen.getByLabelText(/institution/i)).toHaveValue('NJIT'));
+
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+    await waitFor(() => expect(screen.getByLabelText(/institution/i)).toHaveValue(''));
+    expect(screen.queryByRole('button', { name: /update education/i })).not.toBeInTheDocument();
+  });
+
+  test('update education sends PUT /education/:id', async () => {
+    const updated = { ...SAMPLE_EDUCATION, institution: 'MIT' };
+    global.fetch = jest.fn((url, opts = {}) => {
+      if (url && url.includes('/education')) {
+        if (opts.method === 'PUT') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(updated) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([SAMPLE_EDUCATION]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText('NJIT')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /edit njit/i }));
+    await waitFor(() => expect(screen.getByLabelText(/institution/i)).toHaveValue('NJIT'));
+
+    await userEvent.clear(screen.getByLabelText(/institution/i));
+    await userEvent.type(screen.getByLabelText(/institution/i), 'MIT');
+    fireEvent.click(screen.getByRole('button', { name: /update education/i }));
+
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(
+        ([u, o = {}]) => u === `${BACKEND}/education/${SAMPLE_EDUCATION.id}` && o.method === 'PUT'
+      );
+      expect(putCall).toBeDefined();
+    });
+  });
+
+  test('delete button sends DELETE /education/:id', async () => {
+    mockFetch({ education: [SAMPLE_EDUCATION] });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('NJIT')).toBeInTheDocument());
+
+    global.fetch = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(null) }));
+
+    fireEvent.click(screen.getByRole('button', { name: /delete njit/i }));
+
+    await waitFor(() => {
+      const deleteCall = global.fetch.mock.calls.find(
+        ([u, o = {}]) =>
+          u === `${BACKEND}/education/${SAMPLE_EDUCATION.id}` && o.method === 'DELETE'
+      );
+      expect(deleteCall).toBeDefined();
+    });
+  });
+
+  test('submit button stays disabled when start_year is before 1900', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/institution/i)).toBeInTheDocument());
+
+    const eduSection = screen.getByRole('region', { name: /^education$/i });
+    await userEvent.type(screen.getByLabelText(/institution/i), 'NJIT');
+    await userEvent.type(screen.getByLabelText(/^degree$/i), 'BS');
+    await userEvent.type(screen.getByLabelText(/field of study/i), 'CS');
+    await userEvent.type(within(eduSection).getByLabelText(/start year/i), '1800');
+
+    expect(screen.getByRole('button', { name: /add education/i })).toBeDisabled();
   });
 });
 
@@ -1072,6 +1335,8 @@ describe('skills section', () => {
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
+      const edu = resolveEducationUrl(url, opts);
+      if (edu) return edu;
       const exp = resolveExperienceUrl(url, opts);
       if (exp) return exp;
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
@@ -1142,6 +1407,8 @@ describe('skills section', () => {
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve([SAMPLE_SKILL]) });
       }
+      const edu = resolveEducationUrl(url, opts);
+      if (edu) return edu;
       const exp = resolveExperienceUrl(url, opts);
       if (exp) return exp;
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
@@ -1197,6 +1464,8 @@ describe('skills section', () => {
           json: () => Promise.resolve([SAMPLE_SKILL, skill2]),
         });
       }
+      const edu = resolveEducationUrl(url, opts);
+      if (edu) return edu;
       const exp = resolveExperienceUrl(url, opts);
       if (exp) return exp;
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
@@ -1227,6 +1496,8 @@ describe('skills section', () => {
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
+      const edu = resolveEducationUrl(url, opts);
+      if (edu) return edu;
       const exp = resolveExperienceUrl(url, opts);
       if (exp) return exp;
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
