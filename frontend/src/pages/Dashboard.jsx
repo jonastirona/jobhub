@@ -117,6 +117,8 @@ export default function Dashboard() {
   const deleteOverlayRef = useRef(null);
   const deleteModalRef = useRef(null);
   const deleteCancelButtonRef = useRef(null);
+  const draftModalRef = useRef(null);
+  const draftCancelButtonRef = useRef(null);
   const [viewJob, setViewJob] = useState(null);
   const filteredJobs = jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm));
   const totalApplications = filteredJobs.length;
@@ -198,12 +200,12 @@ export default function Dashboard() {
     setDraftValidationError('');
   }
 
-  function closeDraft() {
+  const closeDraft = useCallback(() => {
     if (savingDraft) return;
     clearSaveError();
     setDraftJob(null);
     setDraftValidationError('');
-  }
+  }, [clearSaveError, savingDraft]);
 
   async function saveDraftFromJob() {
     if (!draftJob || savingDraft) return;
@@ -278,6 +280,41 @@ export default function Dashboard() {
     [deleteModalRef]
   );
 
+  const handleDraftModalKeyDown = useCallback(
+    (e) => {
+      const modal = draftModalRef.current;
+      if (e.key !== 'Tab' || !modal) return;
+
+      const focusable = Array.from(
+        modal.querySelectorAll(
+          'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      );
+
+      if (focusable.length === 0) {
+        e.preventDefault();
+        if (!modal.hasAttribute('tabindex')) {
+          modal.setAttribute('tabindex', '-1');
+        }
+        modal.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    },
+    [draftModalRef]
+  );
+
   function handleDeleteOverlayClick(e) {
     if (e.target === deleteOverlayRef.current) {
       cancelDelete();
@@ -301,6 +338,24 @@ export default function Dashboard() {
       deleteModalRef.current?.focus();
     }
   }, [jobPendingDelete, deletingJobId]);
+
+  useEffect(() => {
+    if (!draftJob) return undefined;
+    draftCancelButtonRef.current?.focus();
+    function handleEscape(e) {
+      if (e.key === 'Escape') {
+        closeDraft();
+      }
+    }
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [draftJob, closeDraft]);
+
+  useEffect(() => {
+    if (draftJob && savingDraft) {
+      draftModalRef.current?.focus();
+    }
+  }, [draftJob, savingDraft]);
 
   async function confirmDelete() {
     if (!jobPendingDelete || deletingJobId) return;
@@ -605,10 +660,13 @@ export default function Dashboard() {
         <div className="delete-modal-overlay" role="presentation" onClick={closeDraft}>
           <div
             className="draft-modal"
+            ref={draftModalRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="draft-modal-title"
+            onKeyDown={handleDraftModalKeyDown}
             onClick={(e) => e.stopPropagation()}
+            tabIndex={-1}
           >
             <h2 className="delete-modal-title" id="draft-modal-title">
               Save Draft from Job Context
@@ -665,6 +723,7 @@ export default function Dashboard() {
                 type="button"
                 className="delete-modal-btn delete-modal-btn--cancel"
                 onClick={closeDraft}
+                ref={draftCancelButtonRef}
                 disabled={savingDraft}
               >
                 Cancel
