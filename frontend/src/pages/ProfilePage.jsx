@@ -223,7 +223,6 @@ export default function ProfilePage() {
 
   const [prefsData, setPrefsData] = useState(createEmptyPreferencesFormState);
   const [prefsSaveSuccess, setPrefsSaveSuccess] = useState(false);
-  const [salaryTextDisplay, setSalaryTextDisplay] = useState({ min: '', max: '' });
 
   const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
   const [editingExperienceId, setEditingExperienceId] = useState(null);
@@ -287,10 +286,6 @@ export default function ProfilePage() {
         salary_min: nextMinSalary || prev.salary_min || '',
         salary_max: nextMaxSalary || prev.salary_max || '',
       }));
-      setSalaryTextDisplay({
-        min: formatStoredSalaryText(nextMinSalary),
-        max: formatStoredSalaryText(nextMaxSalary),
-      });
     }
   }, [preferences, user?.id]);
 
@@ -443,7 +438,6 @@ export default function ProfilePage() {
       setPrefsSaveSuccess(true);
       const minText = formatStoredSalaryText(prefsData.salary_min);
       const maxText = formatStoredSalaryText(prefsData.salary_max);
-      setSalaryTextDisplay({ min: minText, max: maxText });
 
       if (user?.id) {
         const storageKey = `${SALARY_TEXT_STORAGE_KEY_PREFIX}${user.id}`;
