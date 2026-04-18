@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from main import (
     JOB_STATUSES,
     PROFILE_REQUIRED_FIELDS,
+    CareerPreferencesUpsert,
     DocumentCreate,
     DocumentUpdate,
     EducationCreate,
@@ -2599,6 +2600,242 @@ def test_reminder_update_all_optional():
 
 
 # ---------------------------------------------------------------------------
+# Career preferences fixtures
+# ---------------------------------------------------------------------------
+
+SAMPLE_PREFS = {
+    "id": "prefs-uuid-1111",
+    "user_id": MOCK_USER_ID,
+    "target_roles": "Software Engineer",
+    "preferred_locations": "New York, NY",
+    "work_mode": "hybrid",
+    "salary_min": 80000,
+    "salary_max": 120000,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-01T00:00:00+00:00",
+}
+
+
+# ---------------------------------------------------------------------------
+# Auth guard — career preferences routes must reject requests with no token
+# ---------------------------------------------------------------------------
+
+
+def test_get_career_preferences_requires_auth():
+    response = client.get("/career-preferences")
+    assert response.status_code == 401
+
+
+def test_put_career_preferences_requires_auth():
+    response = client.put("/career-preferences", json={"target_roles": "Engineer"})
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# GET /career-preferences
+# ---------------------------------------------------------------------------
+
+
+def test_get_career_preferences_returns_existing():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_PREFS])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/career-preferences", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["work_mode"] == "hybrid"
+    assert body["salary_min"] == 80000
+    assert body["salary_max"] == 120000
+
+
+def test_get_career_preferences_returns_empty_when_none():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/career-preferences", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    assert response.json() == {}
+
+
+def test_get_career_preferences_returns_500_on_db_failure():
+    mock_sb, _, mock_result = make_mock_sb(data=None)
+    mock_result.data = None
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/career-preferences", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 500
+
+
+def test_get_career_preferences_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PREFS])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get("/career-preferences", headers={"authorization": AUTH_HEADER})
+    mock_query.eq.assert_any_call("user_id", MOCK_USER_ID)
+
+
+# ---------------------------------------------------------------------------
+# PUT /career-preferences
+# ---------------------------------------------------------------------------
+
+
+def test_put_career_preferences_success():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_PREFS])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/career-preferences",
+            json={"target_roles": "Software Engineer", "work_mode": "hybrid"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["work_mode"] == "hybrid"
+
+
+def test_put_career_preferences_injects_user_id():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PREFS])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            "/career-preferences",
+            json={"target_roles": "Engineer"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    upserted = mock_query.upsert.call_args[0][0]
+    assert upserted["user_id"] == MOCK_USER_ID
+
+
+def test_put_career_preferences_uses_on_conflict_user_id():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_PREFS])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.put(
+            "/career-preferences",
+            json={"target_roles": "Engineer"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    kwargs = mock_query.upsert.call_args[1]
+    assert kwargs.get("on_conflict") == "user_id"
+
+
+def test_put_career_preferences_rejects_invalid_work_mode():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_PREFS])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/career-preferences",
+            json={"work_mode": "invalid"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_put_career_preferences_allows_null_work_mode():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_PREFS])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/career-preferences",
+            json={"work_mode": None},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+
+
+def test_put_career_preferences_rejects_negative_salary_min():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_PREFS])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/career-preferences",
+            json={"salary_min": -1},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_put_career_preferences_rejects_negative_salary_max():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_PREFS])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/career-preferences",
+            json={"salary_max": -500},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_put_career_preferences_rejects_min_greater_than_max():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/career-preferences",
+            json={"salary_min": 120000, "salary_max": 80000},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_put_career_preferences_rejects_partial_update_violating_range():
+    """Updating only salary_max below an existing salary_min must fail."""
+    existing = {**SAMPLE_PREFS, "salary_min": 80000, "salary_max": 120000}
+    mock_sb = MagicMock()
+    mock_user_resp = MagicMock()
+    mock_user_resp.user.id = MOCK_USER_ID
+    mock_sb.auth.get_user.return_value = mock_user_resp
+
+    select_result = MagicMock()
+    select_result.data = [existing]
+
+    upsert_result = MagicMock()
+    upsert_result.data = [existing]
+
+    mock_query = MagicMock()
+    for method in ("select", "insert", "update", "delete", "upsert", "eq", "order"):
+        getattr(mock_query, method).return_value = mock_query
+    mock_query.execute.side_effect = [select_result, upsert_result]
+
+    mock_sb.table.return_value = mock_query
+
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/career-preferences",
+            json={"salary_max": 60000},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_put_career_preferences_db_failure_returns_500():
+    mock_sb, _, mock_result = make_mock_sb(data=[])
+    mock_result.data = []
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            "/career-preferences",
+            json={"target_roles": "Engineer"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# CareerPreferencesUpsert schema validation
+# ---------------------------------------------------------------------------
+
+
+def test_career_preferences_upsert_all_optional():
+    prefs = CareerPreferencesUpsert()
+    assert prefs.target_roles is None
+    assert prefs.preferred_locations is None
+    assert prefs.work_mode is None
+    assert prefs.salary_min is None
+    assert prefs.salary_max is None
+
+
+def test_career_preferences_upsert_all_fields():
+    prefs = CareerPreferencesUpsert(
+        target_roles="Software Engineer",
+        preferred_locations="New York, NY",
+        work_mode="remote",
+        salary_min=80000,
+        salary_max=120000,
+    )
+    assert prefs.target_roles == "Software Engineer"
+    assert prefs.work_mode == "remote"
+    assert prefs.salary_min == 80000
+    assert prefs.salary_max == 120000
+
+
 # Skills fixtures
 # ---------------------------------------------------------------------------
 

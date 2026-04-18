@@ -228,6 +228,17 @@ class DocumentUpdate(BaseModel):
     job_id: Optional[str] = None
 
 
+VALID_WORK_MODES = {"remote", "hybrid", "onsite", "any"}
+
+
+class CareerPreferencesUpsert(BaseModel):
+    target_roles: Optional[str] = None
+    preferred_locations: Optional[str] = None
+    work_mode: Optional[str] = None
+    salary_min: Optional[int] = None
+    salary_max: Optional[int] = None
+
+
 # Must stay in sync with the CHECK constraint in 010_create_skills.sql.
 # Duplicated here intentionally so the API returns a clean 422 before touching the DB.
 VALID_PROFICIENCY_LEVELS = {"beginner", "intermediate", "advanced", "expert"}
@@ -944,6 +955,72 @@ def delete_experience(entry_id: str, authorization: Optional[str] = Header(defau
     if not response.data:
         raise HTTPException(status_code=404, detail="Experience entry not found")
     return Response(status_code=204)
+
+
+# --- Career preferences routes ---
+
+
+@app.get("/career-preferences")
+def get_career_preferences(authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = sb.table("career_preferences").select("*").eq("user_id", user_id).execute()
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch career preferences")
+    return response.data[0] if response.data else {}
+
+
+@app.put("/career-preferences")
+def upsert_career_preferences(
+    prefs: CareerPreferencesUpsert, authorization: Optional[str] = Header(default=None)
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    payload = prefs.model_dump(exclude_unset=True)
+    if (
+        "work_mode" in payload
+        and payload["work_mode"] is not None
+        and payload["work_mode"] not in VALID_WORK_MODES
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=f"work_mode must be one of: {', '.join(sorted(VALID_WORK_MODES))}",
+        )
+    if "salary_min" in payload and payload["salary_min"] is not None and payload["salary_min"] < 0:
+        raise HTTPException(status_code=422, detail="salary_min must be non-negative")
+    if "salary_max" in payload and payload["salary_max"] is not None and payload["salary_max"] < 0:
+        raise HTTPException(status_code=422, detail="salary_max must be non-negative")
+    if "salary_min" in payload or "salary_max" in payload:
+        existing_salary: dict = {}
+        if "salary_min" not in payload or "salary_max" not in payload:
+            existing_resp = (
+                sb.table("career_preferences")
+                .select("salary_min,salary_max")
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if existing_resp.data is None:
+                raise HTTPException(
+                    status_code=500, detail="Failed to load existing career preferences"
+                )
+            existing_salary = existing_resp.data[0] if existing_resp.data else {}
+        effective_min = (
+            payload["salary_min"] if "salary_min" in payload else existing_salary.get("salary_min")
+        )
+        effective_max = (
+            payload["salary_max"] if "salary_max" in payload else existing_salary.get("salary_max")
+        )
+        if (
+            effective_min is not None
+            and effective_max is not None
+            and effective_min > effective_max
+        ):
+            raise HTTPException(status_code=422, detail="salary_min must not exceed salary_max")
+    payload["user_id"] = user_id
+    response = sb.table("career_preferences").upsert(payload, on_conflict="user_id").execute()
+    if not response.data:
+        raise HTTPException(status_code=500, detail="Failed to save career preferences")
+    return response.data[0]
 
 
 # --- Skills routes ---

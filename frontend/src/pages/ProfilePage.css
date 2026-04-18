@@ -246,6 +246,29 @@
   color: var(--text-muted);
 }
 
+.profile-select {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+}
+
+.profile-select:focus {
+  border-color: var(--border-orange);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
+  background: var(--bg-white);
+}
+
 /* ── Summary card fields ─────────────────────────────────────────────────── */
 
 .profile-card > .profile-field {

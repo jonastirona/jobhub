@@ -19,6 +19,16 @@ const SAMPLE_EXPERIENCE_ENTRY = {
   position: 0,
 };
 
+const SAMPLE_PREFS = {
+  id: 'prefs-1',
+  user_id: 'user-1',
+  target_roles: 'Software Engineer',
+  preferred_locations: 'New York, NY',
+  work_mode: 'hybrid',
+  salary_min: 80000,
+  salary_max: 120000,
+};
+
 const mockAuthValue = {
   session: { access_token: ACCESS_TOKEN },
   user: { id: 'user-1', email: 'jane@example.com' },
@@ -149,8 +159,16 @@ function mockFetch({
   education = [],
   skills = [],
   saveSkill = null,
+  getPrefs = {},
+  savePrefs = SAMPLE_PREFS,
 } = {}) {
   global.fetch = jest.fn((url, opts = {}) => {
+    if (url.includes('/career-preferences')) {
+      if (opts.method === 'PUT') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(savePrefs) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(getPrefs) });
+    }
     const edu = resolveEducationUrl(url, opts, { getEducation: education });
     if (edu) return edu;
     const exp = resolveExperienceUrl(url, opts, { getExperience, saveExperience });
@@ -166,6 +184,9 @@ function mockFetch({
 
 function mockFetchGetError(status = 500, message = 'Internal Server Error') {
   global.fetch = jest.fn((url, opts = {}) => {
+    if (url.includes('/career-preferences')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }
     const edu = resolveEducationUrl(url, opts);
     if (edu) return edu;
     const exp = resolveExperienceUrl(url, opts);
@@ -178,6 +199,9 @@ function mockFetchGetError(status = 500, message = 'Internal Server Error') {
 
 function mockFetchSaveError(status = 500, text = 'Server Error') {
   global.fetch = jest.fn((url, opts = {}) => {
+    if (url.includes('/career-preferences')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }
     const edu = resolveEducationUrl(url, opts);
     if (edu) return edu;
     const exp = resolveExperienceUrl(url, opts);
@@ -193,6 +217,9 @@ function mockFetchSaveError(status = 500, text = 'Server Error') {
 
 function mockFetchNetworkError(message = 'Network error') {
   global.fetch = jest.fn((url, opts = {}) => {
+    if (url.includes('/career-preferences')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    }
     const edu = resolveEducationUrl(url, opts);
     if (edu) return edu;
     const exp = resolveExperienceUrl(url, opts);
@@ -349,7 +376,7 @@ describe('rendering — empty profile (no existing data)', () => {
       expect(screen.getByLabelText(/full name/i)).toHaveValue('');
     });
     expect(screen.getByLabelText(/headline/i)).toHaveValue('');
-    expect(screen.getByLabelText(/location/i)).toHaveValue('');
+    expect(screen.getByLabelText(/^location$/i)).toHaveValue('');
     expect(screen.getByLabelText(/phone/i)).toHaveValue('');
     expect(screen.getByLabelText(/website/i)).toHaveValue('');
     expect(screen.getByLabelText(/linkedin url/i)).toHaveValue('');
@@ -416,7 +443,7 @@ describe('rendering — existing profile', () => {
       expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith');
     });
     expect(screen.getByLabelText(/headline/i)).toHaveValue('Software Engineer');
-    expect(screen.getByLabelText(/location/i)).toHaveValue('New York, NY');
+    expect(screen.getByLabelText(/^location$/i)).toHaveValue('New York, NY');
     expect(screen.getByLabelText(/phone/i)).toHaveValue('555-123-4567');
     expect(screen.getByLabelText(/website/i)).toHaveValue('https://janesmith.dev');
     expect(screen.getByLabelText(/linkedin url/i)).toHaveValue('https://linkedin.com/in/janesmith');
@@ -484,7 +511,7 @@ describe('rendering — existing profile', () => {
     mockFetch({ getProfile: profile });
     renderPage();
     await waitFor(() => {
-      expect(screen.getByLabelText(/location/i)).toHaveValue('');
+      expect(screen.getByLabelText(/^location$/i)).toHaveValue('');
     });
     expect(screen.getByLabelText(/phone/i)).toHaveValue('');
     expect(screen.getByLabelText('Summary')).toHaveValue('');
@@ -536,7 +563,7 @@ describe('form interaction', () => {
 
     await userEvent.type(screen.getByLabelText(/full name/i), 'Jane Smith');
     await userEvent.type(screen.getByLabelText(/headline/i), 'Software Engineer');
-    await userEvent.type(screen.getByLabelText(/location/i), 'New York, NY');
+    await userEvent.type(screen.getByLabelText(/^location$/i), 'New York, NY');
     await userEvent.type(screen.getByLabelText(/phone/i), '555-123-4567');
     await userEvent.type(screen.getByLabelText(/website/i), 'https://janesmith.dev');
     await userEvent.type(
@@ -804,7 +831,7 @@ describe('accessibility', () => {
     renderPage();
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toBeInTheDocument());
     expect(screen.getByLabelText(/headline/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/location/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^location$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/phone/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/website/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/linkedin url/i)).toBeInTheDocument();
@@ -1512,5 +1539,115 @@ describe('skills section', () => {
     await waitFor(() => {
       expect(screen.getByText('Skill save failed')).toBeInTheDocument();
     });
+  });
+});
+
+// ─── Career Preferences section ───────────────────────────────────────────────
+
+describe('career preferences section', () => {
+  test('renders Career Preferences section heading', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /career preferences/i })).toBeInTheDocument();
+    });
+  });
+
+  test('renders all career preferences fields', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/target roles/i)).toBeInTheDocument());
+    expect(screen.getByLabelText(/preferred locations/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/work mode/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/minimum salary/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/maximum salary/i)).toBeInTheDocument();
+  });
+
+  test('pre-fills career preferences from fetched data', async () => {
+    mockFetch({ getPrefs: SAMPLE_PREFS });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByLabelText(/target roles/i)).toHaveValue('Software Engineer')
+    );
+    expect(screen.getByLabelText(/preferred locations/i)).toHaveValue('New York, NY');
+    expect(screen.getByLabelText(/work mode/i)).toHaveValue('hybrid');
+    expect(screen.getByLabelText(/minimum salary/i)).toHaveValue(80000);
+    expect(screen.getByLabelText(/maximum salary/i)).toHaveValue(120000);
+  });
+
+  test('renders Save Preferences button', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /save preferences/i })).toBeInTheDocument();
+    });
+  });
+
+  test('submits PUT to /career-preferences on save', async () => {
+    mockFetch({ getPrefs: SAMPLE_PREFS });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByLabelText(/target roles/i)).toHaveValue('Software Engineer')
+    );
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(
+        ([url, opts = {}]) => url === `${BACKEND}/career-preferences` && opts.method === 'PUT'
+      );
+      expect(putCall).toBeDefined();
+    });
+    const [url, opts] = global.fetch.mock.calls.find(
+      ([u, o = {}]) => u === `${BACKEND}/career-preferences` && o.method === 'PUT'
+    );
+    expect(url).toBe(`${BACKEND}/career-preferences`);
+    const body = JSON.parse(opts.body);
+    expect(body).toHaveProperty('target_roles');
+    expect(body).toHaveProperty('salary_min');
+    expect(body).toHaveProperty('salary_max');
+  });
+
+  test('shows "Career preferences saved successfully." after save', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save preferences/i })).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/career preferences saved successfully/i)).toBeInTheDocument();
+    });
+  });
+
+  test('shows save error when PUT /career-preferences fails', async () => {
+    global.fetch = jest.fn((url, opts = {}) => {
+      if (url.includes('/career-preferences') && opts.method === 'PUT') {
+        return Promise.resolve({
+          ok: false,
+          status: 422,
+          headers: { get: (name) => (name === 'content-type' ? 'application/json' : null) },
+          json: () => Promise.resolve({ detail: 'Invalid work_mode' }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save preferences/i })).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/invalid work_mode/i)).toBeInTheDocument();
+    });
+  });
+
+  test('success message disappears after editing a preferences field', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save preferences/i })).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/career preferences saved successfully/i)).toBeInTheDocument()
+    );
+    fireEvent.change(screen.getByLabelText(/target roles/i), {
+      target: { value: 'Frontend Engineer' },
+    });
+    expect(screen.queryByText(/career preferences saved successfully/i)).not.toBeInTheDocument();
   });
 });
