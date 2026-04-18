@@ -108,12 +108,16 @@ describe('Dashboard draft modal accessibility', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /save draft for backend engineer/i }));
 
-    expect(await screen.findByRole('heading', { name: /save draft from job context/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: /save draft from job context/i })
+    ).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Escape' });
 
     await waitFor(() => {
-      expect(screen.queryByRole('heading', { name: /save draft from job context/i })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('heading', { name: /save draft from job context/i })
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -152,6 +156,8 @@ describe('Dashboard draft modal accessibility', () => {
 
     fireEvent.click(overlay);
 
-    expect(screen.getByRole('heading', { name: /save draft from job context/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: /save draft from job context/i })
+    ).toBeInTheDocument();
   });
 });
