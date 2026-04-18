@@ -191,6 +191,15 @@ export default function Dashboard() {
     selectedSortBy,
   ]);
 
+  // Clamp currentPage back into range after the visible dataset shrinks
+  // (e.g. the last item on the last page is deleted). Without this, the user
+  // would be stranded on an empty page with the Next button disabled.
+  useEffect(() => {
+    if (meta.totalPages > 0 && currentPage > meta.totalPages) {
+      setCurrentPage(meta.totalPages);
+    }
+  }, [meta.totalPages, currentPage]);
+
   useEffect(() => {
     function handleOutsideClick(event) {
       if (filterControlsRef.current && !filterControlsRef.current.contains(event.target)) {

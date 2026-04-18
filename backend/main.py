@@ -589,9 +589,12 @@ def list_jobs(
     available_locations = _build_available_locations(jobs_for_location_facet)
     available_statuses = sorted(
         {
-            status
-            for status in (job.get("status") for job in jobs_for_status_facet)
-            if isinstance(status, str) and status
+            normalized
+            for normalized in (
+                _normalize_job_status_alias((job.get("status") or "").strip().lower())
+                for job in jobs_for_status_facet
+            )
+            if normalized in JOB_STATUSES
         }
     )
 
@@ -626,10 +629,14 @@ def list_jobs(
     jobs = _sort_jobs_for_view(jobs, sort_by, last_activity_by_job_id)
 
     total = len(jobs)
-    start_idx = (page - 1) * page_size
+    total_pages = ceil(total / page_size) if total > 0 else 1
+    # Clamp the requested page into the valid range so clients that ask for a
+    # page that no longer exists (e.g. after deletions or filter changes) get
+    # the last real page instead of an empty slice with a ghost page number.
+    effective_page = min(page, total_pages)
+    start_idx = (effective_page - 1) * page_size
     end_idx = start_idx + page_size
     items = jobs[start_idx:end_idx]
-    total_pages = ceil(total / page_size) if total > 0 else 1
 
     status_counts = {
         "interviewing": 0,
@@ -645,7 +652,7 @@ def list_jobs(
     return {
         "items": items,
         "total": total,
-        "page": page,
+        "page": effective_page,
         "page_size": page_size,
         "total_pages": total_pages,
         "available_statuses": available_statuses,

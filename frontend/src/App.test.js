@@ -517,6 +517,95 @@ test('location filter options only show locations still present after delete', a
   expect(screen.queryByRole('checkbox', { name: 'Boston, MA' })).not.toBeInTheDocument();
 });
 
+test('clamps currentPage back into range after deleting the last item on the last page', async () => {
+  const makeItems = (count, startId = 1) =>
+    Array.from({ length: count }, (_, i) => ({
+      id: `job-${startId + i}`,
+      title: `Role ${startId + i}`,
+      company: 'Acme',
+      status: 'applied',
+    }));
+
+  const page1BeforeDelete = {
+    items: makeItems(10, 1),
+    total: 11,
+    page: 1,
+    page_size: 10,
+    total_pages: 2,
+    available_statuses: ['applied'],
+    available_locations: [],
+    status_counts: { interviewing: 0, offered: 0 },
+  };
+  const page2BeforeDelete = {
+    items: [{ id: 'job-last', title: 'Last Page Role', company: 'Acme', status: 'applied' }],
+    total: 11,
+    page: 2,
+    page_size: 10,
+    total_pages: 2,
+    available_statuses: ['applied'],
+    available_locations: [],
+    status_counts: { interviewing: 0, offered: 0 },
+  };
+  // After delete: only 10 items remain, so total_pages collapses to 1.
+  // If the client still asks for page=2 before clamping, backend returns an
+  // empty page but reports total_pages=1 so the clamp effect can react.
+  const page2AfterDelete = {
+    items: [],
+    total: 10,
+    page: 2,
+    page_size: 10,
+    total_pages: 1,
+    available_statuses: ['applied'],
+    available_locations: [],
+    status_counts: { interviewing: 0, offered: 0 },
+  };
+  const page1AfterDelete = {
+    items: makeItems(10, 1),
+    total: 10,
+    page: 1,
+    page_size: 10,
+    total_pages: 1,
+    available_statuses: ['applied'],
+    available_locations: [],
+    status_counts: { interviewing: 0, offered: 0 },
+  };
+
+  let deleted = false;
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      const parsed = new URL(String(url));
+      const pageParam = parsed.searchParams.get('page');
+      let body;
+      if (!deleted) {
+        body = pageParam === '2' ? page2BeforeDelete : page1BeforeDelete;
+      } else {
+        body = pageParam === '2' ? page2AfterDelete : page1AfterDelete;
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+    }
+    if (options.method === 'DELETE') {
+      deleted = true;
+      return Promise.resolve({ ok: true, status: 204 });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Role 1'));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Page 2' }));
+  await waitFor(() => screen.getByText('Last Page Role'));
+
+  fireEvent.click(screen.getByRole('button', { name: /delete application last page role/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+  await waitFor(() => expect(screen.queryByText('Last Page Role')).not.toBeInTheDocument());
+  // After the clamp, the user should be shown the new last (only) page with
+  // the 10 remaining jobs, instead of being stranded on an empty page.
+  await waitFor(() => expect(screen.getByText('Role 1')).toBeInTheDocument());
+  expect(screen.getByText('Role 10')).toBeInTheDocument();
+});
+
 test('shows delete error when delete request fails', async () => {
   global.fetch = jest.fn((url, options = {}) => {
     if (!options.method) {
@@ -1133,9 +1222,8 @@ test('saves draft from job context with linked job_id', async () => {
 });
 
 test('stage dropdown supports multi-select and uncheck clearing', async () => {
-  global.fetch = jest.fn((url) => {
-    const hasStatusFilter = String(url).includes('statuses=');
-    return Promise.resolve({
+  global.fetch = jest.fn(() =>
+    Promise.resolve({
       ok: true,
       json: () =>
         Promise.resolve({
@@ -1147,15 +1235,15 @@ test('stage dropdown supports multi-select and uncheck clearing', async () => {
           page: 1,
           page_size: 10,
           total_pages: 1,
-          // Simulate backend narrowing options after a filter is selected.
-          available_statuses: hasStatusFilter
-            ? ['applied']
-            : ['applied', 'interviewing', 'archived'],
+          // Backend uses faceted filtering: the status facet excludes the status
+          // filter itself, so all selectable statuses stay visible regardless of
+          // which statuses are currently checked.
+          available_statuses: ['applied', 'interviewing', 'archived'],
           available_locations: ['Remote'],
           status_counts: { interviewing: 1, offered: 0 },
         }),
-    });
-  });
+    })
+  );
 
   render(<App />);
   fireEvent.click(screen.getByRole('button', { name: 'Stage' }));

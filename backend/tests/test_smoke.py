@@ -734,6 +734,74 @@ def test_list_jobs_available_statuses_excludes_status_filter_to_allow_multi_sele
     assert body["available_statuses"] == ["applied", "interviewing", "offered"]
 
 
+def test_list_jobs_clamps_out_of_range_page_to_last_real_page():
+    """Requesting a page past total_pages must not return an empty slice with a ghost page number.
+
+    The server should clamp page into the valid range and echo the clamped
+    page in the response so clients never observe `items: []` alongside
+    `page: <nonexistent>`.
+    """
+    jobs = [
+        {**SAMPLE_JOB, "id": "job-a", "company": "Acme"},
+        {**SAMPLE_JOB, "id": "job-b", "company": "Beta"},
+        {**SAMPLE_JOB, "id": "job-c", "company": "Zeta"},
+    ]
+    mock_sb, _, _ = make_mock_sb(data=jobs)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/jobs?sort_by=company&page=99&page_size=2",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 3
+    assert body["total_pages"] == 2
+    # Clamped from the requested page=99 down to the real last page (2).
+    assert body["page"] == 2
+    # Returns the items of the clamped page, not an empty slice.
+    assert [row["id"] for row in body["items"]] == ["job-c"]
+
+
+def test_list_jobs_clamps_page_to_1_when_there_are_no_jobs():
+    """With zero items, the clamped page must be 1, not the requested value."""
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/jobs?page=5&page_size=10",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 0
+    assert body["total_pages"] == 1
+    assert body["page"] == 1
+    assert body["items"] == []
+
+
+def test_list_jobs_available_statuses_normalizes_casing_whitespace_and_aliases():
+    """Facet statuses must be canonical even if the DB has dirty rows.
+
+    available_statuses should mirror the normalization the filter/counts
+    paths do (strip + lowercase + alias), and drop values that are not
+    canonical JOB_STATUSES — otherwise the UI facet would show ghost
+    options like 'Applied ' or 'interview' that the filter endpoint
+    would then 422 on.
+    """
+    jobs = [
+        {**SAMPLE_JOB, "id": "job-canonical", "status": "applied"},
+        {**SAMPLE_JOB, "id": "job-titlecase", "status": "Applied"},
+        {**SAMPLE_JOB, "id": "job-trailing-space", "status": "interviewing "},
+        {**SAMPLE_JOB, "id": "job-alias", "status": "interview"},
+        {**SAMPLE_JOB, "id": "job-garbage", "status": "legacy_foo"},
+    ]
+    mock_sb, _, _ = make_mock_sb(data=jobs)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/jobs", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    # Exactly the canonical values, no duplicates, no 'legacy_foo'.
+    assert response.json()["available_statuses"] == ["applied", "interviewing"]
+
+
 def test_list_jobs_available_locations_stay_title_cased_when_sort_reorders_rows():
     jobs = [
         {**SAMPLE_JOB, "id": "a", "location": "montreal", "company": "Acme"},

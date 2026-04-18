@@ -80,7 +80,12 @@ describe('useJobs', () => {
     );
   });
 
-  test('dedupes availableLocations case-insensitively and trims whitespace', async () => {
+  // Value canonicalization (trim / casefold-dedupe / title-case / sort) for
+  // available_locations is the backend's responsibility now (see
+  // backend/main.py::_build_available_locations and its backend tests). The
+  // hook is only expected to pass the server's normalized values through so
+  // there is exactly one normalization layer.
+  test('passes server-normalized availableLocations through verbatim', async () => {
     process.env.REACT_APP_BACKEND_URL = 'http://localhost:8000';
     global.fetch = jest.fn(() =>
       Promise.resolve({
@@ -93,37 +98,44 @@ describe('useJobs', () => {
             page_size: 10,
             total_pages: 1,
             available_statuses: ['applied'],
-            available_locations: ['San Francisco', ' san francisco ', 'SAN FRANCISCO', 'Montreal'],
+            available_locations: ['Boston, MA', 'Montreal', 'San Francisco'],
             status_counts: { interviewing: 0, offered: 0 },
           }),
       })
     );
     const { result } = renderHook(() => useJobs('access-token-xyz', ''));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.meta.availableLocations).toEqual(['Montreal', 'San Francisco']);
+    expect(result.current.meta.availableLocations).toEqual([
+      'Boston, MA',
+      'Montreal',
+      'San Francisco',
+    ]);
   });
 
-  test('normalizes availableLocations to title case', async () => {
+  test('keeps selected statuses visible even when the backend facet omits them', async () => {
     process.env.REACT_APP_BACKEND_URL = 'http://localhost:8000';
     global.fetch = jest.fn(() =>
       Promise.resolve({
         ok: true,
         json: () =>
           Promise.resolve({
-            items: [{ id: 'job-a', title: 'Dev' }],
-            total: 1,
+            items: [],
+            total: 0,
             page: 1,
             page_size: 10,
             total_pages: 1,
-            available_statuses: ['applied'],
-            available_locations: ['montreal', 'MONTREAL'],
+            // Server facet no longer has 'rejected' (e.g. last rejected job
+            // was deleted), but the user still has the checkbox ticked — it
+            // must stay visible so they can uncheck/un-filter intentionally.
+            available_statuses: ['applied', 'interviewing'],
+            available_locations: [],
             status_counts: { interviewing: 0, offered: 0 },
           }),
       })
     );
-    const { result } = renderHook(() => useJobs('access-token-xyz', ''));
+    const { result } = renderHook(() => useJobs('tok', '', { statuses: ['rejected'] }));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.meta.availableLocations).toEqual(['Montreal']);
+    expect(result.current.meta.availableStatuses).toEqual(['applied', 'interviewing', 'rejected']);
   });
 
   test('does not retain stale locations after a refetch', async () => {
@@ -140,7 +152,10 @@ describe('useJobs', () => {
             page_size: 10,
             total_pages: 1,
             available_statuses: ['applied'],
-            available_locations: ['Remote', 'Boston, MA'],
+            // Backend sorts available_locations by casefold (see
+            // _build_available_locations in main.py); mirror that here so the
+            // mock reflects the real contract.
+            available_locations: ['Boston, MA', 'Remote'],
             status_counts: { interviewing: 0, offered: 0 },
           }),
       })
@@ -154,7 +169,7 @@ describe('useJobs', () => {
             page_size: 10,
             total_pages: 1,
             available_statuses: ['applied'],
-            available_locations: ['Remote', 'Boston, MA'],
+            available_locations: ['Boston, MA', 'Remote'],
             status_counts: { interviewing: 0, offered: 0 },
           }),
       })
