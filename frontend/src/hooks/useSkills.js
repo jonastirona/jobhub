@@ -107,6 +107,7 @@ export function useSkills(accessToken) {
         return false;
       } finally {
         if (!controller.signal.aborted) setSaving(false);
+        if (pendingSaveRef.current === controller) pendingSaveRef.current = null;
       }
     },
     [accessToken]
@@ -153,6 +154,7 @@ export function useSkills(accessToken) {
         return false;
       } finally {
         if (!controller.signal.aborted) setSaving(false);
+        if (pendingSaveRef.current === controller) pendingSaveRef.current = null;
       }
     },
     [accessToken]
@@ -194,6 +196,7 @@ export function useSkills(accessToken) {
         return false;
       } finally {
         if (!controller.signal.aborted) setSaving(false);
+        if (pendingSaveRef.current === controller) pendingSaveRef.current = null;
       }
     },
     [accessToken]
@@ -240,6 +243,7 @@ export function useSkills(accessToken) {
         return false;
       } finally {
         if (!controller.signal.aborted) setSaving(false);
+        if (pendingSaveRef.current === controller) pendingSaveRef.current = null;
       }
     },
     [accessToken]

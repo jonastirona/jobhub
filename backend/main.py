@@ -970,33 +970,33 @@ def create_skill(skill: SkillCreate, authorization: Optional[str] = Header(defau
             status_code=422,
             detail=f"proficiency must be one of: {', '.join(sorted(VALID_PROFICIENCY_LEVELS))}",
         )
-    # NOTE: there is a narrow race window where two concurrent creates can
-    # read the same max position and both attempt to insert with the same value.
-    # The UNIQUE (user_id, position) constraint in the migration prevents silent
-    # data corruption — one of the two requests will get a DB constraint error
-    # (surfaced as 500). A per-user sequence or atomic INSERT…SELECT would
-    # eliminate the window entirely but requires a Supabase RPC.
-    position_resp = (
-        sb.table("skills")
-        .select("position")
-        .eq("user_id", user_id)
-        .order("position", desc=True)
-        .limit(1)
-        .execute()
-    )
-    if position_resp.data is None:
-        raise HTTPException(status_code=500, detail="Failed to determine skill position")
-    position = (position_resp.data[0]["position"] if position_resp.data else -1) + 1
     payload = skill.model_dump(exclude_none=True)
     payload["name"] = skill.name.strip()
     if "category" in payload:
         payload["category"] = skill.category.strip() or None
     payload["user_id"] = user_id
-    payload["position"] = position
-    response = sb.table("skills").insert(payload).execute()
-    if not response.data:
-        raise HTTPException(status_code=500, detail="Failed to create skill")
-    return response.data[0]
+    # Retry once on insert failure to handle the narrow race window where two
+    # concurrent creates read the same max position and collide on the UNIQUE
+    # (user_id, position) constraint.  A per-user DB sequence would eliminate
+    # the window entirely but requires a Supabase RPC.
+    for attempt in range(2):
+        position_resp = (
+            sb.table("skills")
+            .select("position")
+            .eq("user_id", user_id)
+            .order("position", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if position_resp.data is None:
+            raise HTTPException(status_code=500, detail="Failed to determine skill position")
+        payload["position"] = (position_resp.data[0]["position"] if position_resp.data else -1) + 1
+        response = sb.table("skills").insert(payload).execute()
+        if response.data:
+            return response.data[0]
+        if attempt == 0:
+            continue  # retry with a fresh position read
+    raise HTTPException(status_code=500, detail="Failed to create skill")
 
 
 # NOTE: /skills/reorder must be defined before /skills/{skill_id} so the
@@ -1005,7 +1005,7 @@ def create_skill(skill: SkillCreate, authorization: Optional[str] = Header(defau
 def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
     sb = get_supabase()
-    existing_resp = sb.table("skills").select("id").eq("user_id", user_id).execute()
+    existing_resp = sb.table("skills").select("id,position").eq("user_id", user_id).execute()
     if existing_resp.data is None:
         raise HTTPException(status_code=500, detail="Failed to validate skills for reorder")
     existing_ids = [r["id"] for r in existing_resp.data]
@@ -1017,7 +1017,9 @@ def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(def
             detail="ids must contain each of the authenticated user's skills exactly once",
         )
     if data.ids:
-        # Phase 1: shift all positions to temporary values (len + original index) to avoid
+        # Capture current positions for best-effort recovery if phase 2 fails.
+        original_positions = {r["id"]: r["position"] for r in existing_resp.data if "position" in r}
+        # Phase 1: shift all positions to temporary out-of-range values to avoid
         # violating the UNIQUE (user_id, position) constraint during swaps.
         temp_updates = [
             {"id": skill_id, "user_id": user_id, "position": len(data.ids) + i}
@@ -1033,6 +1035,14 @@ def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(def
         ]
         update_resp = sb.table("skills").upsert(final_updates, on_conflict="id").execute()
         if update_resp.data is None:
+            # Best-effort: attempt to restore original positions so rows are not
+            # left with out-of-range position values from phase 1.
+            if original_positions:
+                recovery_updates = [
+                    {"id": skill_id, "user_id": user_id, "position": pos}
+                    for skill_id, pos in original_positions.items()
+                ]
+                sb.table("skills").upsert(recovery_updates, on_conflict="id").execute()
             raise HTTPException(status_code=500, detail="Failed to reorder skills")
     response = sb.table("skills").select("*").eq("user_id", user_id).order("position").execute()
     if response.data is None:

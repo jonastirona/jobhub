@@ -582,8 +582,8 @@
 }
 
 .skills-proficiency-badge--beginner {
-  background: rgba(59, 130, 246, 0.12);
-  color: #2563eb;
+  background: var(--blue-bg);
+  color: var(--blue);
 }
 
 .skills-proficiency-badge--intermediate {
@@ -592,13 +592,13 @@
 }
 
 .skills-proficiency-badge--advanced {
-  background: rgba(34, 197, 94, 0.12);
-  color: #16a34a;
+  background: var(--green-bg);
+  color: var(--green);
 }
 
 .skills-proficiency-badge--expert {
   background: rgba(139, 92, 246, 0.12);
-  color: #7c3aed;
+  color: var(--purple, #7c3aed);
 }
 
 .skills-item-actions {
