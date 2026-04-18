@@ -2782,8 +2782,8 @@ def test_create_skill_blank_category_stored_as_null():
 
 
 def test_create_skill_db_failure_returns_500():
-    # insert returns empty data
-    mock_sb, _ = _make_mock_sb_with_side_effects([], [])
+    # insert returns empty data on both attempts (position read + insert, retried once)
+    mock_sb, _ = _make_mock_sb_with_side_effects([], [], [], [])
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             "/skills",
