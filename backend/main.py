@@ -1,9 +1,10 @@
+import calendar
 import os
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Response
+from fastapi import FastAPI, Header, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -29,6 +30,18 @@ PROFILE_REQUIRED_FIELDS = (
     "website",
     "linkedin_url",
 )
+JOB_STATUSES = {
+    "interested",
+    "applied",
+    "interviewing",
+    "offered",
+    "accepted",
+    "declined",
+    "rejected",
+    "withdrawn",
+    "archived",
+}
+JOB_STATUS_ALIAS = {"interview": "interviewing", "offer": "offered"}
 
 
 def get_supabase():
@@ -97,8 +110,10 @@ class JobCreate(BaseModel):
     location: Optional[str] = None
     status: Optional[str] = "applied"
     applied_date: Optional[date] = None
+    deadline: Optional[date] = None
     description: Optional[str] = None
     notes: Optional[str] = None
+    recruiter_notes: Optional[str] = None
 
 
 class JobUpdate(BaseModel):
@@ -107,8 +122,10 @@ class JobUpdate(BaseModel):
     location: Optional[str] = None
     status: Optional[str] = None
     applied_date: Optional[date] = None
+    deadline: Optional[date] = None
     description: Optional[str] = None
     notes: Optional[str] = None
+    recruiter_notes: Optional[str] = None
 
 
 class ProfileUpsert(BaseModel):
@@ -122,8 +139,6 @@ class ProfileUpsert(BaseModel):
     summary: Optional[str] = None
 
 
-# Must stay in sync with the CHECK constraint in 004_create_skills.sql.
-# Duplicated here intentionally so the API returns a clean 422 before touching the DB.
 VALID_PROFICIENCY_LEVELS = {"beginner", "intermediate", "advanced", "expert"}
 
 
@@ -143,6 +158,153 @@ class SkillReorder(BaseModel):
     ids: list[str]
 
 
+class ReminderCreate(BaseModel):
+    job_id: str
+    title: str
+    notes: Optional[str] = None
+    due_date: str
+
+
+class ReminderUpdate(BaseModel):
+    title: Optional[str] = None
+    notes: Optional[str] = None
+    due_date: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
+class InterviewEventCreate(BaseModel):
+    round_type: str
+    scheduled_at: datetime
+    notes: Optional[str] = None
+
+
+class InterviewEventUpdate(BaseModel):
+    round_type: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+    notes: Optional[str] = None
+
+
+class ExperienceCreate(BaseModel):
+    title: str
+    company: str
+    location: Optional[str] = None
+    start_year: int
+    end_year: Optional[int] = None
+    description: Optional[str] = None
+
+
+class ExperienceUpdate(BaseModel):
+    title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    start_year: Optional[int] = None
+    end_year: Optional[int] = None
+    description: Optional[str] = None
+
+
+class ExperienceReorder(BaseModel):
+    ids: list[str]
+
+
+def _validate_experience_years(start_year: Optional[int], end_year: Optional[int]) -> None:
+    if start_year is not None and start_year < 1900:
+        raise HTTPException(status_code=422, detail="start_year must be 1900 or later")
+    if start_year is not None and end_year is not None and end_year < start_year:
+        raise HTTPException(status_code=422, detail="end_year must be >= start_year")
+
+
+def _normalize_job_status(status: Optional[str]) -> Optional[str]:
+    if status is None:
+        return None
+    normalized = _normalize_job_status_alias(status)
+    if normalized not in JOB_STATUSES:
+        raise HTTPException(status_code=422, detail="status must be a supported job status")
+    return normalized
+
+
+def _normalize_job_status_alias(status: Optional[str]) -> Optional[str]:
+    if status is None:
+        return None
+    return JOB_STATUS_ALIAS.get(status, status)
+
+
+# Job list search: text fields plus expanded tokens for applied_date / deadline
+# (month names, year, day, ISO, locale-style strings) so queries like "april" match.
+_JOB_SEARCH_TEXT_FIELDS = (
+    "title",
+    "company",
+    "location",
+    "description",
+    "notes",
+    "recruiter_notes",
+    "status",
+)
+
+
+def _parse_job_date_value(value) -> Optional[date]:
+    if value is None or value == "":
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    s = str(value).strip()
+    if not s:
+        return None
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        try:
+            return date.fromisoformat(s[:10])
+        except ValueError:
+            pass
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).date()
+    except ValueError:
+        return None
+
+
+def _date_search_fragments(d: date) -> list[str]:
+    parts = [
+        d.isoformat(),
+        str(d.year),
+        f"{d.month:02d}",
+        f"{d.day:02d}",
+        str(d.day),
+    ]
+    full = calendar.month_name[d.month].lower()
+    abbr = calendar.month_abbr[d.month].lower()
+    if full:
+        parts.append(full)
+        # Unpadded day (e.g. "july 4") to align with en-US toLocaleDateString and user queries;
+        # strftime("%d") uses zero-padded days ("04") which "jul 4" would not match.
+        parts.append(f"{full} {d.day}, {d.year}")
+        parts.append(f"{full} {d.day}")
+    if abbr:
+        parts.append(abbr)
+        parts.append(f"{abbr} {d.day}, {d.year}")
+        parts.append(f"{abbr} {d.day}")
+    parts.append(d.strftime("%b %d, %Y").lower())
+    parts.append(d.strftime("%B %d, %Y").lower())
+    return parts
+
+
+def _job_search_fragments(job: dict) -> list[str]:
+    frags: list[str] = []
+    for field in _JOB_SEARCH_TEXT_FIELDS:
+        v = job.get(field)
+        if v is None:
+            continue
+        frags.append(str(v).lower())
+    for field in ("applied_date", "deadline"):
+        parsed = _parse_job_date_value(job.get(field))
+        if parsed is not None:
+            frags.extend(_date_search_fragments(parsed))
+    return frags
+
+
+def _job_matches_query(job: dict, normalized_query: str) -> bool:
+    return any(normalized_query in fragment for fragment in _job_search_fragments(job))
+
+
 # --- Routes ---
 
 
@@ -152,12 +314,23 @@ def root():
 
 
 @app.get("/jobs")
-def list_jobs(authorization: Optional[str] = Header(default=None)):
+def list_jobs(
+    authorization: Optional[str] = Header(default=None),
+    q: Optional[str] = Query(default=None),
+):
     user_id = get_user_id(authorization)
     sb = get_supabase()
     response = sb.table("jobs").select("*").eq("user_id", user_id).order("created_at", desc=True)
     response = response.execute()
-    return response.data
+    jobs = response.data
+    if not q:
+        return jobs
+
+    normalized_query = q.strip().lower()
+    if not normalized_query:
+        return jobs
+
+    return [job for job in jobs if _job_matches_query(job, normalized_query)]
 
 
 @app.post("/jobs", status_code=201)
@@ -165,9 +338,13 @@ def create_job(job: JobCreate, authorization: Optional[str] = Header(default=Non
     user_id = get_user_id(authorization)
     sb = get_supabase()
     payload = job.model_dump(exclude_none=True)
+    if "status" in payload:
+        payload["status"] = _normalize_job_status(payload["status"])
     payload["user_id"] = user_id
     if "applied_date" in payload and payload["applied_date"] is not None:
         payload["applied_date"] = str(payload["applied_date"])
+    if "deadline" in payload and payload["deadline"] is not None:
+        payload["deadline"] = str(payload["deadline"])
     response = sb.table("jobs").insert(payload).execute()
     if not response.data:
         raise HTTPException(status_code=500, detail="Failed to create job")
@@ -214,6 +391,101 @@ def get_job_history(job_id: str, authorization: Optional[str] = Header(default=N
     return response.data or []
 
 
+@app.get("/jobs/{job_id}/interviews")
+def list_interview_events(job_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = (
+        sb.table("interview_events")
+        .select("*")
+        .eq("job_id", job_id)
+        .eq("user_id", user_id)
+        .order("scheduled_at", desc=False)
+        .execute()
+    )
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch interview events")
+    return response.data or []
+
+
+@app.post("/jobs/{job_id}/interviews", status_code=201)
+def create_interview_event(
+    job_id: str, event: InterviewEventCreate, authorization: Optional[str] = Header(default=None)
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    job_exists = sb.table("jobs").select("id").eq("id", job_id).eq("user_id", user_id).execute()
+    if not job_exists.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not event.round_type.strip():
+        raise HTTPException(status_code=422, detail="round_type must not be blank")
+    payload = event.model_dump(exclude_none=True)
+    payload["job_id"] = job_id
+    payload["user_id"] = user_id
+    payload["round_type"] = event.round_type.strip()
+    payload["scheduled_at"] = event.scheduled_at.isoformat()
+    if "notes" in payload:
+        payload["notes"] = event.notes.strip() or None
+    response = sb.table("interview_events").insert(payload).execute()
+    if not response.data:
+        raise HTTPException(status_code=500, detail="Failed to create interview event")
+    return response.data[0]
+
+
+@app.put("/jobs/{job_id}/interviews/{event_id}")
+def update_interview_event(
+    job_id: str,
+    event_id: str,
+    event: InterviewEventUpdate,
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    payload = event.model_dump(exclude_unset=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    if "round_type" in payload:
+        payload["round_type"] = (payload["round_type"] or "").strip()
+        if not payload["round_type"]:
+            raise HTTPException(status_code=422, detail="round_type must not be blank")
+    if "scheduled_at" in payload:
+        if payload["scheduled_at"] is None:
+            raise HTTPException(status_code=422, detail="scheduled_at must not be null")
+        payload["scheduled_at"] = payload["scheduled_at"].isoformat()
+    if "notes" in payload:
+        payload["notes"] = (payload["notes"] or "").strip() or None
+    response = (
+        sb.table("interview_events")
+        .update(payload)
+        .eq("id", event_id)
+        .eq("job_id", job_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Interview event not found")
+    return response.data[0]
+
+
+@app.delete("/jobs/{job_id}/interviews/{event_id}")
+def delete_interview_event(
+    job_id: str, event_id: str, authorization: Optional[str] = Header(default=None)
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = (
+        sb.table("interview_events")
+        .delete()
+        .eq("id", event_id)
+        .eq("job_id", job_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Interview event not found")
+    return Response(status_code=204)
+
+
 @app.put("/jobs/{job_id}")
 def update_job(job_id: str, job: JobUpdate, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
@@ -221,24 +493,39 @@ def update_job(job_id: str, job: JobUpdate, authorization: Optional[str] = Heade
     payload = job.model_dump(exclude_none=True)
     if not payload:
         raise HTTPException(status_code=400, detail="No fields to update")
+    if "status" in payload:
+        payload["status"] = _normalize_job_status(payload["status"])
     if "applied_date" in payload and payload["applied_date"] is not None:
         payload["applied_date"] = str(payload["applied_date"])
-    existing = sb.table("jobs").select("status").eq("id", job_id).eq("user_id", user_id).execute()
+    if "deadline" in payload and payload["deadline"] is not None:
+        payload["deadline"] = str(payload["deadline"])
+    existing = sb.table("jobs").select("*").eq("id", job_id).eq("user_id", user_id).execute()
     if not existing.data:
         raise HTTPException(status_code=404, detail="Job not found")
     old_status = existing.data[0]["status"]
+    canonical_old_status = _normalize_job_status_alias(old_status)
+    should_insert_status_history = False
+    if "status" in payload:
+        if payload["status"] == canonical_old_status:
+            # Alias-to-canonical transitions should be treated as no-op status updates.
+            payload.pop("status")
+        else:
+            should_insert_status_history = True
+
+    if not payload:
+        return existing.data[0]
+
     response = sb.table("jobs").update(payload).eq("id", job_id).eq("user_id", user_id).execute()
     if not response.data:
         raise HTTPException(status_code=404, detail="Job not found")
     updated = response.data[0]
-    new_status = updated["status"]
-    if "status" in payload and new_status != old_status:
+    if should_insert_status_history:
         sb.table("job_status_history").insert(
             {
                 "job_id": job_id,
                 "user_id": user_id,
-                "from_status": old_status,
-                "to_status": new_status,
+                "from_status": canonical_old_status,
+                "to_status": updated["status"],
             }
         ).execute()
     return updated
@@ -303,12 +590,6 @@ def create_skill(skill: SkillCreate, authorization: Optional[str] = Header(defau
             status_code=422,
             detail=f"proficiency must be one of: {', '.join(sorted(VALID_PROFICIENCY_LEVELS))}",
         )
-    # NOTE: there is a narrow race window where two concurrent creates can
-    # read the same max position and both attempt to insert with the same value.
-    # The UNIQUE (user_id, position) constraint in the migration prevents silent
-    # data corruption — one of the two requests will get a DB constraint error
-    # (surfaced as 500). A per-user sequence or atomic INSERT…SELECT would
-    # eliminate the window entirely but requires a Supabase RPC.
     position_resp = (
         sb.table("skills")
         .select("position")
@@ -332,8 +613,6 @@ def create_skill(skill: SkillCreate, authorization: Optional[str] = Header(defau
     return response.data[0]
 
 
-# NOTE: /skills/reorder must be defined before /skills/{skill_id} so the
-# literal path segment "reorder" is not captured as a skill ID.
 @app.put("/skills/reorder")
 def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
@@ -350,8 +629,6 @@ def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(def
             detail="ids must contain each of the authenticated user's skills exactly once",
         )
     if data.ids:
-        # Phase 1: shift all positions to temporary values (len + original index) to avoid
-        # violating the UNIQUE (user_id, position) constraint during swaps.
         temp_updates = [
             {"id": skill_id, "user_id": user_id, "position": len(data.ids) + i}
             for i, skill_id in enumerate(data.ids)
@@ -359,7 +636,6 @@ def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(def
         temp_resp = sb.table("skills").upsert(temp_updates, on_conflict="id").execute()
         if temp_resp.data is None:
             raise HTTPException(status_code=500, detail="Failed to reorder skills")
-        # Phase 2: write the final 0..n-1 positions.
         final_updates = [
             {"id": skill_id, "user_id": user_id, "position": position}
             for position, skill_id in enumerate(data.ids)
@@ -416,4 +692,236 @@ def delete_skill(skill_id: str, authorization: Optional[str] = Header(default=No
         raise HTTPException(status_code=500, detail="Failed to delete skill")
     if not response.data:
         raise HTTPException(status_code=404, detail="Skill not found")
+    return Response(status_code=204)
+
+
+# --- Reminder routes ---
+
+
+@app.get("/reminders")
+def list_reminders(authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = (
+        sb.table("reminders")
+        .select("*, jobs(title, company)")
+        .eq("user_id", user_id)
+        .order("due_date", desc=False)
+        .execute()
+    )
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch reminders")
+    return response.data or []
+
+
+@app.post("/reminders", status_code=201)
+def create_reminder(reminder: ReminderCreate, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    job_check = (
+        sb.table("jobs").select("id").eq("id", reminder.job_id).eq("user_id", user_id).execute()
+    )
+    if not job_check.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    payload = reminder.model_dump(exclude_none=True)
+    payload["user_id"] = user_id
+    response = sb.table("reminders").insert(payload).execute()
+    if not response.data:
+        raise HTTPException(status_code=500, detail="Failed to create reminder")
+    return response.data[0]
+
+
+@app.put("/reminders/{reminder_id}")
+def update_reminder(
+    reminder_id: str,
+    reminder: ReminderUpdate,
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    payload = reminder.model_dump(exclude_unset=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    response = (
+        sb.table("reminders").update(payload).eq("id", reminder_id).eq("user_id", user_id).execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+    return response.data[0]
+
+
+@app.delete("/reminders/{reminder_id}")
+def delete_reminder(reminder_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = sb.table("reminders").delete().eq("id", reminder_id).eq("user_id", user_id).execute()
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+    return Response(status_code=204)
+
+
+# --- Experience routes ---
+
+
+@app.get("/experience")
+def list_experience(authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = sb.table("experience").select("*").eq("user_id", user_id).order("position").execute()
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch experience")
+    return response.data
+
+
+@app.post("/experience", status_code=201)
+def create_experience(entry: ExperienceCreate, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    _validate_experience_years(entry.start_year, entry.end_year)
+    if not entry.title.strip():
+        raise HTTPException(status_code=422, detail="title must not be blank")
+    if not entry.company.strip():
+        raise HTTPException(status_code=422, detail="company must not be blank")
+    payload = entry.model_dump(exclude_none=True)
+    payload["title"] = entry.title.strip()
+    payload["company"] = entry.company.strip()
+    if "location" in payload:
+        payload["location"] = entry.location.strip() or None
+    if "description" in payload:
+        payload["description"] = entry.description.strip() or None
+    payload["user_id"] = user_id
+    # Retry once on insert failure to handle the narrow race window where two
+    # concurrent creates read the same max position and collide on the UNIQUE
+    # (user_id, position) constraint.  A per-user DB sequence would eliminate
+    # the window entirely but requires a Supabase RPC.
+    for attempt in range(2):
+        position_resp = (
+            sb.table("experience")
+            .select("position")
+            .eq("user_id", user_id)
+            .order("position", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if position_resp.data is None:
+            raise HTTPException(status_code=500, detail="Failed to determine experience position")
+        payload["position"] = (position_resp.data[0]["position"] if position_resp.data else -1) + 1
+        response = sb.table("experience").insert(payload).execute()
+        if response.data:
+            return response.data[0]
+        if attempt == 0:
+            continue  # retry with a fresh position read
+    raise HTTPException(status_code=500, detail="Failed to create experience entry")
+
+
+@app.put("/experience/reorder")
+def reorder_experience(
+    data: ExperienceReorder, authorization: Optional[str] = Header(default=None)
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    existing_resp = sb.table("experience").select("id,position").eq("user_id", user_id).execute()
+    if existing_resp.data is None:
+        raise HTTPException(status_code=500, detail="Failed to validate experience for reorder")
+    existing_ids = [r["id"] for r in existing_resp.data]
+    if len(data.ids) != len(set(data.ids)):
+        raise HTTPException(status_code=400, detail="Experience ids must be unique")
+    if set(data.ids) != set(existing_ids):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "ids must contain each of the authenticated user's experience entries exactly once"
+            ),
+        )
+    if data.ids:
+        # Capture current positions for best-effort recovery if phase 2 fails.
+        original_positions = {r["id"]: r["position"] for r in existing_resp.data if "position" in r}
+        # Phase 1: shift all positions to temporary out-of-range values to avoid
+        # violating the UNIQUE (user_id, position) constraint during swaps.
+        temp_updates = [
+            {"id": entry_id, "user_id": user_id, "position": len(data.ids) + i}
+            for i, entry_id in enumerate(data.ids)
+        ]
+        temp_resp = sb.table("experience").upsert(temp_updates, on_conflict="id").execute()
+        if temp_resp.data is None:
+            raise HTTPException(status_code=500, detail="Failed to reorder experience")
+        # Phase 2: write the final 0..n-1 positions.
+        final_updates = [
+            {"id": entry_id, "user_id": user_id, "position": position}
+            for position, entry_id in enumerate(data.ids)
+        ]
+        update_resp = sb.table("experience").upsert(final_updates, on_conflict="id").execute()
+        if update_resp.data is None:
+            # Best-effort: attempt to restore original positions so rows are not
+            # left with out-of-range position values from phase 1.
+            if original_positions:
+                recovery_updates = [
+                    {"id": entry_id, "user_id": user_id, "position": pos}
+                    for entry_id, pos in original_positions.items()
+                ]
+                sb.table("experience").upsert(recovery_updates, on_conflict="id").execute()
+            raise HTTPException(status_code=500, detail="Failed to reorder experience")
+    response = sb.table("experience").select("*").eq("user_id", user_id).order("position").execute()
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch reordered experience")
+    return response.data
+
+
+@app.put("/experience/{entry_id}")
+def update_experience(
+    entry_id: str,
+    entry: ExperienceUpdate,
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    payload = entry.model_dump(exclude_unset=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    _EXPERIENCE_REQUIRED_FIELDS = ("title", "company", "start_year")
+    for field in _EXPERIENCE_REQUIRED_FIELDS:
+        if field in payload and payload[field] is None:
+            raise HTTPException(status_code=422, detail=f"{field} cannot be null")
+    if "title" in payload:
+        payload["title"] = (payload["title"] or "").strip()
+        if not payload["title"]:
+            raise HTTPException(status_code=422, detail="title must not be blank")
+    if "company" in payload:
+        payload["company"] = (payload["company"] or "").strip()
+        if not payload["company"]:
+            raise HTTPException(status_code=422, detail="company must not be blank")
+    if "location" in payload:
+        payload["location"] = (payload["location"] or "").strip() or None
+    if "description" in payload:
+        payload["description"] = (payload["description"] or "").strip() or None
+    existing_resp = (
+        sb.table("experience").select("*").eq("id", entry_id).eq("user_id", user_id).execute()
+    )
+    if existing_resp.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch experience entry")
+    if not existing_resp.data:
+        raise HTTPException(status_code=404, detail="Experience entry not found")
+    existing = existing_resp.data[0]
+    effective_start = payload.get("start_year", existing.get("start_year"))
+    effective_end = payload.get("end_year", existing.get("end_year"))
+    _validate_experience_years(effective_start, effective_end)
+    response = (
+        sb.table("experience").update(payload).eq("id", entry_id).eq("user_id", user_id).execute()
+    )
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to update experience entry")
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Experience entry not found")
+    return response.data[0]
+
+
+@app.delete("/experience/{entry_id}")
+def delete_experience(entry_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = sb.table("experience").delete().eq("id", entry_id).eq("user_id", user_id).execute()
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to delete experience entry")
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Experience entry not found")
     return Response(status_code=204)

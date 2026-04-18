@@ -1,0 +1,72 @@
+.job-overview-body {
+  padding: 24px 28px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.job-overview-company {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.job-overview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.job-overview-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.job-overview-value {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.job-overview-value--muted {
+  color: var(--text-secondary);
+}
+
+.job-overview-row-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 520px) {
+  .job-overview-row-two {
+    grid-template-columns: 1fr;
+  }
+}
+
+.job-overview-footer {
+  padding: 0 28px 24px;
+}
+
+.job-overview-done {
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--blue, #3b82f6);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.job-overview-done:hover {
+  filter: brightness(1.05);
+}

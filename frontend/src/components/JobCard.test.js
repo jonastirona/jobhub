@@ -70,6 +70,30 @@ test('renders no date when both applied_date and updated_at are null', () => {
   expect(screen.queryByText(/2026/)).not.toBeInTheDocument();
 });
 
+test('renders deadline when present', () => {
+  render(<JobCard job={{ ...baseJob, deadline: '2026-06-01' }} />);
+  expect(screen.getByText(/deadline jun 1, 2026/i)).toBeInTheDocument();
+});
+
+test('renders recruiter notes when present', () => {
+  render(<JobCard job={{ ...baseJob, recruiter_notes: 'Contact: recruiter@example.com' }} />);
+  expect(screen.getByText('Contact: recruiter@example.com')).toBeInTheDocument();
+});
+
+test('truncates very long recruiter_notes with ellipsis', () => {
+  const long = `${'n'.repeat(120)}end`;
+  render(<JobCard job={{ ...baseJob, recruiter_notes: long }} />);
+  const expected = `${'n'.repeat(99)}…`;
+  expect(screen.getByText(expected)).toBeInTheDocument();
+  expect(screen.queryByText(long)).not.toBeInTheDocument();
+});
+
+test('shows both applied line and deadline when both set', () => {
+  render(<JobCard job={{ ...baseJob, applied_date: '2026-01-10', deadline: '2026-02-20' }} />);
+  expect(screen.getByText(/applied jan 10, 2026/i)).toBeInTheDocument();
+  expect(screen.getByText(/deadline feb 20, 2026/i)).toBeInTheDocument();
+});
+
 test('renders as an article element', () => {
   render(<JobCard job={baseJob} />);
   expect(screen.getByRole('article')).toBeInTheDocument();

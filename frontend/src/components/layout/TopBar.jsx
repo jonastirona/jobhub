@@ -11,7 +11,7 @@ function getInitials(email) {
     .join('');
 }
 
-export default function TopBar({ title, notificationCount }) {
+export default function TopBar({ title, notificationCount, onBellClick }) {
   const { user } = useAuth();
   const { avatarPreviewUrl } = useProfileAvatar();
   const initials = getInitials(user?.email);
@@ -21,18 +21,7 @@ export default function TopBar({ title, notificationCount }) {
     <header className="topbar">
       <div className="topbar-title">{title}</div>
       <div className="topbar-right">
-        <div className="search-box">
-          <span className="search-icon" aria-hidden="true">
-            🔍
-          </span>
-          <input
-            type="text"
-            placeholder="Search jobs, companies..."
-            aria-label="Search jobs and companies"
-          />
-        </div>
-
-        <button type="button" className="notif-btn" aria-label="Notifications">
+        <button type="button" className="notif-btn" aria-label="Reminders" onClick={onBellClick}>
           🔔
           {notificationCount > 0 && <span className="notif-badge">{notificationCount}</span>}
         </button>

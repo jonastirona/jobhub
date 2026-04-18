@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppShell from '../components/layout/AppShell';
 import { useAuth } from '../context/AuthContext';
+import { useExperience } from '../hooks/useExperience';
 import { useProfile } from '../hooks/useProfile';
 import { useSkills } from '../hooks/useSkills';
+import { EMPTY_EXPERIENCE } from '../models/experience';
 import { EMPTY_PROFILE, REQUIRED_PROFILE_FIELDS } from '../models/profile';
 import { EMPTY_SKILL, PROFICIENCY_LEVELS } from '../models/skill';
 import './ProfilePage.css';
@@ -43,6 +45,17 @@ function getCompletionState(values, fields = REQUIRED_PROFILE_FIELDS) {
   };
 }
 
+function formatYearRange(startYear, endYear) {
+  if (endYear == null) return `${startYear} – Present`;
+  return `${startYear} – ${endYear}`;
+}
+
+const parseYear = (value) => {
+  const trimmed = String(value ?? '').trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  return Number(trimmed);
+};
+
 export default function ProfilePage() {
   const { session, user } = useAuth();
   const accessToken = session?.access_token;
@@ -58,12 +71,25 @@ export default function ProfilePage() {
     deleteSkill,
     reorderSkills,
   } = useSkills(accessToken);
+  const {
+    experience,
+    loading: experienceLoading,
+    error: experienceError,
+    saving: experienceSaving,
+    saveError: experienceSaveError,
+    addExperience,
+    updateExperience,
+    deleteExperience,
+    reorderExperience,
+  } = useExperience(accessToken);
 
   const [formData, setFormData] = useState(EMPTY_PROFILE);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const [skillForm, setSkillForm] = useState(EMPTY_SKILL);
   const [editingSkillId, setEditingSkillId] = useState(null);
+  const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
+  const [editingExperienceId, setEditingExperienceId] = useState(null);
 
   useEffect(() => {
     setFormData({
@@ -172,6 +198,77 @@ export default function ProfilePage() {
     const newOrder = [...skills];
     [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
     await reorderSkills(newOrder.map((s) => s.id));
+  };
+
+  const expStartYear = parseYear(experienceForm.start_year);
+  const expEndYear = parseYear(experienceForm.end_year);
+  const expHasEndYear = String(experienceForm.end_year ?? '').trim() !== '';
+  const isExperienceFormValid =
+    experienceForm.title.trim().length > 0 &&
+    experienceForm.company.trim().length > 0 &&
+    expStartYear !== null &&
+    expStartYear >= 1900 &&
+    (!expHasEndYear || (expEndYear !== null && expEndYear >= expStartYear));
+
+  const handleExperienceFormChange = (e) => {
+    const { name, value } = e.target;
+    setExperienceForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleExperienceEdit = (entry) => {
+    setEditingExperienceId(entry.id);
+    setExperienceForm({
+      title: entry.title || '',
+      company: entry.company || '',
+      location: entry.location || '',
+      start_year: entry.start_year != null ? String(entry.start_year) : '',
+      end_year: entry.end_year != null ? String(entry.end_year) : '',
+      description: entry.description || '',
+    });
+  };
+
+  const handleExperienceCancelEdit = () => {
+    setEditingExperienceId(null);
+    setExperienceForm(EMPTY_EXPERIENCE);
+  };
+
+  const handleExperienceSubmit = async (e) => {
+    e.preventDefault();
+    if (experienceSaving || !isExperienceFormValid) return;
+    const payload = {
+      title: experienceForm.title.trim(),
+      company: experienceForm.company.trim(),
+      location: experienceForm.location.trim() || null,
+      start_year: parseYear(experienceForm.start_year),
+      end_year: expHasEndYear ? parseYear(experienceForm.end_year) : null,
+      description: experienceForm.description.trim() || null,
+    };
+    const saved = editingExperienceId
+      ? await updateExperience(editingExperienceId, payload)
+      : await addExperience(payload);
+    if (saved) {
+      setExperienceForm(EMPTY_EXPERIENCE);
+      setEditingExperienceId(null);
+    }
+  };
+
+  const handleExperienceDelete = async (id) => {
+    if (editingExperienceId === id) handleExperienceCancelEdit();
+    await deleteExperience(id);
+  };
+
+  const handleExperienceMoveUp = async (index) => {
+    if (index === 0) return;
+    const newOrder = [...experience];
+    [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
+    await reorderExperience(newOrder.map((e) => e.id));
+  };
+
+  const handleExperienceMoveDown = async (index) => {
+    if (index === experience.length - 1) return;
+    const newOrder = [...experience];
+    [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+    await reorderExperience(newOrder.map((e) => e.id));
   };
 
   if (loading) {
@@ -537,6 +634,210 @@ export default function ProfilePage() {
                       type="button"
                       className="skills-btn skills-btn--secondary"
                       onClick={handleSkillCancelEdit}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </form>
+            </>
+          )}
+        </section>
+
+        <section className="profile-card" role="region" aria-labelledby="profile-experience-title">
+          <div className="profile-card-header">
+            <h2 id="profile-experience-title" className="profile-card-title">
+              Experience
+            </h2>
+          </div>
+
+          {experienceLoading && <p className="profile-state">Loading experience...</p>}
+
+          {experienceError && (
+            <p className="profile-state profile-state--error" role="alert">
+              {experienceError}
+            </p>
+          )}
+
+          {!experienceLoading && (
+            <>
+              {experience.length === 0 && !experienceError && (
+                <p className="experience-empty">No experience added yet.</p>
+              )}
+
+              {experience.length > 0 && (
+                <ul className="experience-list" aria-label="Experience list">
+                  {experience.map((entry, index) => (
+                    <li key={entry.id} className="experience-item">
+                      <div className="experience-item-info">
+                        <span className="experience-item-title">{entry.title}</span>
+                        <span className="experience-item-company">{entry.company}</span>
+                        {entry.location && (
+                          <span className="experience-item-location">{entry.location}</span>
+                        )}
+                        <span className="experience-item-years">
+                          {formatYearRange(entry.start_year, entry.end_year)}
+                        </span>
+                      </div>
+                      <div className="experience-item-actions">
+                        <button
+                          type="button"
+                          className="experience-btn experience-btn--icon"
+                          onClick={() => handleExperienceMoveUp(index)}
+                          disabled={index === 0 || experienceSaving}
+                          aria-label={`Move ${entry.title} up`}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          className="experience-btn experience-btn--icon"
+                          onClick={() => handleExperienceMoveDown(index)}
+                          disabled={index === experience.length - 1 || experienceSaving}
+                          aria-label={`Move ${entry.title} down`}
+                        >
+                          ▼
+                        </button>
+                        <button
+                          type="button"
+                          className="experience-btn experience-btn--secondary"
+                          onClick={() => handleExperienceEdit(entry)}
+                          aria-label={`Edit ${entry.title}`}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="experience-btn experience-btn--danger"
+                          onClick={() => handleExperienceDelete(entry.id)}
+                          disabled={experienceSaving}
+                          aria-label={`Delete ${entry.title}`}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <form className="experience-form" onSubmit={handleExperienceSubmit}>
+                <div className="experience-form-fields">
+                  <div className="profile-field">
+                    <label htmlFor="exp_title" className="profile-label">
+                      Title
+                    </label>
+                    <input
+                      id="exp_title"
+                      type="text"
+                      name="title"
+                      value={experienceForm.title}
+                      onChange={handleExperienceFormChange}
+                      className="profile-input"
+                      placeholder="e.g. Software Engineer"
+                    />
+                  </div>
+
+                  <div className="profile-field">
+                    <label htmlFor="exp_company" className="profile-label">
+                      Company
+                    </label>
+                    <input
+                      id="exp_company"
+                      type="text"
+                      name="company"
+                      value={experienceForm.company}
+                      onChange={handleExperienceFormChange}
+                      className="profile-input"
+                      placeholder="e.g. Acme Corp"
+                    />
+                  </div>
+
+                  <div className="profile-field">
+                    <label htmlFor="exp_location" className="profile-label">
+                      City / State
+                    </label>
+                    <input
+                      id="exp_location"
+                      type="text"
+                      name="location"
+                      value={experienceForm.location}
+                      onChange={handleExperienceFormChange}
+                      className="profile-input"
+                      placeholder="e.g. New York, NY"
+                    />
+                  </div>
+
+                  <div className="profile-field">
+                    <label htmlFor="exp_start_year" className="profile-label">
+                      Start Year
+                    </label>
+                    <input
+                      id="exp_start_year"
+                      type="number"
+                      name="start_year"
+                      value={experienceForm.start_year}
+                      onChange={handleExperienceFormChange}
+                      className="profile-input"
+                      placeholder="e.g. 2020"
+                      min="1900"
+                    />
+                  </div>
+
+                  <div className="profile-field">
+                    <label htmlFor="exp_end_year" className="profile-label">
+                      End Year
+                    </label>
+                    <input
+                      id="exp_end_year"
+                      type="number"
+                      name="end_year"
+                      value={experienceForm.end_year}
+                      onChange={handleExperienceFormChange}
+                      className="profile-input"
+                      placeholder="Leave blank if current"
+                      min="1900"
+                    />
+                  </div>
+
+                  <div className="profile-field profile-field--full">
+                    <label htmlFor="exp_description" className="profile-label">
+                      Description
+                    </label>
+                    <textarea
+                      id="exp_description"
+                      name="description"
+                      value={experienceForm.description}
+                      onChange={handleExperienceFormChange}
+                      rows="3"
+                      className="profile-textarea"
+                      placeholder="Key responsibilities and achievements…"
+                    />
+                  </div>
+                </div>
+
+                <div className="profile-actions">
+                  {experienceSaveError && (
+                    <p className="profile-save-error" role="alert">
+                      {experienceSaveError}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={experienceSaving || !isExperienceFormValid}
+                    className="profile-btn-save"
+                  >
+                    {experienceSaving
+                      ? 'Saving...'
+                      : editingExperienceId
+                        ? 'Update Experience'
+                        : 'Add Experience'}
+                  </button>
+                  {editingExperienceId && (
+                    <button
+                      type="button"
+                      className="experience-btn experience-btn--secondary"
+                      onClick={handleExperienceCancelEdit}
                     >
                       Cancel
                     </button>
