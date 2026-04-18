@@ -74,6 +74,15 @@ function renderPage({ savingDraft = false } = {}) {
 
   mockUseJobs.mockReturnValue({
     jobs: [JOB],
+    meta: {
+      total: 1,
+      page: 1,
+      pageSize: 10,
+      totalPages: 1,
+      availableStatuses: [],
+      availableLocations: [],
+      statusCounts: { interviewing: 0, offered: 0 },
+    },
     loading: false,
     error: null,
     refetch: jest.fn(),

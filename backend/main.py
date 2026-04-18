@@ -1,6 +1,7 @@
 import calendar
 import os
 from datetime import date, datetime
+from math import ceil
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -42,6 +43,8 @@ JOB_STATUSES = {
     "archived",
 }
 JOB_STATUS_ALIAS = {"interview": "interviewing", "offer": "offered"}
+DEADLINE_STATES = {"upcoming", "due_today", "overdue", "no_deadline"}
+JOB_SORT_OPTIONS = {"last_activity", "deadline", "created_at", "company"}
 
 
 def get_supabase():
@@ -367,6 +370,158 @@ def _job_matches_query(job: dict, normalized_query: str) -> bool:
     return any(normalized_query in fragment for fragment in _job_search_fragments(job))
 
 
+def _normalize_list_param(values: Optional[list[str]]) -> list[str]:
+    """Normalize a FastAPI repeated query-param into a clean list of strings.
+
+    Values are treated as opaque strings (we deliberately do NOT split on
+    commas, because values like ``"Boston, MA"`` are legitimate single entries).
+    """
+    if not values:
+        return []
+    normalized: list[str] = []
+    for raw in values:
+        if raw is None:
+            continue
+        cleaned = str(raw).strip()
+        if cleaned:
+            normalized.append(cleaned)
+    return normalized
+
+
+def _normalize_location_key(value: Optional[str]) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.strip().casefold()
+
+
+def _to_title_case_location(value: str) -> str:
+    has_lower = any(ch.islower() for ch in value)
+    has_upper = any(ch.isupper() for ch in value)
+    if has_lower and has_upper:
+        return value
+    parts = [segment.capitalize() for segment in value.split()]
+    return " ".join(parts)
+
+
+def _build_available_locations(jobs: list[dict]) -> list[str]:
+    deduped: dict[str, str] = {}
+    for job in jobs:
+        raw_location = job.get("location")
+        if not isinstance(raw_location, str):
+            continue
+        cleaned_location = raw_location.strip()
+        if not cleaned_location:
+            continue
+        key = cleaned_location.casefold()
+        if key not in deduped:
+            deduped[key] = _to_title_case_location(cleaned_location)
+    return sorted(deduped.values(), key=lambda location: location.casefold())
+
+
+def _parse_datetime_value(value) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str):
+        return None
+    s = value.strip()
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _parse_job_created_at(job: dict) -> datetime:
+    return _parse_datetime_value(job.get("created_at")) or datetime.min
+
+
+def _parse_job_deadline(job: dict) -> Optional[date]:
+    return _parse_job_date_value(job.get("deadline"))
+
+
+def _datetime_rank(value: datetime) -> int:
+    return value.toordinal() * 86400 + value.hour * 3600 + value.minute * 60 + value.second
+
+
+def _created_sort_tuple(job: dict) -> tuple:
+    created_at = _parse_job_created_at(job)
+    return (-_datetime_rank(created_at), str(job.get("id") or ""))
+
+
+def _job_matches_status_filter(job: dict, normalized_statuses: list[str]) -> bool:
+    if not normalized_statuses:
+        return True
+    job_status = _normalize_job_status_alias((job.get("status") or "").strip().lower())
+    return job_status in set(normalized_statuses)
+
+
+def _job_matches_location_filter(job: dict, normalized_locations: list[str]) -> bool:
+    if not normalized_locations:
+        return True
+    normalized_location_keys = {_normalize_location_key(loc) for loc in normalized_locations}
+    normalized_location_keys.discard("")
+    if not normalized_location_keys:
+        return True
+    return _normalize_location_key(job.get("location")) in normalized_location_keys
+
+
+def _job_matches_deadline_filter(
+    job: dict, normalized_deadline_states: list[str], today: date
+) -> bool:
+    if not normalized_deadline_states:
+        return True
+    deadline = _parse_job_deadline(job)
+    states = set(normalized_deadline_states)
+    if deadline is None:
+        return "no_deadline" in states
+    if "upcoming" in states and deadline > today:
+        return True
+    if "due_today" in states and deadline == today:
+        return True
+    if "overdue" in states and deadline < today:
+        return True
+    return False
+
+
+def _sort_jobs_for_view(
+    jobs: list[dict],
+    sort_by: str,
+    last_activity_by_job_id: Optional[dict[str, datetime]] = None,
+) -> list[dict]:
+    last_activity_by_job_id = last_activity_by_job_id or {}
+    if sort_by == "company":
+        return sorted(
+            jobs,
+            key=lambda job: (
+                str(job.get("company") or "").casefold(),
+                *_created_sort_tuple(job),
+            ),
+        )
+    if sort_by == "deadline":
+        return sorted(
+            jobs,
+            key=lambda job: (
+                _parse_job_deadline(job) is None,
+                -(_parse_job_deadline(job) or date.min).toordinal(),
+                *_created_sort_tuple(job),
+            ),
+        )
+    if sort_by == "last_activity":
+        return sorted(
+            jobs,
+            key=lambda job: (
+                str(job.get("id") or "") not in last_activity_by_job_id,
+                -_datetime_rank(
+                    last_activity_by_job_id.get(str(job.get("id") or ""), datetime.min)
+                ),
+                *_created_sort_tuple(job),
+            ),
+        )
+    # created_at (default)
+    return sorted(jobs, key=_created_sort_tuple)
+
+
 # --- Routes ---
 
 
@@ -379,20 +534,131 @@ def root():
 def list_jobs(
     authorization: Optional[str] = Header(default=None),
     q: Optional[str] = Query(default=None),
+    statuses: Optional[list[str]] = Query(default=None),
+    locations: Optional[list[str]] = Query(default=None),
+    deadline_states: Optional[list[str]] = Query(default=None),
+    sort_by: str = Query(default="created_at"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10, ge=1, le=100),
 ):
     user_id = get_user_id(authorization)
     sb = get_supabase()
-    response = sb.table("jobs").select("*").eq("user_id", user_id).order("created_at", desc=True)
-    response = response.execute()
-    jobs = response.data
-    if not q:
-        return jobs
+    normalized_statuses = [
+        _normalize_job_status_alias(status) for status in _normalize_list_param(statuses)
+    ]
+    normalized_locations = _normalize_list_param(locations)
+    normalized_deadline_states = _normalize_list_param(deadline_states)
 
-    normalized_query = q.strip().lower()
-    if not normalized_query:
-        return jobs
+    if any(status not in JOB_STATUSES for status in normalized_statuses):
+        raise HTTPException(status_code=422, detail="statuses contains unsupported values")
+    if any(state not in DEADLINE_STATES for state in normalized_deadline_states):
+        raise HTTPException(status_code=422, detail="deadline_states contains unsupported values")
+    if sort_by not in JOB_SORT_OPTIONS:
+        raise HTTPException(status_code=422, detail="sort_by contains unsupported values")
 
-    return [job for job in jobs if _job_matches_query(job, normalized_query)]
+    response = sb.table("jobs").select("*").eq("user_id", user_id).execute()
+    all_user_jobs = response.data or []
+
+    normalized_query = (q or "").strip().lower()
+    if normalized_query:
+        jobs_after_search = [
+            job for job in all_user_jobs if _job_matches_query(job, normalized_query)
+        ]
+    else:
+        jobs_after_search = list(all_user_jobs)
+
+    today = date.today()
+
+    # Facet sets: each facet's options come from jobs filtered by every OTHER
+    # active filter except its own. That way selecting one option in a facet
+    # does not hide the other options in the same facet, while deletions and
+    # other filters still prune the facet appropriately.
+    jobs_for_location_facet = [
+        job
+        for job in jobs_after_search
+        if _job_matches_status_filter(job, normalized_statuses)
+        and _job_matches_deadline_filter(job, normalized_deadline_states, today)
+    ]
+    jobs_for_status_facet = [
+        job
+        for job in jobs_after_search
+        if _job_matches_location_filter(job, normalized_locations)
+        and _job_matches_deadline_filter(job, normalized_deadline_states, today)
+    ]
+
+    available_locations = _build_available_locations(jobs_for_location_facet)
+    available_statuses = sorted(
+        {
+            normalized
+            for normalized in (
+                _normalize_job_status_alias((job.get("status") or "").strip().lower())
+                for job in jobs_for_status_facet
+            )
+            if normalized in JOB_STATUSES
+        }
+    )
+
+    jobs = [
+        job
+        for job in jobs_after_search
+        if _job_matches_status_filter(job, normalized_statuses)
+        and _job_matches_location_filter(job, normalized_locations)
+        and _job_matches_deadline_filter(job, normalized_deadline_states, today)
+    ]
+
+    last_activity_by_job_id: dict[str, datetime] = {}
+    if sort_by == "last_activity" and jobs:
+        job_ids = [str(job["id"]) for job in jobs if job.get("id")]
+        if job_ids:
+            history_response = (
+                sb.table("job_status_history")
+                .select("job_id,changed_at")
+                .eq("user_id", user_id)
+                .in_("job_id", job_ids)
+                .order("changed_at", desc=True)
+                .execute()
+            )
+            for entry in history_response.data or []:
+                job_id = str(entry.get("job_id") or "")
+                changed_at = _parse_datetime_value(entry.get("changed_at"))
+                if not job_id or changed_at is None:
+                    continue
+                if job_id not in last_activity_by_job_id:
+                    last_activity_by_job_id[job_id] = changed_at
+
+    jobs = _sort_jobs_for_view(jobs, sort_by, last_activity_by_job_id)
+
+    total = len(jobs)
+    total_pages = ceil(total / page_size) if total > 0 else 1
+    # Clamp the requested page into the valid range so clients that ask for a
+    # page that no longer exists (e.g. after deletions or filter changes) get
+    # the last real page instead of an empty slice with a ghost page number.
+    effective_page = min(page, total_pages)
+    start_idx = (effective_page - 1) * page_size
+    end_idx = start_idx + page_size
+    items = jobs[start_idx:end_idx]
+
+    status_counts = {
+        "interviewing": 0,
+        "offered": 0,
+    }
+    for job in jobs:
+        status = _normalize_job_status_alias((job.get("status") or "").strip().lower())
+        if status == "interviewing":
+            status_counts["interviewing"] += 1
+        if status in {"offered", "accepted"}:
+            status_counts["offered"] += 1
+
+    return {
+        "items": items,
+        "total": total,
+        "page": effective_page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "available_statuses": available_statuses,
+        "available_locations": available_locations,
+        "status_counts": status_counts,
+    }
 
 
 @app.post("/jobs", status_code=201)
@@ -472,7 +738,9 @@ def list_interview_events(job_id: str, authorization: Optional[str] = Header(def
 
 @app.post("/jobs/{job_id}/interviews", status_code=201)
 def create_interview_event(
-    job_id: str, event: InterviewEventCreate, authorization: Optional[str] = Header(default=None)
+    job_id: str,
+    event: InterviewEventCreate,
+    authorization: Optional[str] = Header(default=None),
 ):
     user_id = get_user_id(authorization)
     sb = get_supabase()
@@ -722,7 +990,10 @@ def upsert_profile(profile: ProfileUpsert, authorization: Optional[str] = Header
     if not response.data:
         raise HTTPException(status_code=500, detail="Failed to save profile")
     saved_profile = response.data[0]
-    return {"profile": saved_profile, "completion": get_profile_completion(saved_profile)}
+    return {
+        "profile": saved_profile,
+        "completion": get_profile_completion(saved_profile),
+    }
 
 
 # --- Reminder routes ---

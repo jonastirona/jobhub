@@ -139,7 +139,13 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
               {pending.map((r) => (
                 <li
                   key={r.id}
-                  className={`rp-item${isToday(r.due_date) ? ' rp-item--due' : isPastDue(r.due_date) ? ' rp-item--overdue' : ''}`}
+                  className={`rp-item${
+                    isToday(r.due_date)
+                      ? ' rp-item--due'
+                      : isPastDue(r.due_date)
+                        ? ' rp-item--overdue'
+                        : ''
+                  }`}
                 >
                   <div className="rp-item-main">
                     <span className="rp-item-title">{r.title}</span>
