@@ -201,7 +201,7 @@ class DocumentUpdate(BaseModel):
     job_id: Optional[str] = None
 
 
-# Must stay in sync with the CHECK constraint in 004_create_skills.sql.
+# Must stay in sync with the CHECK constraint in 010_create_skills.sql.
 # Duplicated here intentionally so the API returns a clean 422 before touching the DB.
 VALID_PROFICIENCY_LEVELS = {"beginner", "intermediate", "advanced", "expert"}
 
