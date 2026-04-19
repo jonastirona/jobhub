@@ -28,15 +28,18 @@ export default function DocumentLibrary() {
     documents,
     loading,
     error,
+    viewError,
     deletingId,
     deleteError,
     viewDocument,
     deleteDocument,
+    clearViewError,
     clearDeleteError,
   } = useDocuments(session?.access_token);
 
   async function handleViewDocument(documentId) {
     clearDeleteError();
+    clearViewError();
     const url = await viewDocument(documentId);
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -64,6 +67,12 @@ export default function DocumentLibrary() {
         {deleteError && (
           <p className="table-empty table-state--error" role="alert">
             {deleteError}
+          </p>
+        )}
+
+        {viewError && (
+          <p className="table-empty table-state--error" role="alert">
+            {viewError}
           </p>
         )}
 

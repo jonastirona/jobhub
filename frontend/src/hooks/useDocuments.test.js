@@ -71,7 +71,7 @@ describe('useDocuments', () => {
     expect(result.current.saveError).toMatch(/only pdf files are supported/i);
   });
 
-  test('viewDocument returns null and sets error when signed url is missing', async () => {
+  test('viewDocument returns null and sets viewError when signed url is missing', async () => {
     global.fetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
 
     const { result } = renderHook(() => useDocuments(TOKEN, false));
@@ -82,7 +82,8 @@ describe('useDocuments', () => {
     });
 
     expect(url).toBeNull();
-    expect(result.current.error).toMatch(/document link is unavailable/i);
+    expect(result.current.error).toBeNull();
+    expect(result.current.viewError).toMatch(/document link is unavailable/i);
   });
 
   test('deleteDocument removes document from state on success', async () => {

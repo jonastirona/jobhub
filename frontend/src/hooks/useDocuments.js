@@ -6,6 +6,7 @@ export function useDocuments(accessToken, loadOnMount = true) {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [viewError, setViewError] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
   const pendingFetchRef = useRef(null);
@@ -81,6 +82,10 @@ export function useDocuments(accessToken, loadOnMount = true) {
     setSaveError(null);
   }, []);
 
+  const clearViewError = useCallback(() => {
+    setViewError(null);
+  }, []);
+
   const createDocument = useCallback(
     async (values) => {
       const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
@@ -146,6 +151,7 @@ export function useDocuments(accessToken, loadOnMount = true) {
     async (documentId) => {
       const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
       if (!backendBase || !accessToken || !documentId) return null;
+      setViewError(null);
       try {
         const res = await fetch(`${backendBase}/documents/${documentId}/view-url`, {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -161,7 +167,7 @@ export function useDocuments(accessToken, loadOnMount = true) {
         }
         return url;
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        setViewError(err instanceof Error ? err.message : String(err));
         return null;
       }
     },
@@ -217,9 +223,11 @@ export function useDocuments(accessToken, loadOnMount = true) {
     error,
     saving,
     saveError,
+    viewError,
     deletingId,
     deleteError,
     clearSaveError,
+    clearViewError,
     clearDeleteError,
     refetch,
     createDocument,

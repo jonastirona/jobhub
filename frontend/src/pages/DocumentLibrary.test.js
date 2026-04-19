@@ -37,10 +37,12 @@ function renderPage(overrides = {}) {
     documents: [baseDoc],
     loading: false,
     error: null,
+    viewError: null,
     deletingId: null,
     deleteError: null,
     viewDocument: jest.fn().mockResolvedValue('https://signed.example/doc.pdf'),
     deleteDocument: jest.fn().mockResolvedValue(true),
+    clearViewError: jest.fn(),
     clearDeleteError: jest.fn(),
     ...overrides,
   });
@@ -56,12 +58,14 @@ describe('DocumentLibrary', () => {
   test('opens signed url in a new tab when View is clicked', async () => {
     const viewDocument = jest.fn().mockResolvedValue('https://signed.example/doc.pdf');
     const clearDeleteError = jest.fn();
-    renderPage({ viewDocument, clearDeleteError });
+    const clearViewError = jest.fn();
+    renderPage({ viewDocument, clearDeleteError, clearViewError });
 
     fireEvent.click(screen.getByRole('button', { name: /view document/i }));
 
     await waitFor(() => {
       expect(clearDeleteError).toHaveBeenCalledTimes(1);
+      expect(clearViewError).toHaveBeenCalledTimes(1);
       expect(viewDocument).toHaveBeenCalledWith('doc-1');
       expect(window.open).toHaveBeenCalledWith(
         'https://signed.example/doc.pdf',
@@ -107,10 +111,12 @@ describe('DocumentLibrary', () => {
       documents: [],
       loading: false,
       error: 'Failed to load documents (500)',
+      viewError: null,
       deletingId: null,
       deleteError: null,
       viewDocument: jest.fn(),
       deleteDocument: jest.fn(),
+      clearViewError: jest.fn(),
       clearDeleteError: jest.fn(),
     });
     rerender(<DocumentLibrary />);
@@ -120,13 +126,22 @@ describe('DocumentLibrary', () => {
       documents: [],
       loading: false,
       error: null,
+      viewError: null,
       deletingId: null,
       deleteError: null,
       viewDocument: jest.fn(),
       deleteDocument: jest.fn(),
+      clearViewError: jest.fn(),
       clearDeleteError: jest.fn(),
     });
     rerender(<DocumentLibrary />);
     expect(screen.getByText(/no saved documents yet/i)).toBeInTheDocument();
+  });
+
+  test('renders view error without hiding existing document rows', () => {
+    renderPage({ viewError: 'Failed to open document (500)' });
+
+    expect(screen.getByText(/failed to open document/i)).toBeInTheDocument();
+    expect(screen.getByText('Resume_2026')).toBeInTheDocument();
   });
 });
