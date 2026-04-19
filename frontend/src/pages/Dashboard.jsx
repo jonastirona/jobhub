@@ -4,10 +4,10 @@ import { useDocuments } from '../hooks/useDocuments';
 import { useJobs } from '../hooks/useJobs';
 import AppShell from '../components/layout/AppShell';
 import StatCard from '../components/common/StatCard';
-import StatusBadge from '../components/common/StatusBadge';
 import JobForm from '../components/JobForm/JobForm';
 import JobHistory from '../components/JobHistory/JobHistory';
 import JobOverviewModal from '../components/JobOverviewModal/JobOverviewModal';
+import JobStageTransitionControls from '../components/common/JobStageTransitionControls';
 import { jobMatchesSearchQuery } from '../utils/jobSearch';
 import '../styles/Dashboard.css';
 
@@ -247,6 +247,36 @@ export default function Dashboard() {
     setViewJob(null);
     setHistoryJob(job);
   }
+
+  const handleStageChange = useCallback(
+    async (job, nextStatus) => {
+      const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '');
+      if (!backendBase || !session?.access_token) {
+        throw new Error('Unable to update stage right now. Please refresh and try again.');
+      }
+
+      const res = await fetch(`${backendBase}/jobs/${job.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(text || `Failed to update stage (${res.status})`);
+      }
+
+      const updatedJob = await res.json();
+      setViewJob((current) => (current?.id === updatedJob.id ? updatedJob : current));
+      setHistoryJob((current) => (current?.id === updatedJob.id ? updatedJob : current));
+      await refetch();
+      return updatedJob;
+    },
+    [refetch, session?.access_token]
+  );
 
   function closeForm() {
     setFormState(null);
@@ -681,54 +711,62 @@ export default function Dashboard() {
                         </span>
                       </td>
                       <td>
-                        <StatusBadge status={job.status} />
+                        <JobStageTransitionControls
+                          idBase={`dashboard-${job.id}`}
+                          jobLabel={`${job.title || 'Job'}${job.company ? ` at ${job.company}` : ''}`}
+                          currentStatus={job.status}
+                          onSubmit={(nextStatus) => handleStageChange(job, nextStatus)}
+                          variant="status-cell"
+                        />
                       </td>
                       <td>
                         <div className="actions-cell">
-                          <button
-                            type="button"
-                            className="action-btn"
-                            aria-label="View application"
-                            onClick={() => openView(job)}
-                            disabled={deletingJobId === job.id}
-                          >
-                            👁
-                          </button>
-                          <button
-                            type="button"
-                            className="action-btn"
-                            aria-label="View stage history"
-                            onClick={() => openHistory(job)}
-                          >
-                            📜
-                          </button>
-                          <button
-                            type="button"
-                            className="action-btn"
-                            aria-label="Edit application"
-                            onClick={() => openEdit(job)}
-                            disabled={deletingJobId === job.id}
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            type="button"
-                            className="action-btn"
-                            aria-label={`Save draft for ${job.title}`}
-                            onClick={() => openDraft(job)}
-                            disabled={deletingJobId === job.id}
-                          >
-                            📝
-                          </button>
-                          <button
-                            type="button"
-                            className="action-btn"
-                            aria-label={`Delete application ${job.title}`}
-                            onClick={() => requestDelete(job)}
-                            disabled={deletingJobId === job.id}
-                          >
-                            {deletingJobId === job.id ? '…' : '🗑'}
-                          </button>
+                          <div className="actions-cell-buttons">
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label="View application"
+                              onClick={() => openView(job)}
+                              disabled={deletingJobId === job.id}
+                            >
+                              👁
+                            </button>
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label="View stage history"
+                              onClick={() => openHistory(job)}
+                            >
+                              📜
+                            </button>
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label="Edit application"
+                              onClick={() => openEdit(job)}
+                              disabled={deletingJobId === job.id}
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label={`Save draft for ${job.title}`}
+                              onClick={() => openDraft(job)}
+                              disabled={deletingJobId === job.id}
+                            >
+                              📝
+                            </button>
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label={`Delete application ${job.title}`}
+                              onClick={() => requestDelete(job)}
+                              disabled={deletingJobId === job.id}
+                            >
+                              {deletingJobId === job.id ? '…' : '🗑'}
+                            </button>
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -791,7 +829,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {viewJob && <JobOverviewModal job={viewJob} onClose={closeView} />}
+      {viewJob && (
+        <JobOverviewModal
+          job={viewJob}
+          onClose={closeView}
+          onStageChange={(nextStatus) => handleStageChange(viewJob, nextStatus)}
+        />
+      )}
 
       {formState && (
         <JobForm

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import StatusBadge from '../common/StatusBadge';
+import JobStageTransitionControls from '../common/JobStageTransitionControls';
 import '../JobForm/JobForm.css';
 import './JobOverviewModal.css';
 
@@ -26,7 +27,7 @@ function Field({ label, children, muted }) {
   );
 }
 
-export default function JobOverviewModal({ job, onClose }) {
+export default function JobOverviewModal({ job, onClose, onStageChange }) {
   const overlayRef = useRef(null);
   const modalRef = useRef(null);
 
@@ -101,6 +102,17 @@ export default function JobOverviewModal({ job, onClose }) {
               </div>
             </div>
             <Field label="Location">{location}</Field>
+          </div>
+
+          <div className="job-overview-section">
+            <div className="job-overview-label">Change stage</div>
+            <JobStageTransitionControls
+              idBase={`job-overview-${job.id}`}
+              jobLabel={`${job.title || 'Job'}${job.company ? ` at ${job.company}` : ''}`}
+              currentStatus={job.status}
+              onSubmit={onStageChange}
+              buttonLabel="Save stage"
+            />
           </div>
 
           <div className="job-overview-row-two">

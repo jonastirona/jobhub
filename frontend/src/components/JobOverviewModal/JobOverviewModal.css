@@ -45,9 +45,28 @@
   gap: 16px;
 }
 
+.job-overview-section .job-stage-controls {
+  align-items: flex-end;
+}
+
+.job-overview-section .job-stage-controls__field {
+  min-width: 180px;
+}
+
+.job-overview-section .job-stage-controls__select {
+  min-width: 180px;
+}
+
 @media (max-width: 520px) {
   .job-overview-row-two {
     grid-template-columns: 1fr;
+  }
+
+  .job-overview-section .job-stage-controls,
+  .job-overview-section .job-stage-controls__field,
+  .job-overview-section .job-stage-controls__select {
+    width: 100%;
+    min-width: 0;
   }
 }
 

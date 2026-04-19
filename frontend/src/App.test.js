@@ -1273,7 +1273,7 @@ test('stage dropdown supports multi-select and uncheck clearing', async () => {
     );
   });
 
-  const stageButton = screen.getByRole('button', { name: /Stage/ });
+  const stageButton = screen.getByRole('button', { name: 'Stage (1)' });
   fireEvent.click(stageButton);
   fireEvent.click(stageButton);
   expect(await screen.findByRole('checkbox', { name: 'archived' })).toBeInTheDocument();

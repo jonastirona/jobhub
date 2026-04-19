@@ -170,3 +170,35 @@ describe('Dashboard draft modal accessibility', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('Dashboard stage controls', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('closes popover on Escape key without submitting', async () => {
+    global.fetch = jest.fn();
+
+    renderPage();
+
+    const statusButton = screen.getByText('applied').closest('button');
+    fireEvent.click(statusButton);
+
+    const stageSelect = screen.getByRole('combobox', {
+      name: /stage for backend engineer at stripe/i,
+    });
+    fireEvent.change(stageSelect, { target: { value: 'interviewing' } });
+
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+
+    // Verify fetch was never called
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    // Verify popover is closed
+    expect(
+      screen.queryByRole('combobox', {
+        name: /stage for backend engineer at stripe/i,
+      })
+    ).not.toBeInTheDocument();
+  });
+});

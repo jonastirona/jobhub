@@ -10,6 +10,13 @@ export const JOB_STATUSES = [
   { value: 'archived', label: 'Archived' },
 ];
 
+export const JOB_STAGE_OPTIONS = JOB_STATUSES;
+
+export const JOB_STATUS_LABELS = JOB_STATUSES.reduce((labels, status) => {
+  labels[status.value] = status.label;
+  return labels;
+}, {});
+
 export const JOB_STATUS_ALIAS = { interview: 'interviewing', offer: 'offered' };
 
 export const EMPTY_JOB = {
