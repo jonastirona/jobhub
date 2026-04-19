@@ -15,7 +15,6 @@ from main import (
     JOB_STATUSES,
     PROFILE_REQUIRED_FIELDS,
     CareerPreferencesUpsert,
-    DocumentCreate,
     DocumentUpdate,
     EducationCreate,
     EducationUpdate,
@@ -69,18 +68,11 @@ SAMPLE_DOCUMENT = {
     "job_id": SAMPLE_JOB["id"],
     "name": "Datadog_Backend_Engineer_Draft",
     "doc_type": "Cover Letter Draft",
-    "content": "Draft content",
-    "created_at": "2026-01-01T00:00:00+00:00",
-    "updated_at": "2026-01-01T00:00:00+00:00",
-}
-
-SAMPLE_DOCUMENT = {
-    "id": "doc-uuid-3322",
-    "user_id": MOCK_USER_ID,
-    "job_id": SAMPLE_JOB["id"],
-    "name": "Datadog_Backend_Engineer_Draft",
-    "doc_type": "Cover Letter Draft",
-    "content": "Draft content",
+    "storage_bucket": "documents",
+    "storage_path": f"{MOCK_USER_ID}/doc-uuid-3322.pdf",
+    "mime_type": "application/pdf",
+    "file_size": 1024,
+    "original_filename": "draft.pdf",
     "created_at": "2026-01-01T00:00:00+00:00",
     "updated_at": "2026-01-01T00:00:00+00:00",
 }
@@ -112,6 +104,14 @@ def make_mock_sb(data=None):
 
     mock_sb.table.return_value = mock_query
 
+    mock_storage = MagicMock()
+    mock_storage.create_signed_url.return_value = {
+        "signedURL": "https://example.test/storage/v1/object/sign/documents/path"
+    }
+    mock_storage.upload.return_value = {"path": "uploaded"}
+    mock_storage.remove.return_value = []
+    mock_sb.storage.from_.return_value = mock_storage
+
     return mock_sb, mock_query, mock_result
 
 
@@ -138,6 +138,15 @@ def _make_mock_sb_with_side_effects(*data_list):
     mock_query.execute.side_effect = results
 
     mock_sb.table.return_value = mock_query
+
+    mock_storage = MagicMock()
+    mock_storage.create_signed_url.return_value = {
+        "signedURL": "https://example.test/storage/v1/object/sign/documents/path"
+    }
+    mock_storage.upload.return_value = {"path": "uploaded"}
+    mock_storage.remove.return_value = []
+    mock_sb.storage.from_.return_value = mock_storage
+
     return mock_sb, mock_query
 
 
@@ -1246,10 +1255,13 @@ def test_delete_document_requires_auth():
 def test_create_document_requires_auth():
     response = client.post(
         "/documents",
-        json={
-            "name": "Draft",
-            "doc_type": "Cover Letter Draft",
-            "content": "Draft content",
+        data={"name": "Draft", "doc_type": "Cover Letter Draft"},
+        files={
+            "file": (
+                "draft.pdf",
+                b"%PDF-1.7\nDraft content",
+                "application/pdf",
+            )
         },
     )
     assert response.status_code == 401
@@ -1301,11 +1313,17 @@ def test_create_document_success():
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             "/documents",
-            json={
+            data={
                 "name": "Datadog_Backend_Engineer_Draft",
                 "doc_type": "Cover Letter Draft",
-                "content": "Draft content",
                 "job_id": SAMPLE_JOB["id"],
+            },
+            files={
+                "file": (
+                    "draft.pdf",
+                    b"%PDF-1.7\nDraft content",
+                    "application/pdf",
+                )
             },
             headers={"authorization": AUTH_HEADER},
         )
@@ -1318,11 +1336,17 @@ def test_create_document_from_job_context_inserts_linked_job_id():
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             "/documents",
-            json={
+            data={
                 "name": "Datadog_Backend_Engineer_Draft",
                 "doc_type": "Cover Letter Draft",
-                "content": "Draft content",
                 "job_id": SAMPLE_JOB["id"],
+            },
+            files={
+                "file": (
+                    "draft.pdf",
+                    b"%PDF-1.7\nDraft content",
+                    "application/pdf",
+                )
             },
             headers={"authorization": AUTH_HEADER},
         )
@@ -1338,37 +1362,74 @@ def test_create_document_sets_user_id():
     with patch("main.get_supabase", return_value=mock_sb):
         client.post(
             "/documents",
-            json={"name": "Draft", "content": "Draft content"},
+            data={"name": "Draft"},
+            files={
+                "file": (
+                    "draft.pdf",
+                    b"%PDF-1.7\nDraft content",
+                    "application/pdf",
+                )
+            },
             headers={"authorization": AUTH_HEADER},
         )
     inserted_payload = mock_query.insert.call_args[0][0]
     assert inserted_payload["user_id"] == MOCK_USER_ID
 
 
-def test_create_document_rejects_blank_content():
+def test_create_document_rejects_blank_name():
     mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             "/documents",
-            json={"name": "Draft", "content": "    "},
+            data={"name": "   "},
+            files={
+                "file": (
+                    "draft.pdf",
+                    b"%PDF-1.7\nDraft content",
+                    "application/pdf",
+                )
+            },
             headers={"authorization": AUTH_HEADER},
         )
     assert response.status_code == 422
-    assert "content must not be blank" in response.json()["detail"]
+    assert "name must not be blank" in response.json()["detail"]
+
+
+def test_create_document_rejects_unsupported_extension():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            data={"name": "Draft"},
+            files={"file": ("draft.exe", b"Draft content", "application/octet-stream")},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "Only PDF files are supported" in response.json()["detail"]
+
+
+def test_create_document_rejects_non_pdf_content_with_pdf_extension():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            data={"name": "Draft"},
+            files={"file": ("draft.pdf", b"Not a PDF", "application/pdf")},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "Uploaded file is not a valid PDF" in response.json()["detail"]
 
 
 def test_update_document_success():
-    updated_document = {**SAMPLE_DOCUMENT, "name": "Updated Draft"}
-    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT], [updated_document])
+    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT], [SAMPLE_DOCUMENT])
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.put(
             f"/documents/{SAMPLE_DOCUMENT['id']}",
             json={"name": "Updated Draft"},
             headers={"authorization": AUTH_HEADER},
         )
-    assert response.status_code == 200
-    assert response.json()["id"] == SAMPLE_DOCUMENT["id"]
-    assert mock_sb.table.return_value.update.call_args[0][0] == {"name": "Updated Draft"}
+    assert response.status_code == 405
 
 
 def test_update_document_not_found():
@@ -1379,7 +1440,7 @@ def test_update_document_not_found():
             json={"name": "Updated Draft"},
             headers={"authorization": AUTH_HEADER},
         )
-    assert response.status_code == 404
+    assert response.status_code == 405
 
 
 def test_update_document_rejects_empty_payload():
@@ -1390,69 +1451,7 @@ def test_update_document_rejects_empty_payload():
             json={},
             headers={"authorization": AUTH_HEADER},
         )
-    assert response.status_code == 400
-
-
-def test_update_document_rejects_blank_name():
-    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT])
-    with patch("main.get_supabase", return_value=mock_sb):
-        response = client.put(
-            f"/documents/{SAMPLE_DOCUMENT['id']}",
-            json={"name": "   "},
-            headers={"authorization": AUTH_HEADER},
-        )
-    assert response.status_code == 422
-    assert "name must not be blank" in response.json()["detail"]
-
-
-def test_update_document_rejects_blank_content():
-    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT])
-    with patch("main.get_supabase", return_value=mock_sb):
-        response = client.put(
-            f"/documents/{SAMPLE_DOCUMENT['id']}",
-            json={"content": "   "},
-            headers={"authorization": AUTH_HEADER},
-        )
-    assert response.status_code == 422
-    assert "content must not be blank" in response.json()["detail"]
-
-
-def test_update_document_validates_linked_job_ownership():
-    mock_sb, mock_query = _make_mock_sb_with_side_effects([SAMPLE_JOB], [SAMPLE_DOCUMENT])
-    with patch("main.get_supabase", return_value=mock_sb):
-        response = client.put(
-            f"/documents/{SAMPLE_DOCUMENT['id']}",
-            json={"job_id": SAMPLE_JOB["id"]},
-            headers={"authorization": AUTH_HEADER},
-        )
-    assert response.status_code == 200
-    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
-    assert ("id", SAMPLE_JOB["id"]) in eq_calls
-    assert ("user_id", MOCK_USER_ID) in eq_calls
-
-
-def test_update_document_rejects_unknown_linked_job():
-    mock_sb, _ = _make_mock_sb_with_side_effects([], [SAMPLE_DOCUMENT])
-    with patch("main.get_supabase", return_value=mock_sb):
-        response = client.put(
-            f"/documents/{SAMPLE_DOCUMENT['id']}",
-            json={"job_id": "missing-job-id"},
-            headers={"authorization": AUTH_HEADER},
-        )
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Linked job not found"
-
-
-def test_update_document_scoped_to_user():
-    mock_sb, mock_query = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT], [SAMPLE_DOCUMENT])
-    with patch("main.get_supabase", return_value=mock_sb):
-        client.put(
-            f"/documents/{SAMPLE_DOCUMENT['id']}",
-            json={"name": "Updated Draft"},
-            headers={"authorization": AUTH_HEADER},
-        )
-    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
-    assert ("user_id", MOCK_USER_ID) in eq_calls
+    assert response.status_code == 405
 
 
 def test_create_document_rejects_unknown_linked_job():
@@ -1460,29 +1459,61 @@ def test_create_document_rejects_unknown_linked_job():
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             "/documents",
-            json={"name": "Draft", "content": "Body", "job_id": "missing-job-id"},
+            data={"name": "Draft", "job_id": "missing-job-id"},
+            files={
+                "file": (
+                    "draft.pdf",
+                    b"%PDF-1.7\nBody",
+                    "application/pdf",
+                )
+            },
             headers={"authorization": AUTH_HEADER},
         )
     assert response.status_code == 404
     assert response.json()["detail"] == "Linked job not found"
 
 
-def test_document_create_defaults():
-    document = DocumentCreate(name="Draft", content="Body")
-    assert document.doc_type == "Draft"
-    assert document.job_id is None
-
-
 def test_document_update_all_optional():
     document = DocumentUpdate()
     assert document.name is None
     assert document.doc_type is None
-    assert document.content is None
     assert document.job_id is None
 
 
+def test_get_document_view_url_success():
+    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            f"/documents/{SAMPLE_DOCUMENT['id']}/view-url",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["url"].startswith("https://")
+
+
+def test_get_document_view_url_uses_15_minute_expiry():
+    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get(
+            f"/documents/{SAMPLE_DOCUMENT['id']}/view-url",
+            headers={"authorization": AUTH_HEADER},
+        )
+    storage_obj = mock_sb.storage.from_.return_value
+    storage_obj.create_signed_url.assert_called_with(SAMPLE_DOCUMENT["storage_path"], 900)
+
+
+def test_get_document_view_url_not_found():
+    mock_sb, _ = _make_mock_sb_with_side_effects([])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/documents/nonexistent-id/view-url",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
 def test_delete_document_success():
-    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT], [SAMPLE_DOCUMENT])
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.delete(
             f"/documents/{SAMPLE_DOCUMENT['id']}",

@@ -24,7 +24,28 @@ function getLinkedJobLabel(doc) {
 
 export default function DocumentLibrary() {
   const { session } = useAuth();
-  const { documents, loading, error } = useDocuments(session?.access_token);
+  const {
+    documents,
+    loading,
+    error,
+    deletingId,
+    deleteError,
+    viewDocument,
+    deleteDocument,
+    clearDeleteError,
+  } = useDocuments(session?.access_token);
+
+  async function handleViewDocument(documentId) {
+    clearDeleteError();
+    const url = await viewDocument(documentId);
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  }
+
+  async function handleDeleteDocument(documentId) {
+    await deleteDocument(documentId);
+  }
 
   return (
     <AppShell title="Document Library" notificationCount={0}>
@@ -35,10 +56,16 @@ export default function DocumentLibrary() {
               Documents
             </h2>
             <p className="shell-card-subtitle">
-              Generated and edited drafts are stored here and linked to their job context.
+              Uploaded draft documents are stored in secure storage and linked to job context.
             </p>
           </div>
         </div>
+
+        {deleteError && (
+          <p className="table-empty table-state--error" role="alert">
+            {deleteError}
+          </p>
+        )}
 
         <table className="shell-table">
           <thead>
@@ -95,17 +122,19 @@ export default function DocumentLibrary() {
                         type="button"
                         className="action-btn"
                         aria-label="View document"
-                        disabled
+                        onClick={() => handleViewDocument(doc.id)}
+                        disabled={deletingId === doc.id}
                       >
                         👁
                       </button>
                       <button
                         type="button"
                         className="action-btn"
-                        aria-label="Edit document"
-                        disabled
+                        aria-label="Delete document"
+                        onClick={() => handleDeleteDocument(doc.id)}
+                        disabled={deletingId === doc.id}
                       >
-                        ✏️
+                        {deletingId === doc.id ? '…' : '🗑'}
                       </button>
                     </div>
                   </td>

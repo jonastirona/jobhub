@@ -1018,8 +1018,8 @@ test('saves draft from job context with linked job_id', async () => {
           Promise.resolve({
             id: 'doc-1',
             name: 'Datadog_Backend_Engineer_Draft',
-            doc_type: 'Cover Letter Draft',
-            content: 'Generated draft body',
+            doc_type: 'Cover Letter',
+            storage_path: 'test-user/doc-1.docx',
             job_id: 'job-ctx-1',
           }),
       });
@@ -1038,20 +1038,20 @@ test('saves draft from job context with linked job_id', async () => {
     ).toBeInTheDocument();
   });
 
-  fireEvent.change(screen.getByLabelText(/draft content/i), {
-    target: { value: 'Generated draft body' },
+  fireEvent.change(screen.getByLabelText(/document name/i), {
+    target: { value: 'Datadog_Backend_Engineer_Draft' },
+  });
+
+  const file = new File(['binary-data'], 'draft.docx', {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  });
+  fireEvent.change(screen.getByLabelText(/upload document/i), {
+    target: { files: [file] },
   });
   fireEvent.click(screen.getByRole('button', { name: /save to documents/i }));
 
   await waitFor(() => {
-    expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/documents',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
-        body: expect.any(String),
-      })
-    );
+    expect(global.fetch).toHaveBeenCalled();
   });
 
   const saveCall = global.fetch.mock.calls.find(
@@ -1059,12 +1059,12 @@ test('saves draft from job context with linked job_id', async () => {
   );
   expect(saveCall).toBeDefined();
   const [, saveOptions] = saveCall;
-  expect(JSON.parse(saveOptions.body)).toMatchObject({
-    name: 'Datadog_Backend_Engineer_Draft',
-    doc_type: 'Cover Letter Draft',
-    content: 'Generated draft body',
-    job_id: 'job-ctx-1',
-  });
+  expect(saveOptions.headers).toMatchObject({ Authorization: 'Bearer test-token' });
+  expect(saveOptions.body).toBeInstanceOf(FormData);
+  expect(saveOptions.body.get('name')).toBe('Datadog_Backend_Engineer_Draft');
+  expect(saveOptions.body.get('doc_type')).toBe('Cover Letter');
+  expect(saveOptions.body.get('job_id')).toBe('job-ctx-1');
+  expect(saveOptions.body.get('file')).toBe(file);
 
   await waitFor(() => {
     expect(

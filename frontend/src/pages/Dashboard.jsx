@@ -76,24 +76,6 @@ const STAT_BARS = {
 
 const PAGE_NUMBERS = [1, 2, 3, 4, 5];
 
-function buildDraftTemplate(job) {
-  return [
-    `Dear Hiring Team at ${job.company},`,
-    '',
-    `I am excited to apply for the ${job.title} position.`,
-    '',
-    'I am writing to highlight how my experience aligns with your needs:',
-    '- Relevant experience and achievements',
-    '- Why this role and company are a strong fit',
-    '- How I can contribute quickly in this position',
-    '',
-    'Thank you for your time and consideration.',
-    '',
-    'Sincerely,',
-    '[Your Name]',
-  ].join('\n');
-}
-
 export default function Dashboard() {
   const { session } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
@@ -111,8 +93,8 @@ export default function Dashboard() {
   const [jobPendingDelete, setJobPendingDelete] = useState(null);
   const [draftJob, setDraftJob] = useState(null);
   const [draftName, setDraftName] = useState('');
-  const [draftType, setDraftType] = useState('Cover Letter Draft');
-  const [draftContent, setDraftContent] = useState('');
+  const [draftType, setDraftType] = useState('Cover Letter');
+  const [draftFile, setDraftFile] = useState(null);
   const [draftValidationError, setDraftValidationError] = useState('');
   const deleteOverlayRef = useRef(null);
   const deleteModalRef = useRef(null);
@@ -194,9 +176,9 @@ export default function Dashboard() {
   function openDraft(job) {
     clearSaveError();
     setDraftJob(job);
-    setDraftName(`${job.company}_${job.title}_Draft`.replace(/\s+/g, '_'));
-    setDraftType('Cover Letter Draft');
-    setDraftContent(buildDraftTemplate(job));
+    setDraftName('');
+    setDraftType('Cover Letter');
+    setDraftFile(null);
     setDraftValidationError('');
   }
 
@@ -204,20 +186,20 @@ export default function Dashboard() {
     if (savingDraft) return;
     clearSaveError();
     setDraftJob(null);
+    setDraftFile(null);
     setDraftValidationError('');
   }, [clearSaveError, savingDraft]);
 
   async function saveDraftFromJob() {
     if (!draftJob || savingDraft) return;
     const trimmedName = draftName.trim();
-    const trimmedContent = draftContent.trim();
 
     if (!trimmedName) {
       setDraftValidationError('Document name is required.');
       return;
     }
-    if (!trimmedContent) {
-      setDraftValidationError('Draft content is required.');
+    if (!draftFile) {
+      setDraftValidationError('A document file is required.');
       return;
     }
 
@@ -225,8 +207,8 @@ export default function Dashboard() {
     const created = await createDocument({
       name: trimmedName,
       doc_type: draftType.trim() || 'Draft',
-      content: trimmedContent,
       job_id: draftJob.id,
+      file: draftFile,
     });
 
     if (created) {
@@ -691,26 +673,33 @@ export default function Dashboard() {
             <label className="draft-field-label" htmlFor="draft-type">
               Type
             </label>
-            <input
+            <select
               id="draft-type"
               className="draft-input"
               value={draftType}
               onChange={(e) => setDraftType(e.target.value)}
-              placeholder="Cover Letter Draft"
               disabled={savingDraft}
-            />
+            >
+              <option value="Resume">Resume</option>
+              <option value="Cover Letter">Cover Letter</option>
+              <option value="Transcript">Transcript</option>
+              <option value="Other">Other</option>
+            </select>
 
-            <label className="draft-field-label" htmlFor="draft-content">
-              Draft Content
+            <label className="draft-field-label" htmlFor="draft-file">
+              Upload Document
             </label>
-            <textarea
-              id="draft-content"
-              className="draft-textarea"
-              value={draftContent}
-              onChange={(e) => setDraftContent(e.target.value)}
-              rows={12}
+            <input
+              id="draft-file"
+              type="file"
+              className="draft-input"
+              accept=".pdf,application/pdf"
+              onChange={(e) => setDraftFile(e.target.files?.[0] || null)}
               disabled={savingDraft}
             />
+            <p className="delete-modal-text" style={{ marginTop: 8 }}>
+              {draftFile ? `Selected file: ${draftFile.name}` : 'Supported: PDF only (max 10MB).'}
+            </p>
 
             {(draftValidationError || draftSaveError) && (
               <p className="delete-modal-error" role="alert" aria-live="assertive">
