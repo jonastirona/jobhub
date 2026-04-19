@@ -755,7 +755,9 @@ describe('save — error', () => {
     await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
     fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
     await waitFor(() => {
-      expect(screen.getByText('Error')).toBeInTheDocument();
+      const alert = screen.getByRole('alert');
+      expect(alert).toBeInTheDocument();
+      expect(alert).toHaveTextContent('Error');
     });
   });
 
