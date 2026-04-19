@@ -25,8 +25,8 @@ app.add_middleware(
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 DOCUMENTS_BUCKET = os.getenv(
-    "SUPABASE_DOCUMENTS_BUCKET", 
-    "documents") #on supabase side, storage is named documents
+    "SUPABASE_DOCUMENTS_BUCKET", "documents"
+)  # on supabase side, storage is named documents
 _supabase = None
 PROFILE_REQUIRED_FIELDS = (
     "full_name",
