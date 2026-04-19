@@ -97,7 +97,9 @@ export default function JobStageTransitionControls({
             title="Click to change job stage"
           >
             <StatusBadge status={currentStatus} />
-            <span className="job-stage-controls__edit-icon" aria-hidden="true">✎</span>
+            <span className="job-stage-controls__edit-icon" aria-hidden="true">
+              ✎
+            </span>
           </button>
           {isOpen && (
             <>
@@ -136,7 +138,12 @@ export default function JobStageTransitionControls({
                   </button>
                 </div>
                 {error && (
-                  <p className="job-stage-controls__error" id={errorId} role="alert" aria-live="polite">
+                  <p
+                    className="job-stage-controls__error"
+                    id={errorId}
+                    role="alert"
+                    aria-live="polite"
+                  >
                     {error}
                   </p>
                 )}

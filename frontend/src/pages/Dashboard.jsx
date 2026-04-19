@@ -713,7 +713,9 @@ export default function Dashboard() {
                       <td>
                         <JobStageTransitionControls
                           idBase={`dashboard-${job.id}`}
-                          jobLabel={`${job.title || 'Job'}${job.company ? ` at ${job.company}` : ''}`}
+                          jobLabel={`${job.title || 'Job'}${
+                            job.company ? ` at ${job.company}` : ''
+                          }`}
                           currentStatus={job.status}
                           onSubmit={(nextStatus) => handleStageChange(job, nextStatus)}
                           variant="status-cell"
