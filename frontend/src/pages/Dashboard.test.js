@@ -173,7 +173,12 @@ describe('Dashboard draft modal accessibility', () => {
 
 describe('Dashboard stage controls', () => {
   beforeEach(() => {
+    process.env.REACT_APP_BACKEND_URL = 'http://localhost:8000';
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    delete process.env.REACT_APP_BACKEND_URL;
   });
 
   test('keeps popover open and shows error when stage save fails', async () => {
