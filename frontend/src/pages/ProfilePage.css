@@ -279,16 +279,6 @@
   background: var(--bg-white);
 }
 
-.profile-select--error {
-  border-color: var(--red);
-  background: var(--red-bg);
-}
-
-.profile-select--error:focus {
-  border-color: var(--red);
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
-}
-
 .profile-multi-input-row {
   display: flex;
   gap: 8px;
@@ -479,13 +469,6 @@
   font-size: 12px;
   line-height: 1.4;
   color: var(--red);
-}
-
-.profile-field-note {
-  margin: 2px 0 0;
-  font-size: 12px;
-  line-height: 1.35;
-  color: var(--text-muted);
 }
 
 /* ── Experience section ──────────────────────────────────────────────────── */

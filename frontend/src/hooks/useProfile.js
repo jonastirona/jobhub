@@ -127,6 +127,7 @@ export function useProfile(accessToken) {
         setSaveError(message);
         return { ok: false, error: message };
       } finally {
+        if (pendingSaveRef.current === controller) pendingSaveRef.current = null;
         if (!controller.signal.aborted) setSaving(false);
       }
     },

@@ -333,6 +333,8 @@ export default function ProfilePage() {
     const saved = await saveProfile(buildIdentityPayload(formData));
     if (saved.ok) {
       setIdentitySaveSuccess(true);
+    } else if (saved.error == null) {
+      return;
     } else {
       setIdentitySaveError(saved.error || 'Unable to save identity right now.');
     }
@@ -351,6 +353,8 @@ export default function ProfilePage() {
     const saved = await saveProfile(buildSummaryPayload(formData));
     if (saved.ok) {
       setSummarySaveSuccess(true);
+    } else if (saved.error == null) {
+      return;
     } else {
       setSummarySaveError(saved.error || 'Unable to save summary right now.');
     }
