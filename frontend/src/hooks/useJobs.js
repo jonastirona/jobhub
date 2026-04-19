@@ -90,10 +90,10 @@ export function useJobs(accessToken, searchTerm = '', options = {}) {
       const items = Array.isArray(data) ? data : data.items || [];
       setJobs(items);
       setMeta((prev) => ({
-        total: Array.isArray(data) ? items.length : data.total ?? items.length,
-        page: Array.isArray(data) ? 1 : data.page ?? page,
-        pageSize: Array.isArray(data) ? items.length || pageSize : data.page_size ?? pageSize,
-        totalPages: Array.isArray(data) ? 1 : data.total_pages ?? 1,
+        total: Array.isArray(data) ? items.length : (data.total ?? items.length),
+        page: Array.isArray(data) ? 1 : (data.page ?? page),
+        pageSize: Array.isArray(data) ? items.length || pageSize : (data.page_size ?? pageSize),
+        totalPages: Array.isArray(data) ? 1 : (data.total_pages ?? 1),
         availableStatuses: Array.isArray(data)
           ? prev.availableStatuses
           : unionPreservingServerOrder(data.available_statuses || [], statuses),
