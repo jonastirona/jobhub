@@ -1752,6 +1752,50 @@ describe('career preferences section', () => {
     expect(body).toHaveProperty('salary_max');
   });
 
+  test('sanitizes formatted salary text before sending payload', async () => {
+    mockFetch({ getPrefs: SAMPLE_PREFS });
+    renderPage();
+
+    const minSalaryInput = await screen.findByLabelText(/minimum salary/i);
+    const maxSalaryInput = screen.getByLabelText(/maximum salary/i);
+    fireEvent.change(minSalaryInput, { target: { value: '$95,000' } });
+    fireEvent.change(maxSalaryInput, { target: { value: '140,000' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+
+    await waitFor(() => {
+      const putCall = global.fetch.mock.calls.find(
+        ([url, opts = {}]) => url === `${BACKEND}/career-preferences` && opts.method === 'PUT'
+      );
+      expect(putCall).toBeDefined();
+    });
+
+    const [, opts] = global.fetch.mock.calls.find(
+      ([u, o = {}]) => u === `${BACKEND}/career-preferences` && o.method === 'PUT'
+    );
+    const body = JSON.parse(opts.body);
+    expect(body.salary_min).toBe(95000);
+    expect(body.salary_max).toBe(140000);
+  });
+
+  test('blocks save when salary text is invalid and shows validation message', async () => {
+    mockFetch({ getPrefs: SAMPLE_PREFS });
+    renderPage();
+
+    const minSalaryInput = await screen.findByLabelText(/minimum salary/i);
+    fireEvent.change(minSalaryInput, { target: { value: '$95k' } });
+    fireEvent.click(screen.getByRole('button', { name: /save preferences/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/salary values must be whole numbers/i)).toBeInTheDocument();
+    });
+
+    const putCalls = global.fetch.mock.calls.filter(
+      ([url, opts = {}]) => url === `${BACKEND}/career-preferences` && opts.method === 'PUT'
+    );
+    expect(putCalls).toHaveLength(0);
+  });
+
   test('shows "Career preferences saved successfully." after save', async () => {
     renderPage();
     await waitFor(() =>
