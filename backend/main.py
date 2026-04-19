@@ -1,11 +1,13 @@
 import calendar
 import os
+import uuid
 from datetime import date, datetime
+from pathlib import Path
 from math import ceil
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Query, Response
+from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -22,6 +24,7 @@ app.add_middleware(
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+DOCUMENTS_BUCKET = os.getenv("SUPABASE_DOCUMENTS_BUCKET", "documents") #on supabase side, storage is named documents
 _supabase = None
 PROFILE_REQUIRED_FIELDS = (
     "full_name",
@@ -43,6 +46,10 @@ JOB_STATUSES = {
     "archived",
 }
 JOB_STATUS_ALIAS = {"interview": "interviewing", "offer": "offered"}
+PDF_EXTENSION = ".pdf"
+PDF_MIME_TYPE = "application/pdf"
+SIGNED_URL_EXPIRY_SECONDS = 15 * 60
+MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024
 DEADLINE_STATES = {"upcoming", "due_today", "overdue", "no_deadline"}
 JOB_SORT_OPTIONS = {"last_activity", "deadline", "created_at", "company"}
 
@@ -217,17 +224,9 @@ class ExperienceReorder(BaseModel):
     ids: list[str]
 
 
-class DocumentCreate(BaseModel):
-    name: str
-    doc_type: Optional[str] = "Draft"
-    content: str
-    job_id: Optional[str] = None
-
-
 class DocumentUpdate(BaseModel):
     name: Optional[str] = None
     doc_type: Optional[str] = None
-    content: Optional[str] = None
     job_id: Optional[str] = None
 
 
@@ -291,6 +290,74 @@ def _assert_linked_job_exists_for_user(sb, user_id: str, job_id: Optional[str]) 
     response = sb.table("jobs").select("id").eq("id", job_id).eq("user_id", user_id).execute()
     if not response.data:
         raise HTTPException(status_code=404, detail="Linked job not found")
+
+
+def _assert_allowed_document_extension(filename: Optional[str]) -> str:
+    extension = Path(filename or "").suffix.lower().strip()
+    if extension != PDF_EXTENSION:
+        raise HTTPException(status_code=422, detail="Only PDF files are supported")
+    return extension
+
+
+def _assert_pdf_signature(content: bytes) -> None:
+    if not content.startswith(b"%PDF-"):
+        raise HTTPException(status_code=422, detail="Uploaded file is not a valid PDF")
+
+
+def _build_storage_document_path(user_id: str, extension: str) -> str:
+    return f"{user_id}/{uuid.uuid4().hex}{extension}"
+
+
+async def _upload_document_to_storage(sb, user_id: str, upload: UploadFile) -> tuple[str, str, int]:
+    extension = _assert_allowed_document_extension(upload.filename)
+    content = await upload.read()
+    size = len(content)
+    if size == 0:
+        raise HTTPException(status_code=422, detail="Document file is required")
+    if size > MAX_DOCUMENT_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail="Document exceeds 10MB size limit")
+    _assert_pdf_signature(content)
+
+    storage_path = _build_storage_document_path(user_id, extension)
+    content_type = PDF_MIME_TYPE
+    try:
+        sb.storage.from_(DOCUMENTS_BUCKET).upload(
+            storage_path,
+            content,
+            {"content-type": content_type, "upsert": "false"},
+        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to upload document file")
+    return storage_path, content_type, size
+
+
+def _create_document_signed_url(
+    sb, bucket: str, storage_path: str, expires_in_seconds: int = SIGNED_URL_EXPIRY_SECONDS
+) -> str:
+    try:
+        data = sb.storage.from_(bucket).create_signed_url(storage_path, expires_in_seconds)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to generate document view link")
+
+    signed_url = None
+    if isinstance(data, dict):
+        signed_url = data.get("signedURL") or data.get("signedUrl")
+    if not signed_url:
+        raise HTTPException(status_code=500, detail="Failed to generate document view link")
+    if signed_url.startswith("http://") or signed_url.startswith("https://"):
+        return signed_url
+    if not SUPABASE_URL:
+        raise HTTPException(status_code=500, detail="Storage URL is not configured")
+    return f"{SUPABASE_URL}/storage/v1{signed_url}"
+
+
+def _delete_document_from_storage(sb, bucket: str, storage_path: Optional[str]) -> None:
+    if not storage_path:
+        return
+    try:
+        sb.storage.from_(bucket).remove([storage_path])
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to delete document file")
 
 
 # Job list search: text fields plus expanded tokens for applied_date / deadline
@@ -891,20 +958,35 @@ def list_documents(authorization: Optional[str] = Header(default=None)):
 
 
 @app.post("/documents", status_code=201)
-def create_document(document: DocumentCreate, authorization: Optional[str] = Header(default=None)):
+async def create_document(
+    name: str = Form(...),
+    doc_type: str = Form("Draft"),
+    job_id: Optional[str] = Form(default=None),
+    file: UploadFile = File(...),
+    authorization: Optional[str] = Header(default=None),
+):
     user_id = get_user_id(authorization)
     sb = get_supabase()
-    payload = document.model_dump(exclude_none=True)
-    payload["name"] = (payload.get("name") or "").strip()
-    payload["content"] = (payload.get("content") or "").strip()
-    if not payload["name"]:
+    trimmed_name = (name or "").strip()
+    if not trimmed_name:
         raise HTTPException(status_code=422, detail="name must not be blank")
-    if not payload["content"]:
-        raise HTTPException(status_code=422, detail="content must not be blank")
-    _assert_linked_job_exists_for_user(sb, user_id, payload.get("job_id"))
-    payload["user_id"] = user_id
+    trimmed_doc_type = (doc_type or "").strip() or "Draft"
+    _assert_linked_job_exists_for_user(sb, user_id, job_id)
+    storage_path, mime_type, file_size = await _upload_document_to_storage(sb, user_id, file)
+    payload = {
+        "user_id": user_id,
+        "job_id": job_id,
+        "name": trimmed_name,
+        "doc_type": trimmed_doc_type,
+        "storage_bucket": DOCUMENTS_BUCKET,
+        "storage_path": storage_path,
+        "mime_type": mime_type,
+        "file_size": file_size,
+        "original_filename": file.filename,
+    }
     response = sb.table("documents").insert(payload).execute()
     if not response.data:
+        _delete_document_from_storage(sb, DOCUMENTS_BUCKET, storage_path)
         raise HTTPException(status_code=500, detail="Failed to create document")
     return response.data[0]
 
@@ -925,43 +1007,61 @@ def get_document(document_id: str, authorization: Optional[str] = Header(default
     return response.data[0]
 
 
+@app.get("/documents/{document_id}/view-url")
+def get_document_view_url(document_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    response = (
+        sb.table("documents")
+        .select("id, storage_bucket, storage_path")
+        .eq("id", document_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Document not found")
+    document = response.data[0]
+    storage_path = document.get("storage_path")
+    if not storage_path:
+        raise HTTPException(status_code=404, detail="Document file not found")
+    bucket = document.get("storage_bucket") or DOCUMENTS_BUCKET
+    return {"url": _create_document_signed_url(sb, bucket, storage_path)}
+
+
 @app.put("/documents/{document_id}")
 def update_document(
     document_id: str,
     document: DocumentUpdate,
     authorization: Optional[str] = Header(default=None),
 ):
-    user_id = get_user_id(authorization)
-    sb = get_supabase()
-    payload = document.model_dump(exclude_unset=True)
-    if not payload:
-        raise HTTPException(status_code=400, detail="No fields to update")
-    if "name" in payload:
-        payload["name"] = (payload["name"] or "").strip()
-        if not payload["name"]:
-            raise HTTPException(status_code=422, detail="name must not be blank")
-    if "content" in payload:
-        payload["content"] = (payload["content"] or "").strip()
-        if not payload["content"]:
-            raise HTTPException(status_code=422, detail="content must not be blank")
-    if "doc_type" in payload:
-        payload["doc_type"] = (payload["doc_type"] or "").strip()
-        if not payload["doc_type"]:
-            raise HTTPException(status_code=422, detail="doc_type must not be blank")
-    if "job_id" in payload and payload["job_id"] is not None:
-        _assert_linked_job_exists_for_user(sb, user_id, payload["job_id"])
-    response = (
-        sb.table("documents").update(payload).eq("id", document_id).eq("user_id", user_id).execute()
+    get_user_id(authorization)
+    raise HTTPException(
+        status_code=405,
+        detail="Updating documents is not supported. Upload a new file or delete this one.",
     )
-    if not response.data:
-        raise HTTPException(status_code=404, detail="Document not found")
-    return response.data[0]
 
 
 @app.delete("/documents/{document_id}")
 def delete_document(document_id: str, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
     sb = get_supabase()
+    existing = (
+        sb.table("documents")
+        .select("id, storage_bucket, storage_path")
+        .eq("id", document_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc = existing.data[0]
+    _delete_document_from_storage(
+        sb,
+        doc.get("storage_bucket") or DOCUMENTS_BUCKET,
+        doc.get("storage_path"),
+    )
+
     response = sb.table("documents").delete().eq("id", document_id).eq("user_id", user_id).execute()
     if not response.data:
         raise HTTPException(status_code=404, detail="Document not found")
