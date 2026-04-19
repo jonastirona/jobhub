@@ -242,6 +242,16 @@
   background: var(--bg-white);
 }
 
+.profile-input--error {
+  border-color: var(--red);
+  background: var(--red-bg);
+}
+
+.profile-input--error:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
+}
+
 .profile-input::placeholder {
   color: var(--text-muted);
 }
@@ -267,6 +277,84 @@
   border-color: var(--border-orange);
   box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
   background: var(--bg-white);
+}
+
+.profile-multi-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.profile-multi-input-row .profile-input {
+  flex: 1;
+}
+
+.profile-chip-add-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    background 0.15s;
+}
+
+.profile-chip-add-btn:hover:not(:disabled) {
+  border-color: var(--border-orange);
+  color: var(--orange-600);
+  background: var(--bg-white);
+}
+
+.profile-chip-add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profile-chip-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-chip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(249, 115, 22, 0.28);
+  background: rgba(249, 115, 22, 0.08);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.profile-chip-remove-btn {
+  border: none;
+  background: transparent;
+  color: var(--orange-600);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+}
+
+.profile-chip-remove-btn:hover {
+  color: var(--red);
+}
+
+.profile-chip-empty {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 /* ── Summary card fields ─────────────────────────────────────────────────── */
@@ -297,6 +385,16 @@
   background: var(--bg-white);
 }
 
+.profile-textarea--error {
+  border-color: var(--red);
+  background: var(--red-bg);
+}
+
+.profile-textarea--error:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
+}
+
 .profile-textarea::placeholder {
   color: var(--text-muted);
 }
@@ -314,6 +412,14 @@
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.profile-actions--section {
+  padding: 0 24px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
 }
 
 .profile-btn-save {
@@ -346,10 +452,6 @@
   margin: 0;
   font-size: 13px;
   color: var(--red);
-  background: var(--red-bg);
-  border: 1px solid var(--red);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
 }
 
 .profile-save-success {
@@ -360,6 +462,13 @@
   border: 1px solid var(--green);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
+}
+
+.profile-field-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--red);
 }
 
 /* ── Experience section ──────────────────────────────────────────────────── */
@@ -524,6 +633,14 @@
 
   .profile-grid {
     grid-template-columns: 1fr;
+  }
+
+  .profile-multi-input-row {
+    flex-direction: column;
+  }
+
+  .profile-chip-add-btn {
+    height: 40px;
   }
 
   .profile-field--full {
@@ -806,211 +923,4 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-}
-
-/* ── Experience section ──────────────────────────────────────────────────── */
-
-.experience-empty {
-  padding: 16px 24px;
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-muted);
-}
-
-.experience-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.experience-item {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 24px;
-  border-bottom: 1px solid var(--border);
-}
-
-.experience-item:last-child {
-  border-bottom: none;
-}
-
-.experience-item-info {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.experience-item-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.experience-item-company {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.experience-item-location {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.experience-item-years {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.experience-item-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-  align-items: center;
-}
-
-.experience-btn {
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    opacity 0.15s,
-    transform 0.1s;
-  border: 1px solid transparent;
-}
-
-.experience-btn:hover:not(:disabled) {
-  opacity: 0.85;
-  transform: translateY(-1px);
-}
-
-.experience-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.experience-btn--icon {
-  padding: 4px 8px;
-  background: transparent;
-  border-color: var(--border);
-  color: var(--text-secondary);
-  font-size: 11px;
-}
-
-.experience-btn--icon:hover:not(:disabled) {
-  border-color: var(--border-orange);
-  color: var(--orange-600);
-}
-
-.experience-btn--secondary {
-  background: transparent;
-  border-color: var(--border);
-  color: var(--text-secondary);
-}
-
-.experience-btn--secondary:hover:not(:disabled) {
-  border-color: var(--border-orange);
-  color: var(--orange-600);
-}
-
-.experience-btn--danger {
-  background: transparent;
-  border-color: var(--red);
-  color: var(--red);
-}
-
-.experience-btn--danger:hover:not(:disabled) {
-  background: var(--red-bg);
-}
-
-.experience-form {
-  padding: 16px 24px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.experience-form-fields {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-/* ── Responsive ──────────────────────────────────────────────────────────── */
-
-@media (max-width: 1024px) {
-  .profile-content {
-    max-width: 100%;
-  }
-}
-
-@media (max-width: 768px) {
-  .profile-main {
-    margin-left: 0;
-  }
-
-  .profile-content {
-    padding: 16px;
-  }
-
-  .profile-completion {
-    padding: 16px;
-  }
-
-  .profile-completion-header {
-    flex-direction: column;
-  }
-
-  .profile-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .profile-field--full {
-    grid-column: 1;
-  }
-
-  .profile-avatar-row {
-    padding: 16px 16px 0;
-  }
-
-  .profile-card-header,
-  .profile-grid,
-  .profile-card > .profile-field {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  .skills-item {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 12px 16px;
-  }
-
-  .skills-item-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-  .skills-form {
-    padding: 16px;
-  }
-
-  .skills-form-fields {
-    grid-template-columns: 1fr;
-  }
-
-  .education-form-fields {
-    grid-template-columns: 1fr;
-  }
-
-  .experience-form-fields {
-    grid-template-columns: 1fr;
-  }
 }
