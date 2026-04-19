@@ -569,15 +569,18 @@ describe('form interaction', () => {
       expect(screen.getByText(/profile completion/i)).toBeInTheDocument();
     });
 
-    await userEvent.type(screen.getByLabelText(/full name/i), 'Jane Smith');
-    await userEvent.type(screen.getByLabelText(/headline/i), 'Software Engineer');
-    await userEvent.type(screen.getByLabelText(/^location$/i), 'New York, NY');
-    await userEvent.type(screen.getByLabelText(/phone/i), '555-123-4567');
-    await userEvent.type(screen.getByLabelText(/website/i), 'https://janesmith.dev');
-    await userEvent.type(
-      screen.getByLabelText(/linkedin url/i),
-      'https://linkedin.com/in/janesmith'
-    );
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: 'Jane Smith' } });
+    fireEvent.change(screen.getByLabelText(/headline/i), {
+      target: { value: 'Software Engineer' },
+    });
+    fireEvent.change(screen.getByLabelText(/^location$/i), { target: { value: 'New York, NY' } });
+    fireEvent.change(screen.getByLabelText(/phone/i), { target: { value: '555-123-4567' } });
+    fireEvent.change(screen.getByLabelText(/website/i), {
+      target: { value: 'https://janesmith.dev' },
+    });
+    fireEvent.change(screen.getByLabelText(/linkedin url/i), {
+      target: { value: 'https://linkedin.com/in/janesmith' },
+    });
 
     await waitFor(() => {
       expect(screen.queryByText(/profile completion/i)).not.toBeInTheDocument();
@@ -886,6 +889,25 @@ describe('saving state', () => {
     );
     const putCalls = global.fetch.mock.calls.filter(([, opts = {}]) => opts.method === 'PUT');
     expect(putCalls).toHaveLength(1);
+  });
+
+  test('shows Saving label only on the section that initiated save', async () => {
+    const settle = makePendingSave();
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText(/full name/i)).toHaveValue('Jane Smith'));
+
+    fireEvent.click(screen.getByRole('button', { name: /save identity/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Saving...' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save summary/i })).toBeInTheDocument();
+    });
+
+    settle();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /save identity/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save summary/i })).toBeInTheDocument();
+    });
   });
 });
 

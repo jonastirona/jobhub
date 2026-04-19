@@ -228,6 +228,7 @@ export default function ProfilePage() {
   const [summarySaveSuccess, setSummarySaveSuccess] = useState(false);
   const [summarySaveError, setSummarySaveError] = useState('');
   const [summaryValidationAttempted, setSummaryValidationAttempted] = useState(false);
+  const [activeProfileSaveSection, setActiveProfileSaveSection] = useState(null);
 
   const [prefsData, setPrefsData] = useState(createEmptyPreferencesFormState);
   const [prefsSaveSuccess, setPrefsSaveSuccess] = useState(false);
@@ -339,13 +340,18 @@ export default function ProfilePage() {
 
     if (hasIdentityValidationErrors) return;
 
-    const saved = await saveProfile(buildIdentityPayload(formData));
-    if (saved.ok) {
-      setIdentitySaveSuccess(true);
-    } else if (saved.error == null) {
-      return;
-    } else {
-      setIdentitySaveError(saved.error || 'Unable to save identity right now.');
+    setActiveProfileSaveSection('identity');
+    try {
+      const saved = await saveProfile(buildIdentityPayload(formData));
+      if (saved.ok) {
+        setIdentitySaveSuccess(true);
+      } else if (saved.error == null) {
+        return;
+      } else {
+        setIdentitySaveError(saved.error || 'Unable to save identity right now.');
+      }
+    } finally {
+      setActiveProfileSaveSection(null);
     }
   };
 
@@ -359,13 +365,18 @@ export default function ProfilePage() {
 
     if (hasSummaryValidationErrors) return;
 
-    const saved = await saveProfile(buildSummaryPayload(formData));
-    if (saved.ok) {
-      setSummarySaveSuccess(true);
-    } else if (saved.error == null) {
-      return;
-    } else {
-      setSummarySaveError(saved.error || 'Unable to save summary right now.');
+    setActiveProfileSaveSection('summary');
+    try {
+      const saved = await saveProfile(buildSummaryPayload(formData));
+      if (saved.ok) {
+        setSummarySaveSuccess(true);
+      } else if (saved.error == null) {
+        return;
+      } else {
+        setSummarySaveError(saved.error || 'Unable to save summary right now.');
+      }
+    } finally {
+      setActiveProfileSaveSection(null);
     }
   };
 
@@ -881,7 +892,7 @@ export default function ProfilePage() {
                   </p>
                 )}
                 <button type="submit" disabled={saving} className="profile-btn-save">
-                  {saving ? 'Saving...' : 'Save Identity'}
+                  {saving && activeProfileSaveSection === 'identity' ? 'Saving...' : 'Save Identity'}
                 </button>
               </div>
             </section>
@@ -1026,7 +1037,7 @@ export default function ProfilePage() {
                   </p>
                 )}
                 <button type="submit" disabled={saving} className="profile-btn-save">
-                  {saving ? 'Saving...' : 'Save Summary'}
+                  {saving && activeProfileSaveSection === 'summary' ? 'Saving...' : 'Save Summary'}
                 </button>
               </div>
             </section>
