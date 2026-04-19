@@ -58,13 +58,13 @@ export default function JobStageTransitionControls({
     setError('');
     try {
       await onSubmit?.(selectedStatus);
+      if (isStatusCell) {
+        setIsOpen(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
-      if (variant === 'status-cell') {
-        setIsOpen(false);
-      }
     }
   }
 

@@ -176,6 +176,35 @@ describe('Dashboard stage controls', () => {
     jest.clearAllMocks();
   });
 
+  test('keeps popover open and shows error when stage save fails', async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: false,
+        text: () => Promise.resolve('Failed to update stage (500)'),
+      })
+    );
+
+    renderPage();
+
+    const statusButton = screen.getByText('applied').closest('button');
+    expect(statusButton).toBeTruthy();
+    fireEvent.click(statusButton);
+
+    const stageSelect = screen.getByRole('combobox', {
+      name: /stage for backend engineer at stripe/i,
+    });
+    fireEvent.change(stageSelect, { target: { value: 'interviewing' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /save stage for backend engineer/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/failed to update stage/i);
+    expect(
+      screen.getByRole('combobox', {
+        name: /stage for backend engineer at stripe/i,
+      })
+    ).toBeInTheDocument();
+  });
+
   test('closes popover on Escape key without submitting', async () => {
     global.fetch = jest.fn();
 
