@@ -1221,6 +1221,86 @@ test('saves draft from job context with linked job_id', async () => {
   });
 });
 
+test('successfully uploads PDF file when saving draft from job context', async () => {
+  const job = {
+    id: 'job-pdf-1',
+    title: 'Senior Engineer',
+    company: 'Stripe',
+    status: 'applied',
+    applied_date: null,
+  };
+
+  global.fetch = jest.fn((url, options = {}) => {
+    if (!options.method) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve([job]),
+      });
+    }
+
+    if (options.method === 'POST' && url === 'http://localhost:8000/documents') {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 'doc-pdf-1',
+            name: 'Stripe_Senior_Engineer_CV',
+            doc_type: 'Cover Letter',
+            storage_path: 'test-user/doc-pdf-1.pdf',
+            job_id: 'job-pdf-1',
+          }),
+      });
+    }
+
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('Senior Engineer'));
+
+  fireEvent.click(screen.getByRole('button', { name: /save draft for senior engineer/i }));
+  await waitFor(() => {
+    expect(
+      screen.getByRole('heading', { name: /save draft from job context/i })
+    ).toBeInTheDocument();
+  });
+
+  fireEvent.change(screen.getByLabelText(/document name/i), {
+    target: { value: 'Stripe_Senior_Engineer_CV' },
+  });
+
+  const pdfFile = new File(['pdf-binary-data'], 'resume.pdf', {
+    type: 'application/pdf',
+  });
+  fireEvent.change(screen.getByLabelText(/upload document/i), {
+    target: { files: [pdfFile] },
+  });
+  fireEvent.click(screen.getByRole('button', { name: /save to documents/i }));
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalled();
+  });
+
+  const saveCall = global.fetch.mock.calls.find(
+    ([url, options]) => url === 'http://localhost:8000/documents' && options?.method === 'POST'
+  );
+  expect(saveCall).toBeDefined();
+  const [, saveOptions] = saveCall;
+  expect(saveOptions.headers).toMatchObject({ Authorization: 'Bearer test-token' });
+  expect(saveOptions.body).toBeInstanceOf(FormData);
+  expect(saveOptions.body.get('name')).toBe('Stripe_Senior_Engineer_CV');
+  expect(saveOptions.body.get('doc_type')).toBe('Cover Letter');
+  expect(saveOptions.body.get('job_id')).toBe('job-pdf-1');
+  expect(saveOptions.body.get('file')).toBe(pdfFile);
+  expect(saveOptions.body.get('file').type).toBe('application/pdf');
+
+  await waitFor(() => {
+    expect(
+      screen.queryByRole('heading', { name: /save draft from job context/i })
+    ).not.toBeInTheDocument();
+  });
+});
+
 test('stage dropdown supports multi-select and uncheck clearing', async () => {
   global.fetch = jest.fn(() =>
     Promise.resolve({
