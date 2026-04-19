@@ -892,7 +892,9 @@ export default function ProfilePage() {
                   </p>
                 )}
                 <button type="submit" disabled={saving} className="profile-btn-save">
-                  {saving && activeProfileSaveSection === 'identity' ? 'Saving...' : 'Save Identity'}
+                  {saving && activeProfileSaveSection === 'identity'
+                    ? 'Saving...'
+                    : 'Save Identity'}
                 </button>
               </div>
             </section>
