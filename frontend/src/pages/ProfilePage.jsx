@@ -720,7 +720,11 @@ export default function ProfilePage() {
                     name="full_name"
                     value={formData.full_name}
                     onChange={handleChange}
-                    className={`profile-input${identityValidationAttempted && identityFieldErrors.full_name ? ' profile-input--error' : ''}`}
+                    className={`profile-input${
+                      identityValidationAttempted && identityFieldErrors.full_name
+                        ? ' profile-input--error'
+                        : ''
+                    }`}
                     aria-invalid={
                       identityValidationAttempted && identityFieldErrors.full_name
                         ? true
@@ -749,7 +753,11 @@ export default function ProfilePage() {
                     name="headline"
                     value={formData.headline}
                     onChange={handleChange}
-                    className={`profile-input${identityValidationAttempted && identityFieldErrors.headline ? ' profile-input--error' : ''}`}
+                    className={`profile-input${
+                      identityValidationAttempted && identityFieldErrors.headline
+                        ? ' profile-input--error'
+                        : ''
+                    }`}
                     aria-invalid={
                       identityValidationAttempted && identityFieldErrors.headline ? true : undefined
                     }
@@ -776,7 +784,11 @@ export default function ProfilePage() {
                     name="location"
                     value={formData.location}
                     onChange={handleChange}
-                    className={`profile-input${identityValidationAttempted && identityFieldErrors.location ? ' profile-input--error' : ''}`}
+                    className={`profile-input${
+                      identityValidationAttempted && identityFieldErrors.location
+                        ? ' profile-input--error'
+                        : ''
+                    }`}
                     aria-invalid={
                       identityValidationAttempted && identityFieldErrors.location ? true : undefined
                     }
@@ -803,7 +815,11 @@ export default function ProfilePage() {
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
-                    className={`profile-input${identityValidationAttempted && identityFieldErrors.phone ? ' profile-input--error' : ''}`}
+                    className={`profile-input${
+                      identityValidationAttempted && identityFieldErrors.phone
+                        ? ' profile-input--error'
+                        : ''
+                    }`}
                     aria-invalid={
                       identityValidationAttempted && identityFieldErrors.phone ? true : undefined
                     }
@@ -863,7 +879,11 @@ export default function ProfilePage() {
                     name="website"
                     value={formData.website}
                     onChange={handleChange}
-                    className={`profile-input${summaryValidationAttempted && summaryFieldErrors.website ? ' profile-input--error' : ''}`}
+                    className={`profile-input${
+                      summaryValidationAttempted && summaryFieldErrors.website
+                        ? ' profile-input--error'
+                        : ''
+                    }`}
                     aria-invalid={
                       summaryValidationAttempted && summaryFieldErrors.website ? true : undefined
                     }
@@ -890,7 +910,11 @@ export default function ProfilePage() {
                     name="linkedin_url"
                     value={formData.linkedin_url}
                     onChange={handleChange}
-                    className={`profile-input${summaryValidationAttempted && summaryFieldErrors.linkedin_url ? ' profile-input--error' : ''}`}
+                    className={`profile-input${
+                      summaryValidationAttempted && summaryFieldErrors.linkedin_url
+                        ? ' profile-input--error'
+                        : ''
+                    }`}
                     aria-invalid={
                       summaryValidationAttempted && summaryFieldErrors.linkedin_url
                         ? true
@@ -919,7 +943,11 @@ export default function ProfilePage() {
                     name="github_url"
                     value={formData.github_url}
                     onChange={handleChange}
-                    className={`profile-input${summaryValidationAttempted && summaryFieldErrors.github_url ? ' profile-input--error' : ''}`}
+                    className={`profile-input${
+                      summaryValidationAttempted && summaryFieldErrors.github_url
+                        ? ' profile-input--error'
+                        : ''
+                    }`}
                     aria-invalid={
                       summaryValidationAttempted && summaryFieldErrors.github_url ? true : undefined
                     }
