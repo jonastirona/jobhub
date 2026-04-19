@@ -186,8 +186,9 @@ describe('Dashboard stage controls', () => {
 
     renderPage();
 
-    const statusButton = screen.getByText('applied').closest('button');
-    expect(statusButton).toBeTruthy();
+    const statusButton = screen.getByRole('button', {
+      name: /stage for backend engineer at stripe/i,
+    });
     fireEvent.click(statusButton);
 
     const stageSelect = screen.getByRole('combobox', {
@@ -210,7 +211,9 @@ describe('Dashboard stage controls', () => {
 
     renderPage();
 
-    const statusButton = screen.getByText('applied').closest('button');
+    const statusButton = screen.getByRole('button', {
+      name: /stage for backend engineer at stripe/i,
+    });
     fireEvent.click(statusButton);
 
     const stageSelect = screen.getByRole('combobox', {
