@@ -236,12 +236,15 @@ export default function ProfilePage() {
 
   const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
   const [editingExperienceId, setEditingExperienceId] = useState(null);
+  const [experienceSaveSuccess, setExperienceSaveSuccess] = useState(false);
 
   const [educationForm, setEducationForm] = useState(EMPTY_EDUCATION);
   const [editingEducationId, setEditingEducationId] = useState(null);
+  const [educationSaveSuccess, setEducationSaveSuccess] = useState(false);
 
   const [skillForm, setSkillForm] = useState(EMPTY_SKILL);
   const [editingSkillId, setEditingSkillId] = useState(null);
+  const [skillSaveSuccess, setSkillSaveSuccess] = useState(false);
 
   useEffect(() => {
     setFormData({
@@ -500,10 +503,12 @@ export default function ProfilePage() {
 
   const handleExperienceFormChange = (e) => {
     const { name, value } = e.target;
+    setExperienceSaveSuccess(false);
     setExperienceForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleExperienceEdit = (entry) => {
+    setExperienceSaveSuccess(false);
     setEditingExperienceId(entry.id);
     setExperienceForm({
       title: entry.title || '',
@@ -516,6 +521,7 @@ export default function ProfilePage() {
   };
 
   const handleExperienceCancelEdit = () => {
+    setExperienceSaveSuccess(false);
     setEditingExperienceId(null);
     setExperienceForm(EMPTY_EXPERIENCE);
   };
@@ -537,6 +543,7 @@ export default function ProfilePage() {
     if (saved) {
       setExperienceForm(EMPTY_EXPERIENCE);
       setEditingExperienceId(null);
+      setExperienceSaveSuccess(true);
     }
   };
 
@@ -558,10 +565,12 @@ export default function ProfilePage() {
 
   const handleEducationFormChange = (e) => {
     const { name, value } = e.target;
+    setEducationSaveSuccess(false);
     setEducationForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleEducationEdit = (entry) => {
+    setEducationSaveSuccess(false);
     setEditingEducationId(entry.id);
     setEducationForm({
       institution: entry.institution || '',
@@ -575,6 +584,7 @@ export default function ProfilePage() {
   };
 
   const handleEducationCancelEdit = () => {
+    setEducationSaveSuccess(false);
     setEditingEducationId(null);
     setEducationForm(EMPTY_EDUCATION);
   };
@@ -597,6 +607,7 @@ export default function ProfilePage() {
     if (saved) {
       setEducationForm(EMPTY_EDUCATION);
       setEditingEducationId(null);
+      setEducationSaveSuccess(true);
     }
   };
 
@@ -621,10 +632,12 @@ export default function ProfilePage() {
 
   const handleSkillFormChange = (e) => {
     const { name, value } = e.target;
+    setSkillSaveSuccess(false);
     setSkillForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSkillEdit = (skill) => {
+    setSkillSaveSuccess(false);
     setEditingSkillId(skill.id);
     setSkillForm({
       name: skill.name || '',
@@ -634,6 +647,7 @@ export default function ProfilePage() {
   };
 
   const handleSkillCancelEdit = () => {
+    setSkillSaveSuccess(false);
     setEditingSkillId(null);
     setSkillForm(EMPTY_SKILL);
   };
@@ -652,6 +666,7 @@ export default function ProfilePage() {
     if (saved) {
       setSkillForm(EMPTY_SKILL);
       setEditingSkillId(null);
+      setSkillSaveSuccess(true);
     }
   };
 
@@ -1224,6 +1239,11 @@ export default function ProfilePage() {
                       {experienceSaveError}
                     </p>
                   )}
+                  {experienceSaveSuccess && !experienceSaveError && (
+                    <p className="profile-save-success" role="status">
+                      Experience saved.
+                    </p>
+                  )}
                   <button
                     type="submit"
                     disabled={experienceSaving || !isExperienceFormValid}
@@ -1429,6 +1449,11 @@ export default function ProfilePage() {
                       {educationSaveError}
                     </p>
                   )}
+                  {educationSaveSuccess && !educationSaveError && (
+                    <p className="profile-save-success" role="status">
+                      Education saved.
+                    </p>
+                  )}
                   <button
                     type="submit"
                     disabled={educationSaving || !isEducationFormValid}
@@ -1591,6 +1616,11 @@ export default function ProfilePage() {
                   {skillsSaveError && (
                     <p className="profile-save-error" role="alert">
                       {skillsSaveError}
+                    </p>
+                  )}
+                  {skillSaveSuccess && !skillsSaveError && (
+                    <p className="profile-save-success" role="status">
+                      Skill saved.
                     </p>
                   )}
                   <button
