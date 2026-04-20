@@ -29,11 +29,19 @@ function toNullableString(value) {
   return trimmed === '' ? null : trimmed;
 }
 
-function toNullableInt(value) {
+function parseNullableSalaryInt(value) {
   const trimmed = asText(value).trim();
-  if (trimmed === '') return null;
-  const n = Number(trimmed);
-  return Number.isInteger(n) ? n : null;
+  if (!trimmed) {
+    return { value: null, isValid: true };
+  }
+  const normalized = trimmed.replace(/[$,\s]/g, '');
+  if (!normalized || !/^\d+$/.test(normalized)) {
+    return { value: null, isValid: false };
+  }
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed)
+    ? { value: parsed, isValid: true }
+    : { value: null, isValid: false };
 }
 
 function parseMultiValueList(value, { allowComma = true } = {}) {
@@ -220,9 +228,11 @@ export default function ProfilePage() {
   const [summarySaveSuccess, setSummarySaveSuccess] = useState(false);
   const [summarySaveError, setSummarySaveError] = useState('');
   const [summaryValidationAttempted, setSummaryValidationAttempted] = useState(false);
+  const [activeProfileSaveSection, setActiveProfileSaveSection] = useState(null);
 
   const [prefsData, setPrefsData] = useState(createEmptyPreferencesFormState);
   const [prefsSaveSuccess, setPrefsSaveSuccess] = useState(false);
+  const [prefsValidationError, setPrefsValidationError] = useState('');
 
   const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
   const [editingExperienceId, setEditingExperienceId] = useState(null);
@@ -330,13 +340,18 @@ export default function ProfilePage() {
 
     if (hasIdentityValidationErrors) return;
 
-    const saved = await saveProfile(buildIdentityPayload(formData));
-    if (saved.ok) {
-      setIdentitySaveSuccess(true);
-    } else if (saved.error == null) {
-      return;
-    } else {
-      setIdentitySaveError(saved.error || 'Unable to save identity right now.');
+    setActiveProfileSaveSection('identity');
+    try {
+      const saved = await saveProfile(buildIdentityPayload(formData));
+      if (saved.ok) {
+        setIdentitySaveSuccess(true);
+      } else if (saved.error == null) {
+        return;
+      } else {
+        setIdentitySaveError(saved.error || 'Unable to save identity right now.');
+      }
+    } finally {
+      setActiveProfileSaveSection(null);
     }
   };
 
@@ -350,31 +365,39 @@ export default function ProfilePage() {
 
     if (hasSummaryValidationErrors) return;
 
-    const saved = await saveProfile(buildSummaryPayload(formData));
-    if (saved.ok) {
-      setSummarySaveSuccess(true);
-    } else if (saved.error == null) {
-      return;
-    } else {
-      setSummarySaveError(saved.error || 'Unable to save summary right now.');
+    setActiveProfileSaveSection('summary');
+    try {
+      const saved = await saveProfile(buildSummaryPayload(formData));
+      if (saved.ok) {
+        setSummarySaveSuccess(true);
+      } else if (saved.error == null) {
+        return;
+      } else {
+        setSummarySaveError(saved.error || 'Unable to save summary right now.');
+      }
+    } finally {
+      setActiveProfileSaveSection(null);
     }
   };
 
   const handlePrefsChange = (e) => {
     const { name, value } = e.target;
     setPrefsSaveSuccess(false);
+    setPrefsValidationError('');
     setPrefsData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handlePrefsListInputChange = (field) => (e) => {
     const inputField = `${field}_input`;
     setPrefsSaveSuccess(false);
+    setPrefsValidationError('');
     setPrefsData((prev) => ({ ...prev, [inputField]: e.target.value }));
   };
 
   const addPrefsListItem = (field, rawValue) => {
     const inputField = `${field}_input`;
     setPrefsSaveSuccess(false);
+    setPrefsValidationError('');
     setPrefsData((prev) => {
       const list = prev[field];
       const nextList = addUniqueListItem(list, rawValue ?? prev[inputField]);
@@ -388,6 +411,7 @@ export default function ProfilePage() {
 
   const removePrefsListValue = (field, value) => {
     setPrefsSaveSuccess(false);
+    setPrefsValidationError('');
     setPrefsData((prev) => ({
       ...prev,
       [field]: removeListItem(prev[field], value),
@@ -407,6 +431,7 @@ export default function ProfilePage() {
     e.preventDefault();
     if (prefsSaving) return;
     setPrefsSaveSuccess(false);
+    setPrefsValidationError('');
 
     const finalizedTargetRoles = addUniqueListItem(
       prefsData.target_roles,
@@ -430,12 +455,21 @@ export default function ProfilePage() {
       }));
     }
 
+    const parsedSalaryMin = parseNullableSalaryInt(prefsData.salary_min);
+    const parsedSalaryMax = parseNullableSalaryInt(prefsData.salary_max);
+    if (!parsedSalaryMin.isValid || !parsedSalaryMax.isValid) {
+      setPrefsValidationError(
+        'Salary values must be whole numbers. You can include $ and commas (for example: $95,000).'
+      );
+      return;
+    }
+
     const payload = {
       target_roles: toNullableJoinedList(finalizedTargetRoles),
       preferred_locations: toNullableJoinedList(finalizedPreferredLocations),
       work_mode: toNullableString(prefsData.work_mode),
-      salary_min: toNullableInt(prefsData.salary_min),
-      salary_max: toNullableInt(prefsData.salary_max),
+      salary_min: parsedSalaryMin.value,
+      salary_max: parsedSalaryMax.value,
     };
     const saved = await savePreferences(payload);
     if (saved) {
@@ -858,7 +892,9 @@ export default function ProfilePage() {
                   </p>
                 )}
                 <button type="submit" disabled={saving} className="profile-btn-save">
-                  {saving ? 'Saving...' : 'Save Identity'}
+                  {saving && activeProfileSaveSection === 'identity'
+                    ? 'Saving...'
+                    : 'Save Identity'}
                 </button>
               </div>
             </section>
@@ -1003,7 +1039,7 @@ export default function ProfilePage() {
                   </p>
                 )}
                 <button type="submit" disabled={saving} className="profile-btn-save">
-                  {saving ? 'Saving...' : 'Save Summary'}
+                  {saving && activeProfileSaveSection === 'summary' ? 'Saving...' : 'Save Summary'}
                 </button>
               </div>
             </section>
@@ -1757,6 +1793,11 @@ export default function ProfilePage() {
             </div>
 
             <div className="profile-actions profile-actions--section">
+              {prefsValidationError && (
+                <p className="profile-save-error" role="alert">
+                  {prefsValidationError}
+                </p>
+              )}
               {prefsSaveError && (
                 <p className="profile-save-error" role="alert">
                   {prefsSaveError}

@@ -6,6 +6,8 @@ export function useDocuments(accessToken, loadOnMount = true) {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
   const pendingFetchRef = useRef(null);
   const pendingSaveRef = useRef(null);
 
@@ -99,13 +101,22 @@ export function useDocuments(accessToken, loadOnMount = true) {
       setSaveError(null);
 
       try {
+        const formData = new FormData();
+        formData.append('name', values?.name || '');
+        formData.append('doc_type', values?.doc_type || 'Draft');
+        if (values?.job_id) {
+          formData.append('job_id', values.job_id);
+        }
+        if (values?.file) {
+          formData.append('file', values.file);
+        }
+
         const res = await fetch(`${backendBase}/documents`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
             Authorization: `Bearer ${accessToken}`,
           },
-          body: JSON.stringify(values),
+          body: formData,
           signal: controller.signal,
         });
 
@@ -131,14 +142,88 @@ export function useDocuments(accessToken, loadOnMount = true) {
     [accessToken]
   );
 
+  const viewDocument = useCallback(
+    async (documentId) => {
+      const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
+      if (!backendBase || !accessToken || !documentId) return null;
+      try {
+        const res = await fetch(`${backendBase}/documents/${documentId}/view-url`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(text || `Failed to open document (${res.status})`);
+        }
+        const data = await res.json();
+        const url = data?.url;
+        if (!url) {
+          throw new Error('Document link is unavailable.');
+        }
+        return url;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        return null;
+      }
+    },
+    [accessToken]
+  );
+
+  const clearDeleteError = useCallback(() => {
+    setDeleteError(null);
+  }, []);
+
+  const deleteDocument = useCallback(
+    async (documentId) => {
+      const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
+      if (!backendBase) {
+        setDeleteError('Backend URL is not configured.');
+        return false;
+      }
+      if (!accessToken) {
+        setDeleteError('You are not authenticated. Please sign in again.');
+        return false;
+      }
+      if (!documentId) {
+        setDeleteError('Document id is required.');
+        return false;
+      }
+
+      setDeletingId(documentId);
+      setDeleteError(null);
+      try {
+        const res = await fetch(`${backendBase}/documents/${documentId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(text || `Failed to delete document (${res.status})`);
+        }
+        setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
+        return true;
+      } catch (err) {
+        setDeleteError(err instanceof Error ? err.message : String(err));
+        return false;
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [accessToken]
+  );
+
   return {
     documents,
     loading,
     error,
     saving,
     saveError,
+    deletingId,
+    deleteError,
     clearSaveError,
+    clearDeleteError,
     refetch,
     createDocument,
+    deleteDocument,
+    viewDocument,
   };
 }

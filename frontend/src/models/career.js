@@ -6,7 +6,16 @@ export const WORK_MODES = [
   { value: 'any', label: 'Any' },
 ];
 
-export const TARGET_ROLE_SUGGESTIONS = [
+function parseSuggestionEnv(value, fallback) {
+  const envValue = typeof value === 'string' ? value : '';
+  const parsed = envValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return parsed.length > 0 ? parsed : fallback;
+}
+
+const DEFAULT_TARGET_ROLE_SUGGESTIONS = [
   'Software Engineer',
   'Frontend Developer',
   'Backend Developer',
@@ -19,7 +28,7 @@ export const TARGET_ROLE_SUGGESTIONS = [
   'UX Designer',
 ];
 
-export const PREFERRED_LOCATION_SUGGESTIONS = [
+const DEFAULT_PREFERRED_LOCATION_SUGGESTIONS = [
   'Remote',
   'Hybrid',
   'New York, NY',
@@ -31,6 +40,16 @@ export const PREFERRED_LOCATION_SUGGESTIONS = [
   'Boston, MA',
   'Chicago, IL',
 ];
+
+export const TARGET_ROLE_SUGGESTIONS = parseSuggestionEnv(
+  process.env.REACT_APP_TARGET_ROLE_SUGGESTIONS,
+  DEFAULT_TARGET_ROLE_SUGGESTIONS
+);
+
+export const PREFERRED_LOCATION_SUGGESTIONS = parseSuggestionEnv(
+  process.env.REACT_APP_PREFERRED_LOCATION_SUGGESTIONS,
+  DEFAULT_PREFERRED_LOCATION_SUGGESTIONS
+);
 
 export const EMPTY_CAREER_PREFERENCES = {
   target_roles: '',

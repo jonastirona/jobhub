@@ -385,16 +385,6 @@
   background: var(--bg-white);
 }
 
-.profile-textarea--error {
-  border-color: var(--red);
-  background: var(--red-bg);
-}
-
-.profile-textarea--error:focus {
-  border-color: var(--red);
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
-}
-
 .profile-textarea::placeholder {
   color: var(--text-muted);
 }
