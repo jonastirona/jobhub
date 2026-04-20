@@ -501,6 +501,15 @@ export default function ProfilePage() {
     expStartYear >= 1900 &&
     (!expHasEndYear || (expEndYear !== null && expEndYear >= expStartYear));
 
+  const experienceValidationHint = (() => {
+    if (!experienceForm.title.trim() || !experienceForm.company.trim())
+      return 'Title and Company are required.';
+    if (expStartYear === null || expStartYear < 1900) return 'Enter a valid Start Year (e.g. 2021).';
+    if (expHasEndYear && (expEndYear === null || expEndYear < expStartYear))
+      return 'End Year must be on or after Start Year.';
+    return null;
+  })();
+
   const handleExperienceFormChange = (e) => {
     const { name, value } = e.target;
     setExperienceSaveSuccess(false);
@@ -562,6 +571,17 @@ export default function ProfilePage() {
     eduStartYear !== null &&
     eduStartYear >= 1900 &&
     (!eduHasEndYear || (eduEndYear !== null && eduEndYear >= eduStartYear));
+
+  const educationValidationHint = (() => {
+    if (!educationForm.institution.trim()) return 'Institution is required.';
+    if (!educationForm.degree.trim()) return 'Degree is required.';
+    if (!educationForm.field_of_study.trim()) return 'Field of Study is required.';
+    if (eduStartYear === null || eduStartYear < 1900)
+      return 'Enter a valid Start Year (e.g. 2021).';
+    if (eduHasEndYear && (eduEndYear === null || eduEndYear < eduStartYear))
+      return 'End Year must be on or after Start Year.';
+    return null;
+  })();
 
   const handleEducationFormChange = (e) => {
     const { name, value } = e.target;
@@ -1246,6 +1266,11 @@ export default function ProfilePage() {
                       Experience saved.
                     </p>
                   )}
+                  {!isExperienceFormValid && experienceValidationHint && (
+                    <p className="profile-validation-hint" role="note">
+                      {experienceValidationHint}
+                    </p>
+                  )}
                   <button
                     type="submit"
                     disabled={experienceSaving || !isExperienceFormValid}
@@ -1456,6 +1481,11 @@ export default function ProfilePage() {
                   {educationSaveSuccess && !educationSaveError && (
                     <p className="profile-save-success" role="status">
                       Education saved.
+                    </p>
+                  )}
+                  {!isEducationFormValid && educationValidationHint && (
+                    <p className="profile-validation-hint" role="note">
+                      {educationValidationHint}
                     </p>
                   )}
                   <button

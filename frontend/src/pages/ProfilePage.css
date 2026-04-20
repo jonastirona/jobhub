@@ -456,6 +456,12 @@
   padding: 8px 12px;
 }
 
+.profile-validation-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted, #6b7280);
+}
+
 .profile-field-error {
   margin: 0;
   font-size: 12px;
