@@ -433,9 +433,11 @@
 }
 
 .profile-btn-save:disabled {
-  opacity: 0.6;
+  opacity: 0.45;
   cursor: not-allowed;
   transform: none;
+  background: linear-gradient(135deg, var(--orange-400, #fb923c), var(--orange-500));
+  filter: grayscale(0.2);
 }
 
 .profile-save-error {

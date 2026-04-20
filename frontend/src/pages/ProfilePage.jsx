@@ -1191,13 +1191,14 @@ export default function ProfilePage() {
                     </label>
                     <input
                       id="exp_start_year"
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       name="start_year"
                       value={experienceForm.start_year}
                       onChange={handleExperienceFormChange}
                       className="profile-input"
                       placeholder="e.g. 2020"
-                      min="1900"
+                      maxLength={4}
                     />
                   </div>
 
@@ -1207,13 +1208,14 @@ export default function ProfilePage() {
                     </label>
                     <input
                       id="exp_end_year"
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       name="end_year"
                       value={experienceForm.end_year}
                       onChange={handleExperienceFormChange}
                       className="profile-input"
                       placeholder="Leave blank if current"
-                      min="1900"
+                      maxLength={4}
                     />
                   </div>
 
@@ -1383,13 +1385,14 @@ export default function ProfilePage() {
                     </label>
                     <input
                       id="edu_start_year"
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       name="start_year"
                       value={educationForm.start_year}
                       onChange={handleEducationFormChange}
                       className="profile-input"
                       placeholder="e.g. 2020"
-                      min="1900"
+                      maxLength={4}
                     />
                   </div>
 
@@ -1399,13 +1402,14 @@ export default function ProfilePage() {
                     </label>
                     <input
                       id="edu_end_year"
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       name="end_year"
                       value={educationForm.end_year}
                       onChange={handleEducationFormChange}
                       className="profile-input"
                       placeholder="Leave blank if current"
-                      min="1900"
+                      maxLength={4}
                     />
                   </div>
 
