@@ -103,12 +103,7 @@ export default function AIRewriteModal({ doc, accessToken, onClose, onSaved }) {
   const displayError = aiError || saveError;
 
   return (
-    <div
-      className="ai-overlay"
-      ref={overlayRef}
-      onClick={handleOverlayClick}
-      role="presentation"
-    >
+    <div className="ai-overlay" ref={overlayRef} onClick={handleOverlayClick} role="presentation">
       <div
         className="ai-modal"
         ref={modalRef}
@@ -168,18 +163,10 @@ export default function AIRewriteModal({ doc, accessToken, onClose, onSaved }) {
 
           {showComparison && (
             <div className="ai-comparison-actions">
-              <button
-                type="button"
-                className="ai-btn ai-btn--ghost"
-                onClick={handleKeepOriginal}
-              >
+              <button type="button" className="ai-btn ai-btn--ghost" onClick={handleKeepOriginal}>
                 ← Keep previous
               </button>
-              <button
-                type="button"
-                className="ai-btn ai-btn--primary"
-                onClick={handleKeepRewrite}
-              >
+              <button type="button" className="ai-btn ai-btn--primary" onClick={handleKeepRewrite}>
                 Keep rewrite ✓
               </button>
             </div>
@@ -212,8 +199,8 @@ export default function AIRewriteModal({ doc, accessToken, onClose, onSaved }) {
         </div>
 
         <div className="ai-footer">
-          {!showComparison && (
-            saved ? (
+          {!showComparison &&
+            (saved ? (
               <span className="ai-saved-msg">Saved as new document!</span>
             ) : (
               <button
@@ -225,8 +212,7 @@ export default function AIRewriteModal({ doc, accessToken, onClose, onSaved }) {
               >
                 {saving ? 'Saving…' : 'Save as new PDF'}
               </button>
-            )
-          )}
+            ))}
           <button type="button" className="ai-btn ai-btn--ghost" onClick={onClose}>
             {saved ? 'Done' : 'Close'}
           </button>

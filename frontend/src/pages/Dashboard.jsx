@@ -792,11 +792,7 @@ export default function Dashboard() {
       </div>
 
       {viewJob && (
-        <JobOverviewModal
-          job={viewJob}
-          onClose={closeView}
-          accessToken={session?.access_token}
-        />
+        <JobOverviewModal job={viewJob} onClose={closeView} accessToken={session?.access_token} />
       )}
 
       {formState && (

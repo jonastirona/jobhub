@@ -13,7 +13,14 @@ export default function AIDraftModal({ type, job, accessToken, onClose, onSaved 
   const modalRef = useRef(null);
   const hasGeneratedRef = useRef(false);
 
-  const { generate, rewrite, generating, rewriting, error: aiError, clearError } = useAIDraft(accessToken);
+  const {
+    generate,
+    rewrite,
+    generating,
+    rewriting,
+    error: aiError,
+    clearError,
+  } = useAIDraft(accessToken);
   const { createDocument, saving, saveError, clearSaveError } = useDocuments(accessToken, false);
 
   const [content, setContent] = useState('');
@@ -113,12 +120,7 @@ export default function AIDraftModal({ type, job, accessToken, onClose, onSaved 
   const hasContent = !isLoading && content;
 
   return (
-    <div
-      className="ai-overlay"
-      ref={overlayRef}
-      onClick={handleOverlayClick}
-      role="presentation"
-    >
+    <div className="ai-overlay" ref={overlayRef} onClick={handleOverlayClick} role="presentation">
       <div
         className="ai-modal"
         ref={modalRef}
@@ -232,8 +234,9 @@ export default function AIDraftModal({ type, job, accessToken, onClose, onSaved 
         </div>
 
         <div className="ai-footer">
-          {hasContent && !showComparison && (
-            saved ? (
+          {hasContent &&
+            !showComparison &&
+            (saved ? (
               <span className="ai-saved-msg">Saved to document library!</span>
             ) : (
               <button
@@ -244,8 +247,7 @@ export default function AIDraftModal({ type, job, accessToken, onClose, onSaved 
               >
                 {saving ? 'Saving…' : 'Save as PDF'}
               </button>
-            )
-          )}
+            ))}
           <button type="button" className="ai-btn ai-btn--ghost" onClick={onClose}>
             {saved ? 'Done' : 'Close'}
           </button>

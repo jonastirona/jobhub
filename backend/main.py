@@ -1158,7 +1158,8 @@ def _fmt_education(entries: list) -> str:
 
 def _build_resume_prompt(ctx: dict, job: dict) -> str:
     p = ctx["profile"]
-    return f"""You are a professional resume writer. Generate a clean, ATS-friendly resume tailored to the job below.
+    return f"""You are a professional resume writer.
+Generate a clean, ATS-friendly resume tailored to the job below.
 
 CANDIDATE:
 Name: {p.get('full_name') or 'Not provided'}
@@ -1188,13 +1189,16 @@ Write a complete resume tailored to this role. Use this exact markdown hierarchy
 - ### for individual job titles / degree entries within sections
 - Plain text or bullet points (-) for descriptions and details
 
-Always include year ranges (e.g. 2020 – 2023, or 2021 – Present) for every experience and education entry. Never omit dates.
+Always include year ranges (e.g. 2020 – 2023, or 2021 – Present) for every
+experience and education entry. Never omit dates.
 Be concise and professional. Do not invent information not in the profile."""
 
 
 def _build_cover_letter_prompt(ctx: dict, job: dict) -> str:
     p = ctx["profile"]
-    return f"""You are a professional cover letter writer. Write a compelling cover letter for the candidate below applying to the specified role.
+    full_name = p.get("full_name") or "the candidate"
+    return f"""You are a professional cover letter writer.
+Write a compelling cover letter for the candidate below applying to the specified role.
 
 CANDIDATE:
 Name: {p.get('full_name') or 'Not provided'}
@@ -1212,11 +1216,16 @@ Title: {job.get('title')}
 Company: {job.get('company')}
 Description: {job.get('description') or 'Not provided'}
 
-Write a professional cover letter (3-4 paragraphs). Use markdown: # for the subject line, ## for any section if needed. Open with a strong hook referencing the role, highlight specific experience matching the job, and close with a call to action. End the letter with "Thank you for your consideration, {p.get('full_name') or 'the candidate'}". Do not invent information not in the profile."""
+Write a professional cover letter (3-4 paragraphs). Use markdown: # for the subject
+line, ## for any section if needed. Open with a strong hook referencing the role,
+highlight specific experience matching the job, and close with a call to action.
+End the letter with "Thank you for your consideration, {full_name}".
+Do not invent information not in the profile."""
 
 
 def _build_rewrite_prompt(content: str, instructions: str) -> str:
-    return f"""You are a professional document editor. Rewrite the draft below according to the user's instructions.
+    return f"""You are a professional document editor.
+Rewrite the draft below according to the user's instructions.
 
 CURRENT DRAFT:
 {content}
