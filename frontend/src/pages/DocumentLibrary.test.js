@@ -105,8 +105,7 @@ describe('DocumentLibrary', () => {
   });
 
   test('renders error state', () => {
-    const { rerender } = renderPage({ loading: true, documents: [] });
-    mockUseDocuments.mockReturnValue({
+    renderPage({
       documents: [],
       loading: false,
       error: 'Failed to load documents (500)',
@@ -116,7 +115,6 @@ describe('DocumentLibrary', () => {
       deleteDocument: jest.fn(),
       clearDeleteError: jest.fn(),
     });
-    rerender(<DocumentLibrary />);
     expect(screen.getByText(/failed to load documents/i)).toBeInTheDocument();
   });
 
