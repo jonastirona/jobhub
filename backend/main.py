@@ -1229,7 +1229,7 @@ def reorder_experience(
 ):
     user_id = get_user_id(authorization)
     sb = get_supabase()
-    existing_resp = sb.table("experience").select("*").eq("user_id", user_id).execute()
+    existing_resp = sb.table("experience").select("id,position").eq("user_id", user_id).execute()
     if existing_resp.data is None:
         raise HTTPException(status_code=500, detail="Failed to validate experience for reorder")
     existing_ids = [r["id"] for r in existing_resp.data]
@@ -1259,7 +1259,7 @@ def reorder_experience(
             for position, entry_id in enumerate(data.ids)
         ]
         update_resp = sb.table("experience").upsert(final_updates, on_conflict="id").execute()
-        if update_resp.data is None:
+        if not update_resp.data or {r["id"] for r in update_resp.data} != set(data.ids):
             if original_positions:
                 recovery_updates = [
                     {"id": entry_id, "user_id": user_id, "position": pos}
@@ -1457,7 +1457,7 @@ def create_skill(skill: SkillCreate, authorization: Optional[str] = Header(defau
 def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
     sb = get_supabase()
-    existing_resp = sb.table("skills").select("*").eq("user_id", user_id).execute()
+    existing_resp = sb.table("skills").select("id,position").eq("user_id", user_id).execute()
     if existing_resp.data is None:
         raise HTTPException(status_code=500, detail="Failed to validate skills for reorder")
     existing_ids = [r["id"] for r in existing_resp.data]
@@ -1485,7 +1485,7 @@ def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(def
             for position, skill_id in enumerate(data.ids)
         ]
         update_resp = sb.table("skills").upsert(final_updates, on_conflict="id").execute()
-        if update_resp.data is None:
+        if not update_resp.data or {r["id"] for r in update_resp.data} != set(data.ids):
             if original_positions:
                 recovery_updates = [
                     {"id": skill_id, "user_id": user_id, "position": pos}
