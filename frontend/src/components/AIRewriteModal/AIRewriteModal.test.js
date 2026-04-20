@@ -94,9 +94,7 @@ describe('AIRewriteModal', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /^rewrite$/i }));
 
-    await waitFor(() =>
-      expect(mockRewrite).toHaveBeenCalledWith(DOC.content, 'Make it shorter.')
-    );
+    await waitFor(() => expect(mockRewrite).toHaveBeenCalledWith(DOC.content, 'Make it shorter.'));
   });
 
   test('shows comparison view after successful rewrite', async () => {
