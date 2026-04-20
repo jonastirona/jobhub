@@ -41,6 +41,7 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [actionError, setActionError] = useState(null);
 
   const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
 
@@ -84,8 +85,9 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
   async function handleComplete(reminder) {
     if (!backendBase || !accessToken) return;
     setCompleting(reminder.id);
+    setActionError(null);
     try {
-      await fetch(`${backendBase}/reminders/${reminder.id}`, {
+      const res = await fetch(`${backendBase}/reminders/${reminder.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -93,7 +95,10 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
         },
         body: JSON.stringify({ completed_at: new Date().toISOString() }),
       });
+      if (!res.ok) throw new Error(`Failed to mark reminder complete (${res.status})`);
       onRefetch();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setCompleting(null);
     }
@@ -102,12 +107,16 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
   async function handleDelete(reminderId) {
     if (!backendBase || !accessToken) return;
     setDeleting(reminderId);
+    setActionError(null);
     try {
-      await fetch(`${backendBase}/reminders/${reminderId}`, {
+      const res = await fetch(`${backendBase}/reminders/${reminderId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
+      if (!res.ok) throw new Error(`Failed to delete reminder (${res.status})`);
       onRefetch();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setDeleting(null);
     }
@@ -132,6 +141,11 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
         </div>
 
         <div className="rp-body">
+          {actionError && (
+            <p className="rp-error" role="alert">
+              {actionError}
+            </p>
+          )}
           {pending.length === 0 && <p className="rp-empty">No upcoming reminders.</p>}
 
           {pending.length > 0 && (
