@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import AppShell from '../components/layout/AppShell';
+import AIRewriteModal from '../components/AIRewriteModal/AIRewriteModal';
 import { useAuth } from '../context/AuthContext';
 import { useDocuments } from '../hooks/useDocuments';
 import './ShellPages.css';
@@ -33,7 +35,10 @@ export default function DocumentLibrary() {
     viewDocument,
     deleteDocument,
     clearDeleteError,
+    refetch,
   } = useDocuments(session?.access_token);
+
+  const [rewriteDoc, setRewriteDoc] = useState(null);
 
   async function handleViewDocument(documentId) {
     clearDeleteError();
@@ -127,6 +132,18 @@ export default function DocumentLibrary() {
                       >
                         👁
                       </button>
+                      {doc.content && (
+                        <button
+                          type="button"
+                          className="action-btn"
+                          aria-label="Rewrite with AI"
+                          title="Rewrite with AI"
+                          onClick={() => setRewriteDoc(doc)}
+                          disabled={deletingId === doc.id}
+                        >
+                          ✦
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="action-btn"
@@ -143,6 +160,18 @@ export default function DocumentLibrary() {
           </tbody>
         </table>
       </section>
+
+      {rewriteDoc && (
+        <AIRewriteModal
+          doc={rewriteDoc}
+          accessToken={session?.access_token}
+          onClose={() => setRewriteDoc(null)}
+          onSaved={() => {
+            setRewriteDoc(null);
+            refetch();
+          }}
+        />
+      )}
     </AppShell>
   );
 }

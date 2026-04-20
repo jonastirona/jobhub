@@ -53,6 +53,49 @@
 
 .job-overview-footer {
   padding: 0 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.job-overview-ai-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--border-light);
+}
+
+.job-overview-ai-label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.job-overview-ai-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.job-overview-ai-btn {
+  flex: 1;
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-orange);
+  background: var(--orange-50);
+  color: var(--orange-600);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.job-overview-ai-btn:hover {
+  background: var(--orange-100);
+  border-color: var(--orange-300);
 }
 
 .job-overview-done {

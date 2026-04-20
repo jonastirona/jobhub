@@ -107,6 +107,9 @@ export function useDocuments(accessToken, loadOnMount = true) {
         if (values?.job_id) {
           formData.append('job_id', values.job_id);
         }
+        if (values?.content) {
+          formData.append('content', values.content);
+        }
         if (values?.file) {
           formData.append('file', values.file);
         }
