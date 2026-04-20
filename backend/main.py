@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 from math import ceil
 from pathlib import Path
 from typing import Optional
+from groq import Groq
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Response, UploadFile
@@ -1241,7 +1242,6 @@ def _call_groq(prompt: str) -> str:
     if not groq_key:
         raise HTTPException(status_code=503, detail="AI service is not configured")
     try:
-        from groq import Groq
 
         client = Groq(api_key=groq_key)
         response = client.chat.completions.create(
