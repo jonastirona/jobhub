@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from postgrest.exceptions import APIError
 from pydantic import ValidationError
 
 from main import (
@@ -1902,7 +1903,10 @@ def test_delete_document_success():
 
 def test_delete_document_returns_500_when_delete_query_fails():
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
-    mock_query.execute.side_effect = [MagicMock(data=[SAMPLE_DOCUMENT]), Exception("db down")]
+    mock_query.execute.side_effect = [
+        MagicMock(data=[SAMPLE_DOCUMENT]),
+        APIError({"message": "db down", "code": "500", "hint": None, "details": None}),
+    ]
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.delete(
             f"/documents/{SAMPLE_DOCUMENT['id']}",

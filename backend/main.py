@@ -9,6 +9,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from postgrest.exceptions import APIError
 from pydantic import BaseModel, Field
 
 load_dotenv()
@@ -1066,7 +1067,7 @@ def delete_document(document_id: str, authorization: Optional[str] = Header(defa
 
     try:
         response = sb.table("documents").delete().eq("id", document_id).eq("user_id", user_id).execute()
-    except Exception:
+    except APIError:
         raise HTTPException(status_code=500, detail="Failed to delete document")
     if not response.data:
         raise HTTPException(status_code=404, detail="Document not found")
