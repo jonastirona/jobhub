@@ -1900,6 +1900,18 @@ def test_delete_document_success():
     assert response.status_code == 204
 
 
+def test_delete_document_returns_500_when_delete_query_fails():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    mock_query.execute.side_effect = [MagicMock(data=[SAMPLE_DOCUMENT]), Exception("db down")]
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Failed to delete document"
+
+
 def test_delete_document_not_found():
     mock_sb, _, _ = make_mock_sb(data=[])
     with patch("main.get_supabase", return_value=mock_sb):

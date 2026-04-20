@@ -99,10 +99,13 @@ describe('DocumentLibrary', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/failed to delete document/i);
   });
 
-  test('renders loading, error and empty states', () => {
-    const { rerender } = renderPage({ loading: true, documents: [] });
+  test('renders loading state', () => {
+    renderPage({ loading: true, documents: [] });
     expect(screen.getByText(/loading documents/i)).toBeInTheDocument();
+  });
 
+  test('renders error state', () => {
+    const { rerender } = renderPage({ loading: true, documents: [] });
     mockUseDocuments.mockReturnValue({
       documents: [],
       loading: false,
@@ -115,7 +118,10 @@ describe('DocumentLibrary', () => {
     });
     rerender(<DocumentLibrary />);
     expect(screen.getByText(/failed to load documents/i)).toBeInTheDocument();
+  });
 
+  test('renders empty state', () => {
+    const { rerender } = renderPage({ loading: true, documents: [] });
     mockUseDocuments.mockReturnValue({
       documents: [],
       loading: false,

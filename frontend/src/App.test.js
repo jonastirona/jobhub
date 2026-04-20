@@ -1163,13 +1163,13 @@ test('saves draft from job context with linked job_id', async () => {
       return Promise.resolve({
         ok: true,
         json: () =>
-          Promise.resolve({
-            id: 'doc-1',
-            name: 'Datadog_Backend_Engineer_Draft',
-            doc_type: 'Cover Letter',
-            storage_path: 'test-user/doc-1.docx',
-            job_id: 'job-ctx-1',
-          }),
+            Promise.resolve({
+              id: 'doc-1',
+              name: 'Datadog_Backend_Engineer_Draft',
+              doc_type: 'Cover Letter',
+              storage_path: 'test-user/doc-1.pdf',
+              job_id: 'job-ctx-1',
+            }),
       });
     }
 
@@ -1190,8 +1190,8 @@ test('saves draft from job context with linked job_id', async () => {
     target: { value: 'Datadog_Backend_Engineer_Draft' },
   });
 
-  const file = new File(['binary-data'], 'draft.docx', {
-    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  const file = new File(['%PDF-1.7\nmock'], 'draft.pdf', {
+    type: 'application/pdf',
   });
   fireEvent.change(screen.getByLabelText(/upload document/i), {
     target: { files: [file] },

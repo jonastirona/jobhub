@@ -1064,7 +1064,10 @@ def delete_document(document_id: str, authorization: Optional[str] = Header(defa
         doc.get("storage_path"),
     )
 
-    response = sb.table("documents").delete().eq("id", document_id).eq("user_id", user_id).execute()
+    try:
+        response = sb.table("documents").delete().eq("id", document_id).eq("user_id", user_id).execute()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to delete document")
     if not response.data:
         raise HTTPException(status_code=404, detail="Document not found")
     return Response(status_code=204)
