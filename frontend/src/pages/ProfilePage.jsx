@@ -237,10 +237,12 @@ export default function ProfilePage() {
   const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
   const [editingExperienceId, setEditingExperienceId] = useState(null);
   const [experienceSaveSuccess, setExperienceSaveSuccess] = useState(false);
+  const [experienceValidationAttempted, setExperienceValidationAttempted] = useState(false);
 
   const [educationForm, setEducationForm] = useState(EMPTY_EDUCATION);
   const [editingEducationId, setEditingEducationId] = useState(null);
   const [educationSaveSuccess, setEducationSaveSuccess] = useState(false);
+  const [educationValidationAttempted, setEducationValidationAttempted] = useState(false);
 
   const [skillForm, setSkillForm] = useState(EMPTY_SKILL);
   const [editingSkillId, setEditingSkillId] = useState(null);
@@ -519,6 +521,7 @@ export default function ProfilePage() {
 
   const handleExperienceEdit = (entry) => {
     setExperienceSaveSuccess(false);
+    setExperienceValidationAttempted(false);
     setEditingExperienceId(entry.id);
     setExperienceForm({
       title: entry.title || '',
@@ -532,12 +535,15 @@ export default function ProfilePage() {
 
   const handleExperienceCancelEdit = () => {
     setExperienceSaveSuccess(false);
+    setExperienceValidationAttempted(false);
     setEditingExperienceId(null);
     setExperienceForm(EMPTY_EXPERIENCE);
   };
 
   const handleExperienceSubmit = async (e) => {
     e.preventDefault();
+    setExperienceValidationAttempted(true);
+    setExperienceSaveSuccess(false);
     if (experienceSaving || !isExperienceFormValid) return;
     const payload = {
       title: experienceForm.title.trim(),
@@ -554,6 +560,7 @@ export default function ProfilePage() {
       setExperienceForm(EMPTY_EXPERIENCE);
       setEditingExperienceId(null);
       setExperienceSaveSuccess(true);
+      setExperienceValidationAttempted(false);
     }
   };
 
@@ -592,6 +599,7 @@ export default function ProfilePage() {
 
   const handleEducationEdit = (entry) => {
     setEducationSaveSuccess(false);
+    setEducationValidationAttempted(false);
     setEditingEducationId(entry.id);
     setEducationForm({
       institution: entry.institution || '',
@@ -606,12 +614,15 @@ export default function ProfilePage() {
 
   const handleEducationCancelEdit = () => {
     setEducationSaveSuccess(false);
+    setEducationValidationAttempted(false);
     setEditingEducationId(null);
     setEducationForm(EMPTY_EDUCATION);
   };
 
   const handleEducationSubmit = async (e) => {
     e.preventDefault();
+    setEducationValidationAttempted(true);
+    setEducationSaveSuccess(false);
     if (educationSaving || !isEducationFormValid) return;
     const payload = {
       institution: educationForm.institution.trim(),
@@ -629,6 +640,7 @@ export default function ProfilePage() {
       setEducationForm(EMPTY_EDUCATION);
       setEditingEducationId(null);
       setEducationSaveSuccess(true);
+      setEducationValidationAttempted(false);
     }
   };
 
@@ -675,6 +687,7 @@ export default function ProfilePage() {
 
   const handleSkillSubmit = async (e) => {
     e.preventDefault();
+    setSkillSaveSuccess(false);
     if (skillsSaving || !skillForm.name.trim()) return;
     const payload = {
       name: skillForm.name.trim(),
@@ -1262,16 +1275,18 @@ export default function ProfilePage() {
                       {experienceSaveError}
                     </p>
                   )}
-                  {experienceSaveSuccess && !experienceSaveError && (
+                  {experienceSaveSuccess && !experienceSaveError && !experienceSaving && (
                     <p className="profile-save-success" role="status">
                       Experience saved.
                     </p>
                   )}
-                  {!isExperienceFormValid && experienceValidationHint && (
-                    <p className="profile-validation-hint" role="note">
-                      {experienceValidationHint}
-                    </p>
-                  )}
+                  {experienceValidationAttempted &&
+                    !isExperienceFormValid &&
+                    experienceValidationHint && (
+                      <p className="profile-validation-hint" role="note">
+                        {experienceValidationHint}
+                      </p>
+                    )}
                   <button
                     type="submit"
                     disabled={experienceSaving || !isExperienceFormValid}
@@ -1479,16 +1494,18 @@ export default function ProfilePage() {
                       {educationSaveError}
                     </p>
                   )}
-                  {educationSaveSuccess && !educationSaveError && (
+                  {educationSaveSuccess && !educationSaveError && !educationSaving && (
                     <p className="profile-save-success" role="status">
                       Education saved.
                     </p>
                   )}
-                  {!isEducationFormValid && educationValidationHint && (
-                    <p className="profile-validation-hint" role="note">
-                      {educationValidationHint}
-                    </p>
-                  )}
+                  {educationValidationAttempted &&
+                    !isEducationFormValid &&
+                    educationValidationHint && (
+                      <p className="profile-validation-hint" role="note">
+                        {educationValidationHint}
+                      </p>
+                    )}
                   <button
                     type="submit"
                     disabled={educationSaving || !isEducationFormValid}
@@ -1653,7 +1670,7 @@ export default function ProfilePage() {
                       {skillsSaveError}
                     </p>
                   )}
-                  {skillSaveSuccess && !skillsSaveError && (
+                  {skillSaveSuccess && !skillsSaveError && !skillsSaving && (
                     <p className="profile-save-success" role="status">
                       Skill saved.
                     </p>
