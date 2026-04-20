@@ -504,7 +504,8 @@ export default function ProfilePage() {
   const experienceValidationHint = (() => {
     if (!experienceForm.title.trim() || !experienceForm.company.trim())
       return 'Title and Company are required.';
-    if (expStartYear === null || expStartYear < 1900) return 'Enter a valid Start Year (e.g. 2021).';
+    if (expStartYear === null || expStartYear < 1900)
+      return 'Enter a valid Start Year (e.g. 2021).';
     if (expHasEndYear && (expEndYear === null || expEndYear < expStartYear))
       return 'End Year must be on or after Start Year.';
     return null;
