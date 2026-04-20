@@ -1089,12 +1089,16 @@ _AI_RATE_WINDOW = timedelta(hours=1)
 def _check_ai_rate_limit(user_id: str) -> None:
     now = datetime.utcnow()
     window_start = now - _AI_RATE_WINDOW
-    _ai_rate_limit[user_id] = [t for t in _ai_rate_limit[user_id] if t > window_start]
-    if len(_ai_rate_limit[user_id]) >= _AI_RATE_LIMIT:
+    recent_requests = [t for t in _ai_rate_limit.get(user_id, []) if t > window_start]
+
+    if not recent_requests:
+        _ai_rate_limit.pop(user_id, None)
+    elif len(recent_requests) >= _AI_RATE_LIMIT:
+        _ai_rate_limit[user_id] = recent_requests
         raise HTTPException(status_code=429, detail="AI rate limit reached. Try again in an hour.")
-    _ai_rate_limit[user_id].append(now)
 
-
+    recent_requests.append(now)
+    _ai_rate_limit[user_id] = recent_requests
 def _fetch_user_context(sb, user_id: str) -> dict:
     profile_resp = sb.table("profiles").select("*").eq("user_id", user_id).execute()
     profile = profile_resp.data[0] if profile_resp.data else {}
