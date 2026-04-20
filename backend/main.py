@@ -6,11 +6,11 @@ from datetime import date, datetime, timedelta
 from math import ceil
 from pathlib import Path
 from typing import Optional
-from groq import Groq
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from groq import Groq
 from postgrest.exceptions import APIError
 from pydantic import BaseModel, Field
 
