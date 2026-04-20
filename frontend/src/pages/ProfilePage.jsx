@@ -516,6 +516,7 @@ export default function ProfilePage() {
   const handleExperienceFormChange = (e) => {
     const { name, value } = e.target;
     setExperienceSaveSuccess(false);
+    setExperienceValidationAttempted(true);
     setExperienceForm((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -594,6 +595,7 @@ export default function ProfilePage() {
   const handleEducationFormChange = (e) => {
     const { name, value } = e.target;
     setEducationSaveSuccess(false);
+    setEducationValidationAttempted(true);
     setEducationForm((prev) => ({ ...prev, [name]: value }));
   };
 
