@@ -565,8 +565,8 @@ export default function ProfilePage() {
   };
 
   const handleExperienceDelete = async (id) => {
-    if (editingExperienceId === id) handleExperienceCancelEdit();
-    await deleteExperience(id);
+    const deleted = await deleteExperience(id);
+    if (deleted && editingExperienceId === id) handleExperienceCancelEdit();
   };
 
   const eduStartYear = parseYear(educationForm.start_year);
@@ -645,8 +645,8 @@ export default function ProfilePage() {
   };
 
   const handleEducationDelete = async (id) => {
-    if (editingEducationId === id) handleEducationCancelEdit();
-    await deleteEducation(id);
+    const deleted = await deleteEducation(id);
+    if (deleted && editingEducationId === id) handleEducationCancelEdit();
   };
 
   const handleExperienceMoveUp = async (index) => {
@@ -705,8 +705,8 @@ export default function ProfilePage() {
   };
 
   const handleSkillDelete = async (id) => {
-    if (editingSkillId === id) handleSkillCancelEdit();
-    await deleteSkill(id);
+    const deleted = await deleteSkill(id);
+    if (deleted && editingSkillId === id) handleSkillCancelEdit();
   };
 
   const handleSkillMoveUp = async (index) => {

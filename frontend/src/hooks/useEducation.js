@@ -101,6 +101,7 @@ export function useEducation(accessToken) {
         const created = await res.json();
         if (controller.signal.aborted) return false;
         setEducation((prev) => [...prev, created].sort(byStartYearDesc));
+        setError(null);
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
@@ -147,6 +148,7 @@ export function useEducation(accessToken) {
         const updated = await res.json();
         if (controller.signal.aborted) return false;
         setEducation((prev) => prev.map((e) => (e.id === id ? updated : e)).sort(byStartYearDesc));
+        setError(null);
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
@@ -188,6 +190,7 @@ export function useEducation(accessToken) {
         }
         if (controller.signal.aborted) return false;
         setEducation((prev) => prev.filter((e) => e.id !== id));
+        setError(null);
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
