@@ -1267,12 +1267,9 @@ def reorder_experience(
                 ]
                 sb.table("experience").upsert(recovery_updates, on_conflict="id").execute()
             raise HTTPException(status_code=500, detail="Failed to reorder experience")
-    # Reconstruct ordered result from already-fetched data to avoid an extra DB round trip.
-    existing_by_id = {r["id"]: r for r in existing_resp.data}
-    return [
-        {**existing_by_id[entry_id], "position": position}
-        for position, entry_id in enumerate(data.ids)
-    ]
+        updated_by_id = {r["id"]: r for r in update_resp.data}
+        return [updated_by_id[entry_id] for entry_id in data.ids]
+    return []
 
 
 @app.put("/experience/{entry_id}")
@@ -1496,12 +1493,9 @@ def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(def
                 ]
                 sb.table("skills").upsert(recovery_updates, on_conflict="id").execute()
             raise HTTPException(status_code=500, detail="Failed to reorder skills")
-    # Reconstruct ordered result from already-fetched data to avoid an extra DB round trip.
-    existing_by_id = {r["id"]: r for r in existing_resp.data}
-    return [
-        {**existing_by_id[skill_id], "position": position}
-        for position, skill_id in enumerate(data.ids)
-    ]
+        updated_by_id = {r["id"]: r for r in update_resp.data}
+        return [updated_by_id[skill_id] for skill_id in data.ids]
+    return []
 
 
 @app.put("/skills/{skill_id}")
