@@ -121,8 +121,7 @@ describe('DocumentLibrary', () => {
   });
 
   test('renders empty state', () => {
-    const { rerender } = renderPage({ loading: true, documents: [] });
-    mockUseDocuments.mockReturnValue({
+    renderPage({
       documents: [],
       loading: false,
       error: null,
@@ -132,7 +131,6 @@ describe('DocumentLibrary', () => {
       deleteDocument: jest.fn(),
       clearDeleteError: jest.fn(),
     });
-    rerender(<DocumentLibrary />);
     expect(screen.getByText(/no saved documents yet/i)).toBeInTheDocument();
   });
 });
