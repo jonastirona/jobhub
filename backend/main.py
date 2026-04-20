@@ -1098,12 +1098,8 @@ def _check_ai_rate_limit(user_id: str) -> None:
 def _fetch_user_context(sb, user_id: str) -> dict:
     profile_resp = sb.table("profiles").select("*").eq("user_id", user_id).execute()
     profile = profile_resp.data[0] if profile_resp.data else {}
-    exp_resp = (
-        sb.table("experience").select("*").eq("user_id", user_id).order("position").execute()
-    )
-    skills_resp = (
-        sb.table("skills").select("*").eq("user_id", user_id).order("position").execute()
-    )
+    exp_resp = sb.table("experience").select("*").eq("user_id", user_id).order("position").execute()
+    skills_resp = sb.table("skills").select("*").eq("user_id", user_id).order("position").execute()
     edu_resp = (
         sb.table("education")
         .select("*")
