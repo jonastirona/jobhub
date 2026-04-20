@@ -7,7 +7,8 @@ export const WORK_MODES = [
 ];
 
 function parseSuggestionEnv(value, fallback) {
-  const parsed = String(value || '')
+  const envValue = typeof value === 'string' ? value : '';
+  const parsed = envValue
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
