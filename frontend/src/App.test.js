@@ -1163,13 +1163,13 @@ test('saves draft from job context with linked job_id', async () => {
       return Promise.resolve({
         ok: true,
         json: () =>
-            Promise.resolve({
-              id: 'doc-1',
-              name: 'Datadog_Backend_Engineer_Draft',
-              doc_type: 'Cover Letter',
-              storage_path: 'test-user/doc-1.pdf',
-              job_id: 'job-ctx-1',
-            }),
+          Promise.resolve({
+            id: 'doc-1',
+            name: 'Datadog_Backend_Engineer_Draft',
+            doc_type: 'Cover Letter',
+            storage_path: 'test-user/doc-1.pdf',
+            job_id: 'job-ctx-1',
+          }),
       });
     }
 

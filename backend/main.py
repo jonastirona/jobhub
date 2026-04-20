@@ -1066,7 +1066,9 @@ def delete_document(document_id: str, authorization: Optional[str] = Header(defa
     )
 
     try:
-        response = sb.table("documents").delete().eq("id", document_id).eq("user_id", user_id).execute()
+        response = (
+            sb.table("documents").delete().eq("id", document_id).eq("user_id", user_id).execute()
+        )
     except APIError:
         raise HTTPException(status_code=500, detail="Failed to delete document")
     if not response.data:
