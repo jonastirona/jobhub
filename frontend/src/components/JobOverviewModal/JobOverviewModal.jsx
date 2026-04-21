@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import StatusBadge from '../common/StatusBadge';
+import AIDraftModal from '../AIDraftModal/AIDraftModal';
 import '../JobForm/JobForm.css';
 import './JobOverviewModal.css';
 
@@ -26,17 +27,24 @@ function Field({ label, children, muted }) {
   );
 }
 
-export default function JobOverviewModal({ job, onClose }) {
+export default function JobOverviewModal({ job, onClose, accessToken }) {
   const overlayRef = useRef(null);
   const modalRef = useRef(null);
+  const [aiDraftType, setAiDraftType] = useState(null);
 
   useEffect(() => {
     function onKey(e) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        if (aiDraftType) {
+          setAiDraftType(null);
+        } else {
+          onClose();
+        }
+      }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, aiDraftType]);
 
   const handleOverlayClick = useCallback(
     (e) => {
@@ -70,55 +78,92 @@ export default function JobOverviewModal({ job, onClose }) {
   const recruiter = job.recruiter_notes?.trim() || '—';
 
   return (
-    <div className="jf-overlay" ref={overlayRef} onClick={handleOverlayClick} role="presentation">
-      <div
-        className="jf-modal"
-        ref={modalRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="job-overview-title"
-        onKeyDown={handleModalKeyDown}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="jf-header">
-          <div>
-            <h2 className="jf-title" id="job-overview-title">
-              {job.title || 'Job'}
-            </h2>
-            <p className="job-overview-company">{job.company || '—'}</p>
-          </div>
-          <button type="button" className="jf-close" onClick={onClose} aria-label="Close overview">
-            ✕
-          </button>
-        </div>
-
-        <div className="job-overview-body">
-          <div className="job-overview-row-two">
-            <div className="job-overview-section">
-              <div className="job-overview-label">Status</div>
-              <div className="job-overview-value">
-                <StatusBadge status={job.status} />
-              </div>
+    <>
+      <div className="jf-overlay" ref={overlayRef} onClick={handleOverlayClick} role="presentation">
+        <div
+          className="jf-modal"
+          ref={modalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="job-overview-title"
+          onKeyDown={handleModalKeyDown}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="jf-header">
+            <div>
+              <h2 className="jf-title" id="job-overview-title">
+                {job.title || 'Job'}
+              </h2>
+              <p className="job-overview-company">{job.company || '—'}</p>
             </div>
-            <Field label="Location">{location}</Field>
+            <button
+              type="button"
+              className="jf-close"
+              onClick={onClose}
+              aria-label="Close overview"
+            >
+              ✕
+            </button>
           </div>
 
-          <div className="job-overview-row-two">
-            <Field label="Applied date">{formatDate(job.applied_date)}</Field>
-            <Field label="Job deadline">{formatDate(job.deadline)}</Field>
+          <div className="job-overview-body">
+            <div className="job-overview-row-two">
+              <div className="job-overview-section">
+                <div className="job-overview-label">Status</div>
+                <div className="job-overview-value">
+                  <StatusBadge status={job.status} />
+                </div>
+              </div>
+              <Field label="Location">{location}</Field>
+            </div>
+
+            <div className="job-overview-row-two">
+              <Field label="Applied date">{formatDate(job.applied_date)}</Field>
+              <Field label="Job deadline">{formatDate(job.deadline)}</Field>
+            </div>
+
+            <Field label="Job description">{description}</Field>
+            <Field label="Notes">{notes}</Field>
+            <Field label="Recruiter / contact notes">{recruiter}</Field>
           </div>
 
-          <Field label="Job description">{description}</Field>
-          <Field label="Notes">{notes}</Field>
-          <Field label="Recruiter / contact notes">{recruiter}</Field>
-        </div>
-
-        <div className="job-overview-footer">
-          <button type="button" className="job-overview-done" onClick={onClose}>
-            Close
-          </button>
+          <div className="job-overview-footer">
+            {accessToken && (
+              <div className="job-overview-ai-actions">
+                <p className="job-overview-ai-label">Generate draft with AI</p>
+                <div className="job-overview-ai-buttons">
+                  <button
+                    type="button"
+                    className="job-overview-ai-btn"
+                    onClick={() => setAiDraftType('resume')}
+                  >
+                    Resume Draft
+                  </button>
+                  <button
+                    type="button"
+                    className="job-overview-ai-btn"
+                    onClick={() => setAiDraftType('cover_letter')}
+                  >
+                    Cover Letter
+                  </button>
+                </div>
+              </div>
+            )}
+            <button type="button" className="job-overview-done" onClick={onClose}>
+              Close
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {aiDraftType && (
+        <AIDraftModal
+          type={aiDraftType}
+          job={job}
+          accessToken={accessToken}
+          onClose={() => setAiDraftType(null)}
+        />
+      )}
+    </>
   );
 }

@@ -1,7 +1,8 @@
 import calendar
 import os
 import uuid
-from datetime import date, datetime
+from collections import defaultdict
+from datetime import date, datetime, timedelta
 from math import ceil
 from pathlib import Path
 from typing import Optional
@@ -9,6 +10,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from groq import Groq
 from postgrest.exceptions import APIError
 from pydantic import BaseModel, Field
 
@@ -965,6 +967,7 @@ async def create_document(
     name: str = Form(...),
     doc_type: str = Form("Draft"),
     job_id: Optional[str] = Form(default=None),
+    content: Optional[str] = Form(default=None),
     file: UploadFile = File(...),
     authorization: Optional[str] = Header(default=None),
 ):
@@ -986,6 +989,7 @@ async def create_document(
         "mime_type": mime_type,
         "file_size": file_size,
         "original_filename": file.filename,
+        "content": content.strip() if content and content.strip() else None,
     }
     response = sb.table("documents").insert(payload).execute()
     if not response.data:
@@ -1074,6 +1078,232 @@ def delete_document(document_id: str, authorization: Optional[str] = Header(defa
     if not response.data:
         raise HTTPException(status_code=404, detail="Document not found")
     return Response(status_code=204)
+
+
+# --- AI draft generation ---
+
+_ai_rate_limit: dict[str, list[datetime]] = defaultdict(list)
+_AI_RATE_LIMIT = 20
+_AI_RATE_WINDOW = timedelta(hours=1)
+
+
+def _check_ai_rate_limit(user_id: str) -> None:
+    now = datetime.utcnow()
+    window_start = now - _AI_RATE_WINDOW
+    recent_requests = [t for t in _ai_rate_limit.get(user_id, []) if t > window_start]
+
+    if not recent_requests:
+        _ai_rate_limit.pop(user_id, None)
+    elif len(recent_requests) >= _AI_RATE_LIMIT:
+        _ai_rate_limit[user_id] = recent_requests
+        raise HTTPException(status_code=429, detail="AI rate limit reached. Try again in an hour.")
+
+    recent_requests.append(now)
+    _ai_rate_limit[user_id] = recent_requests
+
+
+def _fetch_user_context(sb, user_id: str) -> dict:
+    profile_resp = sb.table("profiles").select("*").eq("user_id", user_id).execute()
+    profile = profile_resp.data[0] if profile_resp.data else {}
+    exp_resp = sb.table("experience").select("*").eq("user_id", user_id).order("position").execute()
+    skills_resp = sb.table("skills").select("*").eq("user_id", user_id).order("position").execute()
+    edu_resp = (
+        sb.table("education")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("start_year", desc=True)
+        .execute()
+    )
+    return {
+        "profile": profile,
+        "experience": exp_resp.data or [],
+        "skills": skills_resp.data or [],
+        "education": edu_resp.data or [],
+    }
+
+
+def _fmt_experience(entries: list) -> str:
+    if not entries:
+        return "None provided."
+    parts = []
+    for e in entries:
+        years = f"{e.get('start_year')}–{e.get('end_year') or 'Present'}"
+        line = f"- {e.get('title')} at {e.get('company')}"
+        if e.get("location"):
+            line += f", {e['location']}"
+        line += f" ({years})"
+        if e.get("description"):
+            line += f"\n  {e['description']}"
+        parts.append(line)
+    return "\n".join(parts)
+
+
+def _fmt_skills(entries: list) -> str:
+    if not entries:
+        return "None provided."
+    return ", ".join(
+        f"{e['name']}{' (' + e['proficiency'] + ')' if e.get('proficiency') else ''}"
+        for e in entries
+    )
+
+
+def _fmt_education(entries: list) -> str:
+    if not entries:
+        return "None provided."
+    parts = []
+    for e in entries:
+        years = f"{e.get('start_year')}–{e.get('end_year') or 'Present'}"
+        parts.append(
+            f"- {e.get('degree')} in {e.get('field_of_study')}, {e.get('institution')} ({years})"
+        )
+    return "\n".join(parts)
+
+
+def _build_resume_prompt(ctx: dict, job: dict) -> str:
+    p = ctx["profile"]
+    return f"""You are a professional resume writer.
+Generate a clean, ATS-friendly resume tailored to the job below.
+
+CANDIDATE:
+Name: {p.get('full_name') or 'Not provided'}
+Headline: {p.get('headline') or ''}
+Location: {p.get('location') or ''}
+Summary: {p.get('summary') or ''}
+LinkedIn: {p.get('linkedin_url') or ''}
+GitHub: {p.get('github_url') or ''}
+
+EXPERIENCE:
+{_fmt_experience(ctx['experience'])}
+
+EDUCATION:
+{_fmt_education(ctx['education'])}
+
+SKILLS:
+{_fmt_skills(ctx['skills'])}
+
+TARGET JOB:
+Title: {job.get('title')}
+Company: {job.get('company')}
+Description: {job.get('description') or 'Not provided'}
+
+Write a complete resume tailored to this role. Use this exact markdown hierarchy:
+- # for the candidate name only (once, at the top)
+- ## for section headings (Summary, Experience, Education, Skills)
+- ### for individual job titles / degree entries within sections
+- Plain text or bullet points (-) for descriptions and details
+
+Always include year ranges (e.g. 2020 – 2023, or 2021 – Present) for every
+experience and education entry. Never omit dates.
+Be concise and professional. Do not invent information not in the profile."""
+
+
+def _build_cover_letter_prompt(ctx: dict, job: dict) -> str:
+    p = ctx["profile"]
+    full_name = p.get("full_name") or "the candidate"
+    return f"""You are a professional cover letter writer.
+Write a compelling cover letter for the candidate below applying to the specified role.
+
+CANDIDATE:
+Name: {p.get('full_name') or 'Not provided'}
+Headline: {p.get('headline') or ''}
+Summary: {p.get('summary') or ''}
+
+EXPERIENCE:
+{_fmt_experience(ctx['experience'])}
+
+SKILLS:
+{_fmt_skills(ctx['skills'])}
+
+TARGET JOB:
+Title: {job.get('title')}
+Company: {job.get('company')}
+Description: {job.get('description') or 'Not provided'}
+
+Write a professional cover letter (3-4 paragraphs). Use markdown: # for the subject
+line, ## for any section if needed. Open with a strong hook referencing the role,
+highlight specific experience matching the job, and close with a call to action.
+End the letter with "Thank you for your consideration, {full_name}".
+Do not invent information not in the profile."""
+
+
+def _build_rewrite_prompt(content: str, instructions: str) -> str:
+    return f"""You are a professional document editor.
+Rewrite the draft below according to the user's instructions.
+
+CURRENT DRAFT:
+{content}
+
+USER INSTRUCTIONS:
+{instructions}
+
+Return only the rewritten document. No commentary, no preamble, no explanation."""
+
+
+def _call_groq(prompt: str) -> str:
+    groq_key = os.getenv("GROQ_API_KEY")
+    if not groq_key:
+        raise HTTPException(status_code=503, detail="AI service is not configured")
+    try:
+        client = Groq(api_key=groq_key)
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=2000,
+            temperature=0.7,
+        )
+        return response.choices[0].message.content.strip()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI generation failed: {str(e)}")
+
+
+class GenerateDraftRequest(BaseModel):
+    type: str
+    job_id: str
+
+
+class RewriteDraftRequest(BaseModel):
+    content: str
+    instructions: str
+
+
+@app.post("/ai/generate")
+def generate_draft(
+    request: GenerateDraftRequest, authorization: Optional[str] = Header(default=None)
+):
+    user_id = get_user_id(authorization)
+    if request.type not in {"resume", "cover_letter"}:
+        raise HTTPException(status_code=422, detail="type must be 'resume' or 'cover_letter'")
+    _check_ai_rate_limit(user_id)
+    sb = get_supabase()
+    job_resp = (
+        sb.table("jobs").select("*").eq("id", request.job_id).eq("user_id", user_id).execute()
+    )
+    if not job_resp.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job = job_resp.data[0]
+    ctx = _fetch_user_context(sb, user_id)
+    prompt = (
+        _build_resume_prompt(ctx, job)
+        if request.type == "resume"
+        else _build_cover_letter_prompt(ctx, job)
+    )
+    return {"content": _call_groq(prompt)}
+
+
+@app.post("/ai/rewrite")
+def rewrite_draft(
+    request: RewriteDraftRequest, authorization: Optional[str] = Header(default=None)
+):
+    user_id = get_user_id(authorization)
+    if not request.content.strip():
+        raise HTTPException(status_code=422, detail="content must not be blank")
+    if not request.instructions.strip():
+        raise HTTPException(status_code=422, detail="instructions must not be blank")
+    _check_ai_rate_limit(user_id)
+    prompt = _build_rewrite_prompt(request.content, request.instructions)
+    return {"content": _call_groq(prompt)}
 
 
 # --- Profile routes ---
