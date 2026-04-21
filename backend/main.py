@@ -638,9 +638,11 @@ def list_jobs(
     response = sb.table("jobs").select("*").eq("user_id", user_id).execute()
     all_user_jobs = response.data or []
 
-    visible_jobs = list(all_user_jobs) if include_archived else [
-        job for job in all_user_jobs if not _is_job_archived(job)
-    ]
+    visible_jobs = (
+        list(all_user_jobs)
+        if include_archived
+        else [job for job in all_user_jobs if not _is_job_archived(job)]
+    )
 
     normalized_query = (q or "").strip().lower()
     if normalized_query:
