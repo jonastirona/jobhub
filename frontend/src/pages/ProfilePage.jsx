@@ -176,6 +176,27 @@ const parseYear = (value) => {
   return Number(trimmed);
 };
 
+function validateExperienceForm(form, startYear, endYear, hasEndYear) {
+  if (!form.title.trim() || !form.company.trim())
+    return { isValid: false, hint: 'Title and Company are required.' };
+  if (startYear === null || startYear < 1900)
+    return { isValid: false, hint: 'Enter a valid Start Year (e.g. 2021).' };
+  if (hasEndYear && (endYear === null || endYear < startYear))
+    return { isValid: false, hint: 'End Year must be on or after Start Year.' };
+  return { isValid: true, hint: null };
+}
+
+function validateEducationForm(form, startYear, endYear, hasEndYear) {
+  if (!form.institution.trim()) return { isValid: false, hint: 'Institution is required.' };
+  if (!form.degree.trim()) return { isValid: false, hint: 'Degree is required.' };
+  if (!form.field_of_study.trim()) return { isValid: false, hint: 'Field of Study is required.' };
+  if (startYear === null || startYear < 1900)
+    return { isValid: false, hint: 'Enter a valid Start Year (e.g. 2021).' };
+  if (hasEndYear && (endYear === null || endYear < startYear))
+    return { isValid: false, hint: 'End Year must be on or after Start Year.' };
+  return { isValid: true, hint: null };
+}
+
 export default function ProfilePage() {
   const { session, user } = useAuth();
   const accessToken = session?.access_token;
@@ -496,22 +517,12 @@ export default function ProfilePage() {
   const expStartYear = parseYear(experienceForm.start_year);
   const expEndYear = parseYear(experienceForm.end_year);
   const expHasEndYear = String(experienceForm.end_year ?? '').trim() !== '';
-  const isExperienceFormValid =
-    experienceForm.title.trim().length > 0 &&
-    experienceForm.company.trim().length > 0 &&
-    expStartYear !== null &&
-    expStartYear >= 1900 &&
-    (!expHasEndYear || (expEndYear !== null && expEndYear >= expStartYear));
-
-  const experienceValidationHint = (() => {
-    if (!experienceForm.title.trim() || !experienceForm.company.trim())
-      return 'Title and Company are required.';
-    if (expStartYear === null || expStartYear < 1900)
-      return 'Enter a valid Start Year (e.g. 2021).';
-    if (expHasEndYear && (expEndYear === null || expEndYear < expStartYear))
-      return 'End Year must be on or after Start Year.';
-    return null;
-  })();
+  const { isValid: isExperienceFormValid, hint: experienceValidationHint } = validateExperienceForm(
+    experienceForm,
+    expStartYear,
+    expEndYear,
+    expHasEndYear
+  );
 
   const handleExperienceFormChange = (e) => {
     const { name, value } = e.target;
@@ -566,6 +577,8 @@ export default function ProfilePage() {
   };
 
   const handleExperienceDelete = async (id) => {
+    setExperienceSaveSuccess(false);
+    setExperienceValidationAttempted(false);
     const deleted = await deleteExperience(id);
     if (deleted && editingExperienceId === id) handleExperienceCancelEdit();
   };
@@ -573,24 +586,12 @@ export default function ProfilePage() {
   const eduStartYear = parseYear(educationForm.start_year);
   const eduEndYear = parseYear(educationForm.end_year);
   const eduHasEndYear = String(educationForm.end_year ?? '').trim() !== '';
-  const isEducationFormValid =
-    educationForm.institution.trim().length > 0 &&
-    educationForm.degree.trim().length > 0 &&
-    educationForm.field_of_study.trim().length > 0 &&
-    eduStartYear !== null &&
-    eduStartYear >= 1900 &&
-    (!eduHasEndYear || (eduEndYear !== null && eduEndYear >= eduStartYear));
-
-  const educationValidationHint = (() => {
-    if (!educationForm.institution.trim()) return 'Institution is required.';
-    if (!educationForm.degree.trim()) return 'Degree is required.';
-    if (!educationForm.field_of_study.trim()) return 'Field of Study is required.';
-    if (eduStartYear === null || eduStartYear < 1900)
-      return 'Enter a valid Start Year (e.g. 2021).';
-    if (eduHasEndYear && (eduEndYear === null || eduEndYear < eduStartYear))
-      return 'End Year must be on or after Start Year.';
-    return null;
-  })();
+  const { isValid: isEducationFormValid, hint: educationValidationHint } = validateEducationForm(
+    educationForm,
+    eduStartYear,
+    eduEndYear,
+    eduHasEndYear
+  );
 
   const handleEducationFormChange = (e) => {
     const { name, value } = e.target;
@@ -647,12 +648,16 @@ export default function ProfilePage() {
   };
 
   const handleEducationDelete = async (id) => {
+    setEducationSaveSuccess(false);
+    setEducationValidationAttempted(false);
     const deleted = await deleteEducation(id);
     if (deleted && editingEducationId === id) handleEducationCancelEdit();
   };
 
   const handleExperienceMoveUp = async (index) => {
     if (index === 0) return;
+    setExperienceSaveSuccess(false);
+    setExperienceValidationAttempted(false);
     const newOrder = [...experience];
     [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
     await reorderExperience(newOrder.map((e) => e.id));
@@ -660,6 +665,8 @@ export default function ProfilePage() {
 
   const handleExperienceMoveDown = async (index) => {
     if (index === experience.length - 1) return;
+    setExperienceSaveSuccess(false);
+    setExperienceValidationAttempted(false);
     const newOrder = [...experience];
     [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
     await reorderExperience(newOrder.map((e) => e.id));
@@ -707,12 +714,14 @@ export default function ProfilePage() {
   };
 
   const handleSkillDelete = async (id) => {
+    setSkillSaveSuccess(false);
     const deleted = await deleteSkill(id);
     if (deleted && editingSkillId === id) handleSkillCancelEdit();
   };
 
   const handleSkillMoveUp = async (index) => {
     if (index === 0) return;
+    setSkillSaveSuccess(false);
     const newOrder = [...skills];
     [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
     await reorderSkills(newOrder.map((s) => s.id));
@@ -720,6 +729,7 @@ export default function ProfilePage() {
 
   const handleSkillMoveDown = async (index) => {
     if (index === skills.length - 1) return;
+    setSkillSaveSuccess(false);
     const newOrder = [...skills];
     [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
     await reorderSkills(newOrder.map((s) => s.id));
