@@ -756,7 +756,7 @@ def create_job(job: JobCreate, authorization: Optional[str] = Header(default=Non
         "to_status": created["status"],
     }
     if created.get("applied_date"):
-        history_entry["changed_at"] = f"{created['applied_date']}T00:00:00+00:00"
+        history_entry["changed_at"] = f"{created['applied_date']}T12:00:00+00:00"
     history_response = sb.table("job_status_history").insert(history_entry).execute()
     if not history_response.data:
         sb.table("jobs").delete().eq("id", created["id"]).eq("user_id", user_id).execute()
