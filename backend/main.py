@@ -1478,9 +1478,7 @@ def reorder_experience(
             ),
         )
     if data.ids:
-        max_existing_pos = max(
-            (r.get("position", 0) for r in existing_resp.data), default=-1
-        )
+        max_existing_pos = max((r.get("position", 0) for r in existing_resp.data), default=-1)
         # Phase 1: batch upsert with full row data + temp positions to avoid the
         # UNIQUE (user_id, position) constraint. Using full rows means no columns are nulled.
         # Temp positions are all > max_existing_pos so they never collide with current values.
