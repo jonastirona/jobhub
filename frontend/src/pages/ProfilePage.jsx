@@ -176,6 +176,27 @@ const parseYear = (value) => {
   return Number(trimmed);
 };
 
+function validateExperienceForm(form, startYear, endYear, hasEndYear) {
+  if (!form.title.trim() || !form.company.trim())
+    return { isValid: false, hint: 'Title and Company are required.' };
+  if (startYear === null || startYear < 1900)
+    return { isValid: false, hint: 'Enter a valid Start Year (e.g. 2021).' };
+  if (hasEndYear && (endYear === null || endYear < startYear))
+    return { isValid: false, hint: 'End Year must be on or after Start Year.' };
+  return { isValid: true, hint: null };
+}
+
+function validateEducationForm(form, startYear, endYear, hasEndYear) {
+  if (!form.institution.trim()) return { isValid: false, hint: 'Institution is required.' };
+  if (!form.degree.trim()) return { isValid: false, hint: 'Degree is required.' };
+  if (!form.field_of_study.trim()) return { isValid: false, hint: 'Field of Study is required.' };
+  if (startYear === null || startYear < 1900)
+    return { isValid: false, hint: 'Enter a valid Start Year (e.g. 2021).' };
+  if (hasEndYear && (endYear === null || endYear < startYear))
+    return { isValid: false, hint: 'End Year must be on or after Start Year.' };
+  return { isValid: true, hint: null };
+}
+
 export default function ProfilePage() {
   const { session, user } = useAuth();
   const accessToken = session?.access_token;
@@ -236,12 +257,17 @@ export default function ProfilePage() {
 
   const [experienceForm, setExperienceForm] = useState(EMPTY_EXPERIENCE);
   const [editingExperienceId, setEditingExperienceId] = useState(null);
+  const [experienceSaveSuccess, setExperienceSaveSuccess] = useState(false);
+  const [experienceValidationAttempted, setExperienceValidationAttempted] = useState(false);
 
   const [educationForm, setEducationForm] = useState(EMPTY_EDUCATION);
   const [editingEducationId, setEditingEducationId] = useState(null);
+  const [educationSaveSuccess, setEducationSaveSuccess] = useState(false);
+  const [educationValidationAttempted, setEducationValidationAttempted] = useState(false);
 
   const [skillForm, setSkillForm] = useState(EMPTY_SKILL);
   const [editingSkillId, setEditingSkillId] = useState(null);
+  const [skillSaveSuccess, setSkillSaveSuccess] = useState(false);
 
   useEffect(() => {
     setFormData({
@@ -491,19 +517,23 @@ export default function ProfilePage() {
   const expStartYear = parseYear(experienceForm.start_year);
   const expEndYear = parseYear(experienceForm.end_year);
   const expHasEndYear = String(experienceForm.end_year ?? '').trim() !== '';
-  const isExperienceFormValid =
-    experienceForm.title.trim().length > 0 &&
-    experienceForm.company.trim().length > 0 &&
-    expStartYear !== null &&
-    expStartYear >= 1900 &&
-    (!expHasEndYear || (expEndYear !== null && expEndYear >= expStartYear));
+  const { isValid: isExperienceFormValid, hint: experienceValidationHint } = validateExperienceForm(
+    experienceForm,
+    expStartYear,
+    expEndYear,
+    expHasEndYear
+  );
 
   const handleExperienceFormChange = (e) => {
     const { name, value } = e.target;
+    setExperienceSaveSuccess(false);
+    setExperienceValidationAttempted(true);
     setExperienceForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleExperienceEdit = (entry) => {
+    setExperienceSaveSuccess(false);
+    setExperienceValidationAttempted(false);
     setEditingExperienceId(entry.id);
     setExperienceForm({
       title: entry.title || '',
@@ -516,12 +546,16 @@ export default function ProfilePage() {
   };
 
   const handleExperienceCancelEdit = () => {
+    setExperienceSaveSuccess(false);
+    setExperienceValidationAttempted(false);
     setEditingExperienceId(null);
     setExperienceForm(EMPTY_EXPERIENCE);
   };
 
   const handleExperienceSubmit = async (e) => {
     e.preventDefault();
+    setExperienceValidationAttempted(true);
+    setExperienceSaveSuccess(false);
     if (experienceSaving || !isExperienceFormValid) return;
     const payload = {
       title: experienceForm.title.trim(),
@@ -537,31 +571,38 @@ export default function ProfilePage() {
     if (saved) {
       setExperienceForm(EMPTY_EXPERIENCE);
       setEditingExperienceId(null);
+      setExperienceSaveSuccess(true);
+      setExperienceValidationAttempted(false);
     }
   };
 
   const handleExperienceDelete = async (id) => {
-    if (editingExperienceId === id) handleExperienceCancelEdit();
-    await deleteExperience(id);
+    setExperienceSaveSuccess(false);
+    setExperienceValidationAttempted(false);
+    const deleted = await deleteExperience(id);
+    if (deleted && editingExperienceId === id) handleExperienceCancelEdit();
   };
 
   const eduStartYear = parseYear(educationForm.start_year);
   const eduEndYear = parseYear(educationForm.end_year);
   const eduHasEndYear = String(educationForm.end_year ?? '').trim() !== '';
-  const isEducationFormValid =
-    educationForm.institution.trim().length > 0 &&
-    educationForm.degree.trim().length > 0 &&
-    educationForm.field_of_study.trim().length > 0 &&
-    eduStartYear !== null &&
-    eduStartYear >= 1900 &&
-    (!eduHasEndYear || (eduEndYear !== null && eduEndYear >= eduStartYear));
+  const { isValid: isEducationFormValid, hint: educationValidationHint } = validateEducationForm(
+    educationForm,
+    eduStartYear,
+    eduEndYear,
+    eduHasEndYear
+  );
 
   const handleEducationFormChange = (e) => {
     const { name, value } = e.target;
+    setEducationSaveSuccess(false);
+    setEducationValidationAttempted(true);
     setEducationForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleEducationEdit = (entry) => {
+    setEducationSaveSuccess(false);
+    setEducationValidationAttempted(false);
     setEditingEducationId(entry.id);
     setEducationForm({
       institution: entry.institution || '',
@@ -575,12 +616,16 @@ export default function ProfilePage() {
   };
 
   const handleEducationCancelEdit = () => {
+    setEducationSaveSuccess(false);
+    setEducationValidationAttempted(false);
     setEditingEducationId(null);
     setEducationForm(EMPTY_EDUCATION);
   };
 
   const handleEducationSubmit = async (e) => {
     e.preventDefault();
+    setEducationValidationAttempted(true);
+    setEducationSaveSuccess(false);
     if (educationSaving || !isEducationFormValid) return;
     const payload = {
       institution: educationForm.institution.trim(),
@@ -597,16 +642,22 @@ export default function ProfilePage() {
     if (saved) {
       setEducationForm(EMPTY_EDUCATION);
       setEditingEducationId(null);
+      setEducationSaveSuccess(true);
+      setEducationValidationAttempted(false);
     }
   };
 
   const handleEducationDelete = async (id) => {
-    if (editingEducationId === id) handleEducationCancelEdit();
-    await deleteEducation(id);
+    setEducationSaveSuccess(false);
+    setEducationValidationAttempted(false);
+    const deleted = await deleteEducation(id);
+    if (deleted && editingEducationId === id) handleEducationCancelEdit();
   };
 
   const handleExperienceMoveUp = async (index) => {
     if (index === 0) return;
+    setExperienceSaveSuccess(false);
+    setExperienceValidationAttempted(false);
     const newOrder = [...experience];
     [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
     await reorderExperience(newOrder.map((e) => e.id));
@@ -614,6 +665,8 @@ export default function ProfilePage() {
 
   const handleExperienceMoveDown = async (index) => {
     if (index === experience.length - 1) return;
+    setExperienceSaveSuccess(false);
+    setExperienceValidationAttempted(false);
     const newOrder = [...experience];
     [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
     await reorderExperience(newOrder.map((e) => e.id));
@@ -621,10 +674,12 @@ export default function ProfilePage() {
 
   const handleSkillFormChange = (e) => {
     const { name, value } = e.target;
+    setSkillSaveSuccess(false);
     setSkillForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSkillEdit = (skill) => {
+    setSkillSaveSuccess(false);
     setEditingSkillId(skill.id);
     setSkillForm({
       name: skill.name || '',
@@ -634,12 +689,14 @@ export default function ProfilePage() {
   };
 
   const handleSkillCancelEdit = () => {
+    setSkillSaveSuccess(false);
     setEditingSkillId(null);
     setSkillForm(EMPTY_SKILL);
   };
 
   const handleSkillSubmit = async (e) => {
     e.preventDefault();
+    setSkillSaveSuccess(false);
     if (skillsSaving || !skillForm.name.trim()) return;
     const payload = {
       name: skillForm.name.trim(),
@@ -652,16 +709,19 @@ export default function ProfilePage() {
     if (saved) {
       setSkillForm(EMPTY_SKILL);
       setEditingSkillId(null);
+      setSkillSaveSuccess(true);
     }
   };
 
   const handleSkillDelete = async (id) => {
-    if (editingSkillId === id) handleSkillCancelEdit();
-    await deleteSkill(id);
+    setSkillSaveSuccess(false);
+    const deleted = await deleteSkill(id);
+    if (deleted && editingSkillId === id) handleSkillCancelEdit();
   };
 
   const handleSkillMoveUp = async (index) => {
     if (index === 0) return;
+    setSkillSaveSuccess(false);
     const newOrder = [...skills];
     [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
     await reorderSkills(newOrder.map((s) => s.id));
@@ -669,6 +729,7 @@ export default function ProfilePage() {
 
   const handleSkillMoveDown = async (index) => {
     if (index === skills.length - 1) return;
+    setSkillSaveSuccess(false);
     const newOrder = [...skills];
     [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
     await reorderSkills(newOrder.map((s) => s.id));
@@ -1176,13 +1237,14 @@ export default function ProfilePage() {
                     </label>
                     <input
                       id="exp_start_year"
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       name="start_year"
                       value={experienceForm.start_year}
                       onChange={handleExperienceFormChange}
                       className="profile-input"
                       placeholder="e.g. 2020"
-                      min="1900"
+                      maxLength={4}
                     />
                   </div>
 
@@ -1192,13 +1254,14 @@ export default function ProfilePage() {
                     </label>
                     <input
                       id="exp_end_year"
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       name="end_year"
                       value={experienceForm.end_year}
                       onChange={handleExperienceFormChange}
                       className="profile-input"
                       placeholder="Leave blank if current"
-                      min="1900"
+                      maxLength={4}
                     />
                   </div>
 
@@ -1224,6 +1287,18 @@ export default function ProfilePage() {
                       {experienceSaveError}
                     </p>
                   )}
+                  {experienceSaveSuccess && !experienceSaveError && !experienceSaving && (
+                    <p className="profile-save-success" role="status">
+                      Experience saved.
+                    </p>
+                  )}
+                  {experienceValidationAttempted &&
+                    !isExperienceFormValid &&
+                    experienceValidationHint && (
+                      <p className="profile-validation-hint" role="note">
+                        {experienceValidationHint}
+                      </p>
+                    )}
                   <button
                     type="submit"
                     disabled={experienceSaving || !isExperienceFormValid}
@@ -1363,13 +1438,14 @@ export default function ProfilePage() {
                     </label>
                     <input
                       id="edu_start_year"
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       name="start_year"
                       value={educationForm.start_year}
                       onChange={handleEducationFormChange}
                       className="profile-input"
                       placeholder="e.g. 2020"
-                      min="1900"
+                      maxLength={4}
                     />
                   </div>
 
@@ -1379,13 +1455,14 @@ export default function ProfilePage() {
                     </label>
                     <input
                       id="edu_end_year"
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       name="end_year"
                       value={educationForm.end_year}
                       onChange={handleEducationFormChange}
                       className="profile-input"
                       placeholder="Leave blank if current"
-                      min="1900"
+                      maxLength={4}
                     />
                   </div>
 
@@ -1429,6 +1506,18 @@ export default function ProfilePage() {
                       {educationSaveError}
                     </p>
                   )}
+                  {educationSaveSuccess && !educationSaveError && !educationSaving && (
+                    <p className="profile-save-success" role="status">
+                      Education saved.
+                    </p>
+                  )}
+                  {educationValidationAttempted &&
+                    !isEducationFormValid &&
+                    educationValidationHint && (
+                      <p className="profile-validation-hint" role="note">
+                        {educationValidationHint}
+                      </p>
+                    )}
                   <button
                     type="submit"
                     disabled={educationSaving || !isEducationFormValid}
@@ -1591,6 +1680,11 @@ export default function ProfilePage() {
                   {skillsSaveError && (
                     <p className="profile-save-error" role="alert">
                       {skillsSaveError}
+                    </p>
+                  )}
+                  {skillSaveSuccess && !skillsSaveError && !skillsSaving && (
+                    <p className="profile-save-success" role="status">
+                      Skill saved.
                     </p>
                   )}
                   <button
