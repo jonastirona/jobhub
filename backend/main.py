@@ -129,7 +129,7 @@ class JobCreate(BaseModel):
     description: Optional[str] = None
     notes: Optional[str] = None
     recruiter_notes: Optional[str] = None
-    is_archived: Optional[bool] = False
+    is_archived: bool = False
 
 
 class JobUpdate(BaseModel):
