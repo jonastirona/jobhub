@@ -101,6 +101,8 @@ function renderPage({ savingDraft = false } = {}) {
 describe('Dashboard draft modal accessibility', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    global.fetch = jest.fn();
+    process.env.REACT_APP_BACKEND_URL = 'http://localhost:8000';
   });
 
   test('focuses Cancel button when draft modal opens', async () => {
@@ -168,5 +170,56 @@ describe('Dashboard draft modal accessibility', () => {
     expect(
       screen.getByRole('heading', { name: /save draft from job context/i })
     ).toBeInTheDocument();
+  });
+
+  test('passes includeArchived option when show archived is toggled', async () => {
+    renderPage();
+    expect(mockUseJobs).toHaveBeenLastCalledWith(
+      'test-access-token',
+      '',
+      expect.objectContaining({ includeArchived: false })
+    );
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /show archived jobs/i }));
+
+    expect(mockUseJobs).toHaveBeenLastCalledWith(
+      'test-access-token',
+      '',
+      expect.objectContaining({ includeArchived: true })
+    );
+  });
+
+  test('archives an active job from the actions column', async () => {
+    const refetch = jest.fn().mockResolvedValue(undefined);
+    mockUseJobs.mockReturnValue({
+      jobs: [{ ...JOB, is_archived: false }],
+      meta: {
+        total: 1,
+        page: 1,
+        pageSize: 10,
+        totalPages: 1,
+        availableStatuses: [],
+        availableLocations: [],
+        statusCounts: { interviewing: 0, offered: 0 },
+      },
+      loading: false,
+      error: null,
+      refetch,
+    });
+    global.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+
+    render(<Dashboard />);
+    fireEvent.click(screen.getByRole('button', { name: /archive application backend engineer/i }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/jobs/job-1',
+      expect.objectContaining({
+        method: 'PUT',
+      })
+    );
+    const [, request] = global.fetch.mock.calls[0];
+    expect(request.body).toBe(JSON.stringify({ is_archived: true }));
+    await waitFor(() => expect(refetch).toHaveBeenCalled());
   });
 });

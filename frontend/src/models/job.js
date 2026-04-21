@@ -7,7 +7,6 @@ export const JOB_STATUSES = [
   { value: 'accepted', label: 'Accepted' },
   { value: 'declined', label: 'Declined' },
   { value: 'withdrawn', label: 'Withdrawn' },
-  { value: 'archived', label: 'Archived' },
 ];
 
 export const JOB_STATUS_ALIAS = { interview: 'interviewing', offer: 'offered' };

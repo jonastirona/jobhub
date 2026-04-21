@@ -282,6 +282,33 @@ def test_list_jobs_empty():
     assert body["total"] == 0
 
 
+def test_list_jobs_hides_archived_by_default():
+    active_job = {**SAMPLE_JOB, "id": "job-active", "is_archived": False}
+    archived_job = {**SAMPLE_JOB, "id": "job-archived", "is_archived": True}
+    mock_sb, _, _ = make_mock_sb(data=[active_job, archived_job])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/jobs", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert [row["id"] for row in body["items"]] == ["job-active"]
+
+
+def test_list_jobs_include_archived_returns_archived_rows():
+    active_job = {**SAMPLE_JOB, "id": "job-active", "is_archived": False}
+    archived_job = {**SAMPLE_JOB, "id": "job-archived", "is_archived": True}
+    mock_sb, _, _ = make_mock_sb(data=[active_job, archived_job])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/jobs?include_archived=true",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    assert {row["id"] for row in body["items"]} == {"job-active", "job-archived"}
+
+
 # Verifies list query always filters by authenticated user_id.
 def test_list_jobs_scoped_to_user():
     """Verify the query filters by user_id."""

@@ -25,6 +25,7 @@ export function useJobs(accessToken, searchTerm = '', options = {}) {
   const statuses = options.statuses ?? EMPTY_ARRAY;
   const locations = options.locations ?? EMPTY_ARRAY;
   const deadlineStates = options.deadlineStates ?? EMPTY_ARRAY;
+  const includeArchived = options.includeArchived ?? false;
   const sortBy = options.sortBy ?? 'created_at';
   const page = options.page ?? 1;
   const pageSize = options.pageSize ?? 10;
@@ -72,6 +73,7 @@ export function useJobs(accessToken, searchTerm = '', options = {}) {
       params.set('page', String(page));
       params.set('page_size', String(pageSize));
       params.set('sort_by', sortBy);
+      if (includeArchived) params.set('include_archived', 'true');
       statuses.forEach((status) => params.append('statuses', status));
       locations.forEach((location) => params.append('locations', location));
       deadlineStates.forEach((deadlineState) => params.append('deadline_states', deadlineState));
@@ -113,7 +115,17 @@ export function useJobs(accessToken, searchTerm = '', options = {}) {
         setLoading(false);
       }
     }
-  }, [accessToken, deadlineStates, locations, page, pageSize, searchTerm, sortBy, statuses]);
+  }, [
+    accessToken,
+    deadlineStates,
+    includeArchived,
+    locations,
+    page,
+    pageSize,
+    searchTerm,
+    sortBy,
+    statuses,
+  ]);
 
   useEffect(() => {
     fetchJobs();

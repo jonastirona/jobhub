@@ -80,6 +80,23 @@ describe('useJobs', () => {
     );
   });
 
+  test('GET /jobs includes include_archived when enabled', async () => {
+    process.env.REACT_APP_BACKEND_URL = 'http://localhost:8000';
+    global.fetch = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve([]) }));
+    renderHook(() =>
+      useJobs('tok', '', {
+        includeArchived: true,
+      })
+    );
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/jobs?page=1&page_size=10&sort_by=created_at&include_archived=true',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer tok' },
+      })
+    );
+  });
+
   // Value canonicalization (trim / casefold-dedupe / title-case / sort) for
   // available_locations is the backend's responsibility now (see
   // backend/main.py::_build_available_locations and its backend tests). The

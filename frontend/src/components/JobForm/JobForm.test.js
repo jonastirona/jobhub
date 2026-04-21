@@ -251,7 +251,6 @@ describe('status dropdown options', () => {
         'declined',
         'rejected',
         'withdrawn',
-        'archived',
       ])
     );
   });
@@ -269,13 +268,12 @@ describe('status dropdown options', () => {
       'Accepted',
       'Declined',
       'Withdrawn',
-      'Archived',
     ]);
   });
 
-  test('has exactly nine options', () => {
+  test('has exactly eight options', () => {
     render(<JobForm {...baseProps} />);
-    expect(screen.getByLabelText(/status/i).options).toHaveLength(9);
+    expect(screen.getByLabelText(/status/i).options).toHaveLength(8);
   });
 });
 
