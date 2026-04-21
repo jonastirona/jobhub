@@ -1473,10 +1473,14 @@ def reorder_experience(
 ):
     user_id = get_user_id(authorization)
     sb = get_supabase()
-    existing_resp = sb.table("experience").select("id,position").eq("user_id", user_id).execute()
+    try:
+        existing_resp = sb.table("experience").select("*").eq("user_id", user_id).execute()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to validate experience for reorder")
     if existing_resp.data is None:
         raise HTTPException(status_code=500, detail="Failed to validate experience for reorder")
-    existing_ids = [r["id"] for r in existing_resp.data]
+    existing_by_id = {r["id"]: r for r in existing_resp.data}
+    existing_ids = list(existing_by_id.keys())
     if len(data.ids) != len(set(data.ids)):
         raise HTTPException(status_code=400, detail="Experience ids must be unique")
     if set(data.ids) != set(existing_ids):
@@ -1487,37 +1491,55 @@ def reorder_experience(
             ),
         )
     if data.ids:
-        # Capture current positions for best-effort recovery if phase 2 fails.
         original_positions = {r["id"]: r["position"] for r in existing_resp.data if "position" in r}
-        # Phase 1: shift all positions to temporary out-of-range values to avoid
-        # violating the UNIQUE (user_id, position) constraint during swaps.
-        temp_updates = [
-            {"id": entry_id, "user_id": user_id, "position": len(data.ids) + i}
+        max_existing_pos = max((r.get("position", 0) for r in existing_resp.data), default=-1)
+
+        def _restore_experience_positions():
+            try:
+                for entry_id, pos in original_positions.items():
+                    sb.table("experience").update({"position": pos}).eq("id", entry_id).eq(
+                        "user_id", user_id
+                    ).execute()
+            except Exception:
+                pass
+
+        # Phase 1: batch upsert with full row data + temp positions to avoid the
+        # UNIQUE (user_id, position) constraint. Using full rows means no columns are nulled.
+        # Temp positions are all > max_existing_pos so they never collide with current values.
+        temp_rows = [
+            {**existing_by_id[entry_id], "position": max_existing_pos + 1 + i}
             for i, entry_id in enumerate(data.ids)
         ]
-        temp_resp = sb.table("experience").upsert(temp_updates, on_conflict="id").execute()
-        if temp_resp.data is None:
+        try:
+            sb.table("experience").upsert(temp_rows, on_conflict="id").execute()
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
             raise HTTPException(status_code=500, detail="Failed to reorder experience")
-        # Phase 2: write the final 0..n-1 positions.
-        final_updates = [
-            {"id": entry_id, "user_id": user_id, "position": position}
+
+        # Phase 2: batch upsert with final 0..n-1 positions.
+        # After phase 1 all positions are temp values, so 0..n-1 are free.
+        final_rows = [
+            {**existing_by_id[entry_id], "position": position}
             for position, entry_id in enumerate(data.ids)
         ]
-        update_resp = sb.table("experience").upsert(final_updates, on_conflict="id").execute()
-        if update_resp.data is None:
-            # Best-effort: attempt to restore original positions so rows are not
-            # left with out-of-range position values from phase 1.
-            if original_positions:
-                recovery_updates = [
-                    {"id": entry_id, "user_id": user_id, "position": pos}
-                    for entry_id, pos in original_positions.items()
-                ]
-                sb.table("experience").upsert(recovery_updates, on_conflict="id").execute()
+        try:
+            sb.table("experience").upsert(final_rows, on_conflict="id").execute()
+            result = sb.table("experience").select("*").eq("user_id", user_id).execute()
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+            _restore_experience_positions()
             raise HTTPException(status_code=500, detail="Failed to reorder experience")
-    response = sb.table("experience").select("*").eq("user_id", user_id).order("position").execute()
-    if response.data is None:
-        raise HTTPException(status_code=500, detail="Failed to fetch reordered experience")
-    return response.data
+
+        if not result.data or {r["id"] for r in result.data} != set(data.ids):
+            _restore_experience_positions()
+            raise HTTPException(status_code=500, detail="Failed to reorder experience")
+        updated_by_id = {r["id"]: r for r in result.data}
+        return [updated_by_id[entry_id] for entry_id in data.ids]
+    return []
 
 
 @app.put("/experience/{entry_id}")
@@ -1705,10 +1727,14 @@ def create_skill(skill: SkillCreate, authorization: Optional[str] = Header(defau
 def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
     sb = get_supabase()
-    existing_resp = sb.table("skills").select("id,position").eq("user_id", user_id).execute()
+    try:
+        existing_resp = sb.table("skills").select("*").eq("user_id", user_id).execute()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to validate skills for reorder")
     if existing_resp.data is None:
         raise HTTPException(status_code=500, detail="Failed to validate skills for reorder")
-    existing_ids = [r["id"] for r in existing_resp.data]
+    existing_by_id = {r["id"]: r for r in existing_resp.data}
+    existing_ids = list(existing_by_id.keys())
     if len(data.ids) != len(set(data.ids)):
         raise HTTPException(status_code=400, detail="Skill ids must be unique")
     if set(data.ids) != set(existing_ids):
@@ -1717,37 +1743,53 @@ def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(def
             detail="ids must contain each of the authenticated user's skills exactly once",
         )
     if data.ids:
-        # Capture current positions for best-effort recovery if phase 2 fails.
         original_positions = {r["id"]: r["position"] for r in existing_resp.data if "position" in r}
-        # Phase 1: shift all positions to temporary out-of-range values to avoid
-        # violating the UNIQUE (user_id, position) constraint during swaps.
-        temp_updates = [
-            {"id": skill_id, "user_id": user_id, "position": len(data.ids) + i}
+        max_existing_pos = max((r.get("position", 0) for r in existing_resp.data), default=-1)
+
+        def _restore_skills_positions():
+            try:
+                for skill_id, pos in original_positions.items():
+                    sb.table("skills").update({"position": pos}).eq("id", skill_id).eq(
+                        "user_id", user_id
+                    ).execute()
+            except Exception:
+                pass
+
+        # Phase 1: batch upsert with full row data + temp positions.
+        # Full rows prevent any columns from being nulled out.
+        temp_rows = [
+            {**existing_by_id[skill_id], "position": max_existing_pos + 1 + i}
             for i, skill_id in enumerate(data.ids)
         ]
-        temp_resp = sb.table("skills").upsert(temp_updates, on_conflict="id").execute()
-        if temp_resp.data is None:
+        try:
+            sb.table("skills").upsert(temp_rows, on_conflict="id").execute()
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
             raise HTTPException(status_code=500, detail="Failed to reorder skills")
-        # Phase 2: write the final 0..n-1 positions.
-        final_updates = [
-            {"id": skill_id, "user_id": user_id, "position": position}
+
+        # Phase 2: batch upsert with final 0..n-1 positions.
+        final_rows = [
+            {**existing_by_id[skill_id], "position": position}
             for position, skill_id in enumerate(data.ids)
         ]
-        update_resp = sb.table("skills").upsert(final_updates, on_conflict="id").execute()
-        if update_resp.data is None:
-            # Best-effort: attempt to restore original positions so rows are not
-            # left with out-of-range position values from phase 1.
-            if original_positions:
-                recovery_updates = [
-                    {"id": skill_id, "user_id": user_id, "position": pos}
-                    for skill_id, pos in original_positions.items()
-                ]
-                sb.table("skills").upsert(recovery_updates, on_conflict="id").execute()
+        try:
+            sb.table("skills").upsert(final_rows, on_conflict="id").execute()
+            result = sb.table("skills").select("*").eq("user_id", user_id).execute()
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+            _restore_skills_positions()
             raise HTTPException(status_code=500, detail="Failed to reorder skills")
-    response = sb.table("skills").select("*").eq("user_id", user_id).order("position").execute()
-    if response.data is None:
-        raise HTTPException(status_code=500, detail="Failed to fetch reordered skills")
-    return response.data
+
+        if not result.data or {r["id"] for r in result.data} != set(data.ids):
+            _restore_skills_positions()
+            raise HTTPException(status_code=500, detail="Failed to reorder skills")
+        updated_by_id = {r["id"]: r for r in result.data}
+        return [updated_by_id[skill_id] for skill_id in data.ids]
+    return []
 
 
 @app.put("/skills/{skill_id}")

@@ -433,9 +433,11 @@
 }
 
 .profile-btn-save:disabled {
-  opacity: 0.6;
+  opacity: 0.45;
   cursor: not-allowed;
   transform: none;
+  background: linear-gradient(135deg, var(--orange-400, #fb923c), var(--orange-500));
+  filter: grayscale(0.2);
 }
 
 .profile-save-error {
@@ -452,6 +454,12 @@
   border: 1px solid var(--green);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
+}
+
+.profile-validation-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted, #6b7280);
 }
 
 .profile-field-error {

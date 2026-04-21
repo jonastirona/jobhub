@@ -2571,11 +2571,11 @@ def test_reorder_experience_success():
         "position": 1,
     }
     reordered = [{**exp2, "position": 0}, {**SAMPLE_EXPERIENCE, "position": 1}]
-    # 1 select existing IDs + 1 temp upsert + 1 final upsert + 1 final select
+    # 1 full-row select(*) + 1 temp upsert + 1 final upsert + 1 final select(*)
     mock_sb, _ = _make_mock_sb_with_side_effects(
-        [{"id": exp2["id"]}, {"id": SAMPLE_EXPERIENCE["id"]}],
-        reordered,
-        reordered,
+        [exp2, SAMPLE_EXPERIENCE],
+        None,
+        None,
         reordered,
     )
     with patch("main.get_supabase", return_value=mock_sb):
@@ -2592,7 +2592,7 @@ def test_reorder_experience_success():
 
 
 def test_reorder_experience_empty_ids():
-    mock_sb, _ = _make_mock_sb_with_side_effects([], [])
+    mock_sb, _ = _make_mock_sb_with_side_effects([])
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.put(
             "/experience/reorder",
@@ -3507,11 +3507,11 @@ def test_create_skill_db_failure_returns_500():
 def test_reorder_skills_success():
     skill2 = {**SAMPLE_SKILL, "id": "skill-uuid-2222", "name": "Python", "position": 1}
     reordered = [{**skill2, "position": 0}, {**SAMPLE_SKILL, "position": 1}]
-    # 1 select existing IDs + 1 temp upsert + 1 final upsert + 1 final select
+    # 1 full-row select(*) + 1 temp upsert + 1 final upsert + 1 final select(*)
     mock_sb, _ = _make_mock_sb_with_side_effects(
-        [{"id": skill2["id"]}, {"id": SAMPLE_SKILL["id"]}],
-        reordered,
-        reordered,
+        [skill2, SAMPLE_SKILL],
+        None,
+        None,
         reordered,
     )
     with patch("main.get_supabase", return_value=mock_sb):
@@ -3528,8 +3528,8 @@ def test_reorder_skills_success():
 
 
 def test_reorder_skills_empty_ids():
-    # select existing IDs (empty), skip upsert, final select
-    mock_sb, _ = _make_mock_sb_with_side_effects([], [])
+    # select existing (empty), skip upsert, reconstruct locally
+    mock_sb, _ = _make_mock_sb_with_side_effects([])
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.put(
             "/skills/reorder",
