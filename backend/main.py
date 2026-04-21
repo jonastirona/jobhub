@@ -1242,7 +1242,6 @@ def _call_groq(prompt: str) -> str:
     if not groq_key:
         raise HTTPException(status_code=503, detail="AI service is not configured")
     try:
-
         client = Groq(api_key=groq_key)
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
