@@ -2544,7 +2544,7 @@ def test_reorder_experience_success():
         "position": 1,
     }
     reordered = [{**exp2, "position": 0}, {**SAMPLE_EXPERIENCE, "position": 1}]
-    # 1 select id,position + 1 temp upsert + 1 final upsert + 1 final select
+    # 1 full-row select(*) + 1 temp upsert + 1 final upsert + 1 final select(*)
     mock_sb, _ = _make_mock_sb_with_side_effects(
         [exp2, SAMPLE_EXPERIENCE],
         None,
@@ -3480,7 +3480,7 @@ def test_create_skill_db_failure_returns_500():
 def test_reorder_skills_success():
     skill2 = {**SAMPLE_SKILL, "id": "skill-uuid-2222", "name": "Python", "position": 1}
     reordered = [{**skill2, "position": 0}, {**SAMPLE_SKILL, "position": 1}]
-    # 1 select id,position + 1 temp upsert + 1 final upsert + 1 final select
+    # 1 full-row select(*) + 1 temp upsert + 1 final upsert + 1 final select(*)
     mock_sb, _ = _make_mock_sb_with_side_effects(
         [skill2, SAMPLE_SKILL],
         None,

@@ -1478,7 +1478,18 @@ def reorder_experience(
             ),
         )
     if data.ids:
+        original_positions = {r["id"]: r["position"] for r in existing_resp.data if "position" in r}
         max_existing_pos = max((r.get("position", 0) for r in existing_resp.data), default=-1)
+
+        def _restore_experience_positions():
+            try:
+                for entry_id, pos in original_positions.items():
+                    sb.table("experience").update({"position": pos}).eq("id", entry_id).eq(
+                        "user_id", user_id
+                    ).execute()
+            except Exception:
+                pass
+
         # Phase 1: batch upsert with full row data + temp positions to avoid the
         # UNIQUE (user_id, position) constraint. Using full rows means no columns are nulled.
         # Temp positions are all > max_existing_pos so they never collide with current values.
@@ -1488,8 +1499,11 @@ def reorder_experience(
         ]
         try:
             sb.table("experience").upsert(temp_rows, on_conflict="id").execute()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Phase 1 failed: {e}")
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail="Failed to reorder experience")
 
         # Phase 2: batch upsert with final 0..n-1 positions.
         # After phase 1 all positions are temp values, so 0..n-1 are free.
@@ -1500,10 +1514,15 @@ def reorder_experience(
         try:
             sb.table("experience").upsert(final_rows, on_conflict="id").execute()
             result = sb.table("experience").select("*").eq("user_id", user_id).execute()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Phase 2 failed: {e}")
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+            _restore_experience_positions()
+            raise HTTPException(status_code=500, detail="Failed to reorder experience")
 
         if not result.data or {r["id"] for r in result.data} != set(data.ids):
+            _restore_experience_positions()
             raise HTTPException(status_code=500, detail="Failed to reorder experience")
         updated_by_id = {r["id"]: r for r in result.data}
         return [updated_by_id[entry_id] for entry_id in data.ids]
@@ -1711,7 +1730,18 @@ def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(def
             detail="ids must contain each of the authenticated user's skills exactly once",
         )
     if data.ids:
+        original_positions = {r["id"]: r["position"] for r in existing_resp.data if "position" in r}
         max_existing_pos = max((r.get("position", 0) for r in existing_resp.data), default=-1)
+
+        def _restore_skills_positions():
+            try:
+                for skill_id, pos in original_positions.items():
+                    sb.table("skills").update({"position": pos}).eq("id", skill_id).eq(
+                        "user_id", user_id
+                    ).execute()
+            except Exception:
+                pass
+
         # Phase 1: batch upsert with full row data + temp positions.
         # Full rows prevent any columns from being nulled out.
         temp_rows = [
@@ -1720,8 +1750,11 @@ def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(def
         ]
         try:
             sb.table("skills").upsert(temp_rows, on_conflict="id").execute()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Phase 1 failed: {e}")
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail="Failed to reorder skills")
 
         # Phase 2: batch upsert with final 0..n-1 positions.
         final_rows = [
@@ -1731,10 +1764,15 @@ def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(def
         try:
             sb.table("skills").upsert(final_rows, on_conflict="id").execute()
             result = sb.table("skills").select("*").eq("user_id", user_id).execute()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Phase 2 failed: {e}")
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+            _restore_skills_positions()
+            raise HTTPException(status_code=500, detail="Failed to reorder skills")
 
         if not result.data or {r["id"] for r in result.data} != set(data.ids):
+            _restore_skills_positions()
             raise HTTPException(status_code=500, detail="Failed to reorder skills")
         updated_by_id = {r["id"]: r for r in result.data}
         return [updated_by_id[skill_id] for skill_id in data.ids]
