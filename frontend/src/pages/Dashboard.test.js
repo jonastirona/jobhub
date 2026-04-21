@@ -67,7 +67,7 @@ const JOB = {
   recruiter_notes: 'Recruiter contact',
 };
 
-function renderPage({ savingDraft = false } = {}) {
+function renderPage({ savingDraft = false, jobsHookOverrides = {} } = {}) {
   mockUseAuth.mockReturnValue({
     session: { access_token: 'test-access-token' },
   });
@@ -86,6 +86,7 @@ function renderPage({ savingDraft = false } = {}) {
     loading: false,
     error: null,
     refetch: jest.fn(),
+    ...jobsHookOverrides,
   });
 
   mockUseDocuments.mockReturnValue({
@@ -191,24 +192,25 @@ describe('Dashboard draft modal accessibility', () => {
 
   test('archives an active job from the actions column', async () => {
     const refetch = jest.fn().mockResolvedValue(undefined);
-    mockUseJobs.mockReturnValue({
-      jobs: [{ ...JOB, is_archived: false }],
-      meta: {
-        total: 1,
-        page: 1,
-        pageSize: 10,
-        totalPages: 1,
-        availableStatuses: [],
-        availableLocations: [],
-        statusCounts: { interviewing: 0, offered: 0 },
-      },
-      loading: false,
-      error: null,
-      refetch,
-    });
     global.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
 
-    render(<Dashboard />);
+    renderPage({
+      jobsHookOverrides: {
+        jobs: [{ ...JOB, is_archived: false }],
+        meta: {
+          total: 1,
+          page: 1,
+          pageSize: 10,
+          totalPages: 1,
+          availableStatuses: [],
+          availableLocations: [],
+          statusCounts: { interviewing: 0, offered: 0 },
+        },
+        loading: false,
+        error: null,
+        refetch,
+      },
+    });
     fireEvent.click(screen.getByRole('button', { name: /archive application backend engineer/i }));
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
