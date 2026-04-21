@@ -54,6 +54,7 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
 
     setSaving(true);
     setFormError(null);
+    setActionError(null);
 
     try {
       const res = await fetch(`${backendBase}/reminders`, {

@@ -8,7 +8,12 @@ export function useReminders(accessToken) {
   const fetchReminders = useCallback(
     async (signal) => {
       const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
-      if (!accessToken || !backendBase) return;
+      if (!accessToken || !backendBase) {
+        setReminders([]);
+        setError(null);
+        setLoading(false);
+        return;
+      }
 
       setLoading(true);
       setError(null);
