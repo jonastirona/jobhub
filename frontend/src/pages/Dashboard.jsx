@@ -125,10 +125,13 @@ export default function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedSortBy, setSelectedSortBy] = useState('created_at');
+  const [showArchivedJobs, setShowArchivedJobs] = useState(false);
+  const [updatingArchiveJobId, setUpdatingArchiveJobId] = useState(null);
   const { jobs, meta, loading, error, refetch } = useJobs(session?.access_token, searchTerm, {
     statuses: selectedStatuses,
     locations: selectedLocations,
     deadlineStates: selectedDeadlineStates,
+    includeArchived: showArchivedJobs,
     sortBy: selectedSortBy,
     page: currentPage,
     pageSize,
@@ -169,6 +172,7 @@ export default function Dashboard() {
     selectedStatuses,
     selectedLocations,
     selectedDeadlineStates,
+    showArchivedJobs,
     pageSize,
     selectedSortBy,
   ]);
@@ -451,6 +455,36 @@ export default function Dashboard() {
     }
   }
 
+  async function updateArchiveState(job, isArchivedNext) {
+    if (!job?.id || updatingArchiveJobId || deletingJobId) return;
+    const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '');
+    if (!backendBase || !session?.access_token) {
+      setDeleteError('Unable to update archive state right now. Please refresh and try again.');
+      return;
+    }
+
+    setDeleteError('');
+    setUpdatingArchiveJobId(job.id);
+    try {
+      const res = await fetch(`${backendBase}/jobs/${job.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ is_archived: isArchivedNext }),
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to update archive state (${res.status})`);
+      }
+      await refetch();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to update archive state.');
+    } finally {
+      setUpdatingArchiveJobId(null);
+    }
+  }
+
   return (
     <AppShell title="My Dashboard" notificationCount={0}>
       <div className="dashboard-content">
@@ -608,6 +642,18 @@ export default function Dashboard() {
                   ))}
                 </select>
               </label>
+              <label className="dashboard-sort-control" htmlFor="show-archived-jobs">
+                <span className="dashboard-sort-label">View</span>
+                <span>
+                  <input
+                    id="show-archived-jobs"
+                    type="checkbox"
+                    checked={showArchivedJobs}
+                    onChange={(event) => setShowArchivedJobs(event.target.checked)}
+                  />{' '}
+                  Show archived jobs
+                </span>
+              </label>
             </div>
           </div>
 
@@ -723,9 +769,22 @@ export default function Dashboard() {
                           <button
                             type="button"
                             className="action-btn"
+                            aria-label={
+                              job.is_archived
+                                ? `Restore application ${job.title}`
+                                : `Archive application ${job.title}`
+                            }
+                            onClick={() => updateArchiveState(job, !job.is_archived)}
+                            disabled={deletingJobId === job.id || updatingArchiveJobId === job.id}
+                          >
+                            {updatingArchiveJobId === job.id ? '…' : job.is_archived ? '↩️' : '📦'}
+                          </button>
+                          <button
+                            type="button"
+                            className="action-btn"
                             aria-label={`Delete application ${job.title}`}
                             onClick={() => requestDelete(job)}
-                            disabled={deletingJobId === job.id}
+                            disabled={deletingJobId === job.id || updatingArchiveJobId === job.id}
                           >
                             {deletingJobId === job.id ? '…' : '🗑'}
                           </button>

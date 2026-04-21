@@ -129,6 +129,7 @@ class JobCreate(BaseModel):
     description: Optional[str] = None
     notes: Optional[str] = None
     recruiter_notes: Optional[str] = None
+    is_archived: bool = False
 
 
 class JobUpdate(BaseModel):
@@ -141,6 +142,7 @@ class JobUpdate(BaseModel):
     description: Optional[str] = None
     notes: Optional[str] = None
     recruiter_notes: Optional[str] = None
+    is_archived: Optional[bool] = None
 
 
 class ProfileUpsert(BaseModel):
@@ -442,6 +444,10 @@ def _job_matches_query(job: dict, normalized_query: str) -> bool:
     return any(normalized_query in fragment for fragment in _job_search_fragments(job))
 
 
+def _is_job_archived(job: dict) -> bool:
+    return bool(job.get("is_archived") is True)
+
+
 def _normalize_list_param(values: Optional[list[str]]) -> list[str]:
     """Normalize a FastAPI repeated query-param into a clean list of strings.
 
@@ -610,6 +616,7 @@ def list_jobs(
     locations: Optional[list[str]] = Query(default=None),
     deadline_states: Optional[list[str]] = Query(default=None),
     sort_by: str = Query(default="created_at"),
+    include_archived: bool = Query(default=False),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=100),
 ):
@@ -631,13 +638,19 @@ def list_jobs(
     response = sb.table("jobs").select("*").eq("user_id", user_id).execute()
     all_user_jobs = response.data or []
 
+    visible_jobs = (
+        list(all_user_jobs)
+        if include_archived
+        else [job for job in all_user_jobs if not _is_job_archived(job)]
+    )
+
     normalized_query = (q or "").strip().lower()
     if normalized_query:
         jobs_after_search = [
-            job for job in all_user_jobs if _job_matches_query(job, normalized_query)
+            job for job in visible_jobs if _job_matches_query(job, normalized_query)
         ]
     else:
-        jobs_after_search = list(all_user_jobs)
+        jobs_after_search = list(visible_jobs)
 
     today = date.today()
 
@@ -741,7 +754,7 @@ def create_job(job: JobCreate, authorization: Optional[str] = Header(default=Non
     if "status" in payload:
         payload["status"] = _normalize_job_status(payload["status"])
     payload["user_id"] = user_id
-
+    payload["is_archived"] = bool(payload.get("is_archived", False))
     if "applied_date" in payload and payload["applied_date"] is not None:
         payload["applied_date"] = str(payload["applied_date"])
     if "deadline" in payload and payload["deadline"] is not None:
