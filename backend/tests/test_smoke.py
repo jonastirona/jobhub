@@ -4044,13 +4044,14 @@ def test_education_update_all_optional():
 def test_ai_generate_returns_content_from_groq():
     mock_sb = _make_mock_sb_with_side_effects(
         [SAMPLE_JOB],  # job lookup
-        [{}],          # profile
-        [],            # experience
-        [],            # skills
-        [],            # education
+        [{}],  # profile
+        [],  # experience
+        [],  # skills
+        [],  # education
     )[0]
-    with patch("main.get_supabase", return_value=mock_sb), patch(
-        "main._call_groq", return_value="Generated resume content"
+    with (
+        patch("main.get_supabase", return_value=mock_sb),
+        patch("main._call_groq", return_value="Generated resume content"),
     ):
         response = client.post(
             "/ai/generate",
@@ -4075,8 +4076,9 @@ def test_ai_generate_rejects_invalid_type():
 
 def test_ai_rewrite_returns_rewritten_content():
     mock_sb, _, _ = make_mock_sb()
-    with patch("main.get_supabase", return_value=mock_sb), patch(
-        "main._call_groq", return_value="Rewritten cover letter"
+    with (
+        patch("main.get_supabase", return_value=mock_sb),
+        patch("main._call_groq", return_value="Rewritten cover letter"),
     ):
         response = client.post(
             "/ai/rewrite",
