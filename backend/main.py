@@ -1488,7 +1488,9 @@ def reorder_experience(
             {"id": entry_id, "user_id": user_id, "position": position}
             for position, entry_id in enumerate(data.ids)
         ]
-        update_resp = sb.table("experience").upsert(final_updates, on_conflict="id").select("*").execute()
+        update_resp = (
+            sb.table("experience").upsert(final_updates, on_conflict="id").select("*").execute()
+        )
         if not update_resp.data or {r["id"] for r in update_resp.data} != set(data.ids):
             if original_positions:
                 recovery_updates = [
@@ -1714,7 +1716,9 @@ def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(def
             {"id": skill_id, "user_id": user_id, "position": position}
             for position, skill_id in enumerate(data.ids)
         ]
-        update_resp = sb.table("skills").upsert(final_updates, on_conflict="id").select("*").execute()
+        update_resp = (
+            sb.table("skills").upsert(final_updates, on_conflict="id").select("*").execute()
+        )
         if not update_resp.data or {r["id"] for r in update_resp.data} != set(data.ids):
             if original_positions:
                 recovery_updates = [
