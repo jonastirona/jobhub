@@ -1393,7 +1393,7 @@ def test_create_job_history_uses_applied_date_as_changed_at():
             headers={"authorization": AUTH_HEADER},
         )
     history_payload = mock_query.insert.call_args_list[-1][0][0]
-    assert history_payload["changed_at"] == "2026-04-01T00:00:00+00:00"
+    assert history_payload["changed_at"] == "2026-04-01T12:00:00+00:00"
 
 
 def test_create_job_history_omits_changed_at_when_no_applied_date():
