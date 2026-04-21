@@ -4034,3 +4034,56 @@ def test_education_update_all_optional():
     assert entry.institution is None
     assert entry.degree is None
     assert entry.start_year is None
+
+
+# ---------------------------------------------------------------------------
+# AI draft generation
+# ---------------------------------------------------------------------------
+
+
+def test_ai_generate_returns_content_from_groq():
+    mock_sb = _make_mock_sb_with_side_effects(
+        [SAMPLE_JOB],  # job lookup
+        [{}],  # profile
+        [],  # experience
+        [],  # skills
+        [],  # education
+    )[0]
+    with (
+        patch("main.get_supabase", return_value=mock_sb),
+        patch("main._call_groq", return_value="Generated resume content"),
+    ):
+        response = client.post(
+            "/ai/generate",
+            json={"type": "resume", "job_id": SAMPLE_JOB["id"]},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["content"] == "Generated resume content"
+
+
+def test_ai_generate_rejects_invalid_type():
+    mock_sb, _, _ = make_mock_sb()
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/ai/generate",
+            json={"type": "linkedin_post", "job_id": SAMPLE_JOB["id"]},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "resume" in response.json()["detail"]
+
+
+def test_ai_rewrite_returns_rewritten_content():
+    mock_sb, _, _ = make_mock_sb()
+    with (
+        patch("main.get_supabase", return_value=mock_sb),
+        patch("main._call_groq", return_value="Rewritten cover letter"),
+    ):
+        response = client.post(
+            "/ai/rewrite",
+            json={"content": "Original draft text", "instructions": "Make it more concise"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["content"] == "Rewritten cover letter"
