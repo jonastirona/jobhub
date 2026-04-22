@@ -13,6 +13,17 @@ The app runs on **two Vercel projects** (frontend and backend), both connected t
 
 GitHub Actions (`.github/workflows/ci.yml`) runs tests and builds on pushes and pull requests to `main`; deployment is handled by Vercel’s Git integration.
 
+## performance & accessibility
+
+This pass documents concrete frontend changes for observability, perceived performance, and assistive technology support.
+
+- **Core Web Vitals (dev):** `frontend/src/index.js` passes a callback to `reportWebVitals` only when `NODE_ENV === 'development'`, so CLS/FCP/LCP/TTFB/FID are logged to the console for local profiling. Production builds omit the callback to avoid noise.
+- **Dashboard rendering:** client-side job filtering, pagination button numbers, and stat card configs are **memoized** (`useMemo`) so unrelated state updates do not re-scan the full job list or rebuild static card metadata.
+- **App shell:** reminder-derived lists (`pending`, due today) are memoized from `reminders`. The primary content wrapper is `<main id="main-content">` for skip-link targets. The “due today” banner uses `role="status"` and `aria-live="polite"`.
+- **Global UX:** `public/index.html` sets the document title and description to JobHub-specific copy. A **skip link** (off-screen until focused) jumps to `#main-content`. Global **`:focus-visible`** styles improve keyboard focus visibility.
+- **Semantics & tables:** authenticated pages expose a single **`h1`** via the top bar title. Stat cards use `role="region"` with an `aria-label` summarizing the metric; decorative chart bars stay `aria-hidden`. Jobs and document tables include a **visually hidden `<caption>`** for screen reader context; company logo initials in the jobs grid are `aria-hidden` (company name remains in the row).
+- **Loading & errors:** full-screen auth loading, protected-route loading, dashboard job load, profile bootstrap load, and document list loading use **`role="status"`** / **`aria-busy`** where appropriate; inline error lines use **`role="alert"`** so failures are announced.
+
 ## environment variables
 
 local secrets live in **`frontend/.env`** and **`backend/.env`**. Use **`.env.example`** in each folder as a template.

@@ -29,7 +29,9 @@ export default function Sidebar() {
         {NAV_ITEMS.map((item) => (
           <li key={item.path}>
             <NavLink to={item.path} className={({ isActive }) => (isActive ? 'active' : '')}>
-              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-icon" aria-hidden="true">
+                {item.icon}
+              </span>
               {item.label}
             </NavLink>
           </li>
@@ -38,7 +40,9 @@ export default function Sidebar() {
 
       <div className="sidebar-footer">
         <button type="button" onClick={handleLogout} aria-label="Logout">
-          <span className="nav-icon">🚪</span>
+          <span className="nav-icon" aria-hidden="true">
+            🚪
+          </span>
           Logout
         </button>
       </div>

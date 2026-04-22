@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useDocuments } from '../hooks/useDocuments';
 import { useJobs } from '../hooks/useJobs';
@@ -159,12 +159,51 @@ export default function Dashboard() {
   const draftCancelButtonRef = useRef(null);
   const filterControlsRef = useRef(null);
   const [viewJob, setViewJob] = useState(null);
-  //search happens again for safety second check.
-  const filteredJobs = jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm));
+  // Client-side filter memoized so typing in search does not re-filter the full list on unrelated renders.
+  const filteredJobs = useMemo(
+    () => jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm)),
+    [jobs, searchTerm]
+  );
   const totalApplications = meta.total;
   const interviews = meta.statusCounts?.interviewing ?? 0;
   const offers = meta.statusCounts?.offered ?? 0;
-  const pageNumbers = getVisiblePageNumbers(meta.page, meta.totalPages);
+  const pageNumbers = useMemo(
+    () => getVisiblePageNumbers(meta.page, meta.totalPages),
+    [meta.page, meta.totalPages]
+  );
+
+  const statCards = useMemo(
+    () => [
+      {
+        icon: '📁',
+        label: 'Total Applications',
+        value: String(totalApplications),
+        trend: 'all time',
+        trendDirection: 'up',
+        accentClass: 'orange',
+        bars: STAT_BARS.orange,
+      },
+      {
+        icon: '💬',
+        label: 'Interviews',
+        value: String(interviews),
+        trend: 'in progress',
+        trendDirection: 'up',
+        accentClass: 'blue',
+        bars: STAT_BARS.blue,
+      },
+      {
+        icon: '🎯',
+        label: 'Offers',
+        value: String(offers),
+        trend: 'received',
+        trendDirection: 'up',
+        accentClass: 'green',
+        bars: STAT_BARS.green,
+      },
+    ],
+    [totalApplications, interviews, offers]
+  );
 
   useEffect(() => {
     setCurrentPage(1);
@@ -198,36 +237,6 @@ export default function Dashboard() {
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
-
-  const statCards = [
-    {
-      icon: '📁',
-      label: 'Total Applications',
-      value: String(totalApplications),
-      trend: 'all time',
-      trendDirection: 'up',
-      accentClass: 'orange',
-      bars: STAT_BARS.orange,
-    },
-    {
-      icon: '💬',
-      label: 'Interviews',
-      value: String(interviews),
-      trend: 'in progress',
-      trendDirection: 'up',
-      accentClass: 'blue',
-      bars: STAT_BARS.blue,
-    },
-    {
-      icon: '🎯',
-      label: 'Offers',
-      value: String(offers),
-      trend: 'received',
-      trendDirection: 'up',
-      accentClass: 'green',
-      bars: STAT_BARS.green,
-    },
-  ];
 
   function openCreate() {
     setViewJob(null);
@@ -658,14 +667,28 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {loading && <p className="table-state">Loading jobs...</p>}
-          {error && <p className="table-state table-state--error">{error}</p>}
+          {loading && (
+            <p className="table-state" role="status" aria-live="polite" aria-busy="true">
+              Loading jobs...
+            </p>
+          )}
+          {error && (
+            <p className="table-state table-state--error" role="alert">
+              {error}
+            </p>
+          )}
           {!error && deleteError && !jobPendingDelete && (
-            <p className="table-state table-state--error">{deleteError}</p>
+            <p className="table-state table-state--error" role="alert">
+              {deleteError}
+            </p>
           )}
 
           {!loading && !error && (
             <table className="jobs-table">
+              <caption className="visually-hidden">
+                Job applications; columns include title, company, dates, recruiter notes, status, and
+                row actions.
+              </caption>
               <thead>
                 <tr>
                   <th>#</th>
@@ -701,6 +724,7 @@ export default function Dashboard() {
                           <div
                             className="company-logo"
                             style={{ background: getCompanyGradient(job.company) }}
+                            aria-hidden="true"
                           >
                             {job.company?.[0]}
                           </div>

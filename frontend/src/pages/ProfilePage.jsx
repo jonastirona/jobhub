@@ -739,7 +739,9 @@ export default function ProfilePage() {
     return (
       <AppShell title="My Profile" notificationCount={0}>
         <div className="profile-content">
-          <p className="profile-state">Loading profile...</p>
+          <p className="profile-state" role="status" aria-live="polite" aria-busy="true">
+            Loading profile...
+          </p>
         </div>
       </AppShell>
     );

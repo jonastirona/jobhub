@@ -15,7 +15,9 @@ export default function Login() {
   if (loading) {
     return (
       <div className="AuthScreen">
-        <p>Loading…</p>
+        <p role="status" aria-live="polite" aria-busy="true">
+          Loading…
+        </p>
       </div>
     );
   }

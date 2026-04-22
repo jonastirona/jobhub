@@ -24,6 +24,9 @@ function ProtectedRoute({ children }) {
           background: '#282c34',
           color: '#fff',
         }}
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
       >
         Loading…
       </div>
