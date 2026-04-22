@@ -34,6 +34,14 @@ function isPastDue(isoString) {
   return d < today;
 }
 
+function todayLocalISO() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export default function ReminderPanel({ accessToken, reminders, onClose, onRefetch }) {
   const { jobs } = useJobs(accessToken);
   const [form, setForm] = useState({ job_id: '', title: '', notes: '', due_date: '' });
@@ -51,6 +59,11 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
   async function handleCreate(e) {
     e.preventDefault();
     if (!backendBase || !accessToken) return;
+
+    if (isPastDue(form.due_date)) {
+      setFormError('Due date cannot be in the past.');
+      return;
+    }
 
     setSaving(true);
     setFormError(null);
@@ -269,6 +282,7 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
           <input
             className="rp-input"
             type="date"
+            min={todayLocalISO()}
             value={form.due_date}
             onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))}
             required

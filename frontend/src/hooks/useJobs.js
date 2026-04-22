@@ -67,6 +67,7 @@ export function useJobs(accessToken, searchTerm = '', options = {}) {
     setError(null);
 
     try {
+      //this is where the job filtering query happens that goes to the backend.
       const query = searchTerm.trim();
       const params = new URLSearchParams();
       if (query) params.set('q', query);
