@@ -686,8 +686,8 @@ export default function Dashboard() {
           {!loading && !error && (
             <table className="jobs-table">
               <caption className="visually-hidden">
-                Job applications; columns include title, company, dates, recruiter notes, status, and
-                row actions.
+                Job applications; columns include title, company, dates, recruiter notes, status,
+                and row actions.
               </caption>
               <thead>
                 <tr>
