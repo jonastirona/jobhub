@@ -159,6 +159,7 @@ export default function Dashboard() {
   const draftCancelButtonRef = useRef(null);
   const filterControlsRef = useRef(null);
   const [viewJob, setViewJob] = useState(null);
+  //search happens again for safety second check.
   const filteredJobs = jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm));
   const totalApplications = meta.total;
   const interviews = meta.statusCounts?.interviewing ?? 0;

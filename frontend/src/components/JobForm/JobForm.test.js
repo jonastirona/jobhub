@@ -379,6 +379,75 @@ describe('validation', () => {
   });
 });
 
+// ─── Deadline validation ──────────────────────────────────────────────────────
+
+describe('deadline validation', () => {
+  test('blocks create when deadline is before today', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.change(screen.getByLabelText(/job deadline/i), {
+      target: { value: '2000-01-01' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/deadline cannot be before today/i)).toBeInTheDocument();
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test('blocks create when deadline is before applied date', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.change(screen.getByLabelText(/applied date/i), {
+      target: { value: '2099-01-02' },
+    });
+    fireEvent.change(screen.getByLabelText(/job deadline/i), {
+      target: { value: '2099-01-01' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/deadline cannot be before the applied date/i)).toBeInTheDocument();
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test('allows edit save when an already-past deadline is not changed', async () => {
+    const pastDeadlineJob = { ...sampleJob, deadline: '2000-01-01', status: 'applied' };
+    render(<JobForm {...baseProps} mode="edit" job={pastDeadlineJob} />);
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(screen.queryByText(/deadline cannot be before today/i)).not.toBeInTheDocument();
+  });
+
+  test('blocks edit save when the user changes deadline to a past date', async () => {
+    const futureDeadlineJob = { ...sampleJob, deadline: '2099-01-01', status: 'applied' };
+    render(<JobForm {...baseProps} mode="edit" job={futureDeadlineJob} />);
+    fireEvent.change(screen.getByLabelText(/job deadline/i), {
+      target: { value: '2000-01-01' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/deadline cannot be before today/i)).toBeInTheDocument();
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test('deadline input has aria-invalid when validation fails', async () => {
+    render(<JobForm {...baseProps} />);
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Dev');
+    await userEvent.type(screen.getByLabelText(/company/i), 'Corp');
+    fireEvent.change(screen.getByLabelText(/job deadline/i), {
+      target: { value: '2000-01-01' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /add job/i }));
+    await waitFor(() => {
+      expect(screen.getByLabelText(/job deadline/i)).toHaveAttribute('aria-invalid', 'true');
+    });
+  });
+});
+
 // ─── Create - POST /jobs ──────────────────────────────────────────────────────
 
 describe('create mode - form submission', () => {

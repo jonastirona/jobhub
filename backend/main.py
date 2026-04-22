@@ -197,6 +197,15 @@ class ReminderUpdate(BaseModel):
     completed_at: Optional[str] = None
 
 
+def _validate_reminder_due_date(value: str) -> None:
+    try:
+        parsed = date.fromisoformat(value.split("T", 1)[0])
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=422, detail="Invalid due_date")
+    if parsed < date.today():
+        raise HTTPException(status_code=422, detail="due_date cannot be in the past")
+
+
 class InterviewEventCreate(BaseModel):
     round_type: str
     scheduled_at: datetime
@@ -426,6 +435,7 @@ def _date_search_fragments(d: date) -> list[str]:
     return parts
 
 
+# this is how you search with fragments
 def _job_search_fragments(job: dict) -> list[str]:
     frags: list[str] = []
     for field in _JOB_SEARCH_TEXT_FIELDS:
@@ -440,6 +450,7 @@ def _job_search_fragments(job: dict) -> list[str]:
     return frags
 
 
+# build your search query here with fragments
 def _job_matches_query(job: dict, normalized_query: str) -> bool:
     return any(normalized_query in fragment for fragment in _job_search_fragments(job))
 
@@ -516,6 +527,15 @@ def _parse_job_created_at(job: dict) -> datetime:
 
 def _parse_job_deadline(job: dict) -> Optional[date]:
     return _parse_job_date_value(job.get("deadline"))
+
+
+def _validate_deadline(deadline: Optional[date], applied_date: Optional[date]) -> None:
+    if deadline is None:
+        return
+    if deadline < date.today():
+        raise HTTPException(status_code=422, detail="Deadline cannot be before today.")
+    if applied_date is not None and deadline < applied_date:
+        raise HTTPException(status_code=422, detail="Deadline cannot be before the applied date.")
 
 
 def _datetime_rank(value: datetime) -> int:
@@ -608,6 +628,7 @@ def root():
     return {"message": "FastAPI running on Vercel"}
 
 
+# filtering occurs here.
 @app.get("/jobs")
 def list_jobs(
     authorization: Optional[str] = Header(default=None),
@@ -637,7 +658,6 @@ def list_jobs(
 
     response = sb.table("jobs").select("*").eq("user_id", user_id).execute()
     all_user_jobs = response.data or []
-
     visible_jobs = (
         list(all_user_jobs)
         if include_archived
@@ -683,6 +703,7 @@ def list_jobs(
         }
     )
 
+    # where all the filtering happens
     jobs = [
         job
         for job in jobs_after_search
@@ -750,6 +771,7 @@ def list_jobs(
 def create_job(job: JobCreate, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
     sb = get_supabase()
+    _validate_deadline(job.deadline, job.applied_date)
     payload = job.model_dump(exclude_none=True)
     if "status" in payload:
         payload["status"] = _normalize_job_status(payload["status"])
@@ -918,7 +940,17 @@ def update_job(job_id: str, job: JobUpdate, authorization: Optional[str] = Heade
     existing = sb.table("jobs").select("*").eq("id", job_id).eq("user_id", user_id).execute()
     if not existing.data:
         raise HTTPException(status_code=404, detail="Job not found")
-    old_status = existing.data[0]["status"]
+    existing_row = existing.data[0]
+    if "deadline" in payload:
+        existing_deadline = _parse_job_date_value(existing_row.get("deadline"))
+        if job.deadline != existing_deadline:
+            effective_applied = (
+                job.applied_date
+                if "applied_date" in payload
+                else _parse_job_date_value(existing_row.get("applied_date"))
+            )
+            _validate_deadline(job.deadline, effective_applied)
+    old_status = existing_row["status"]
     canonical_old_status = _normalize_job_status_alias(old_status)
     should_insert_status_history = False
     if "status" in payload:
@@ -1179,26 +1211,26 @@ def _build_resume_prompt(ctx: dict, job: dict) -> str:
 Generate a clean, ATS-friendly resume tailored to the job below.
 
 CANDIDATE:
-Name: {p.get('full_name') or 'Not provided'}
-Headline: {p.get('headline') or ''}
-Location: {p.get('location') or ''}
-Summary: {p.get('summary') or ''}
-LinkedIn: {p.get('linkedin_url') or ''}
-GitHub: {p.get('github_url') or ''}
+Name: {p.get("full_name") or "Not provided"}
+Headline: {p.get("headline") or ""}
+Location: {p.get("location") or ""}
+Summary: {p.get("summary") or ""}
+LinkedIn: {p.get("linkedin_url") or ""}
+GitHub: {p.get("github_url") or ""}
 
 EXPERIENCE:
-{_fmt_experience(ctx['experience'])}
+{_fmt_experience(ctx["experience"])}
 
 EDUCATION:
-{_fmt_education(ctx['education'])}
+{_fmt_education(ctx["education"])}
 
 SKILLS:
-{_fmt_skills(ctx['skills'])}
+{_fmt_skills(ctx["skills"])}
 
 TARGET JOB:
-Title: {job.get('title')}
-Company: {job.get('company')}
-Description: {job.get('description') or 'Not provided'}
+Title: {job.get("title")}
+Company: {job.get("company")}
+Description: {job.get("description") or "Not provided"}
 
 Write a complete resume tailored to this role. Use this exact markdown hierarchy:
 - # for the candidate name only (once, at the top)
@@ -1218,20 +1250,20 @@ def _build_cover_letter_prompt(ctx: dict, job: dict) -> str:
 Write a compelling cover letter for the candidate below applying to the specified role.
 
 CANDIDATE:
-Name: {p.get('full_name') or 'Not provided'}
-Headline: {p.get('headline') or ''}
-Summary: {p.get('summary') or ''}
+Name: {p.get("full_name") or "Not provided"}
+Headline: {p.get("headline") or ""}
+Summary: {p.get("summary") or ""}
 
 EXPERIENCE:
-{_fmt_experience(ctx['experience'])}
+{_fmt_experience(ctx["experience"])}
 
 SKILLS:
-{_fmt_skills(ctx['skills'])}
+{_fmt_skills(ctx["skills"])}
 
 TARGET JOB:
-Title: {job.get('title')}
-Company: {job.get('company')}
-Description: {job.get('description') or 'Not provided'}
+Title: {job.get("title")}
+Company: {job.get("company")}
+Description: {job.get("description") or "Not provided"}
 
 Write a professional cover letter (3-4 paragraphs). Use markdown: # for the subject
 line, ## for any section if needed. Open with a strong hook referencing the role,
@@ -1370,6 +1402,7 @@ def list_reminders(authorization: Optional[str] = Header(default=None)):
 @app.post("/reminders", status_code=201)
 def create_reminder(reminder: ReminderCreate, authorization: Optional[str] = Header(default=None)):
     user_id = get_user_id(authorization)
+    _validate_reminder_due_date(reminder.due_date)
     sb = get_supabase()
     job_check = (
         sb.table("jobs").select("id").eq("id", reminder.job_id).eq("user_id", user_id).execute()
@@ -1395,6 +1428,8 @@ def update_reminder(
     payload = reminder.model_dump(exclude_unset=True)
     if not payload:
         raise HTTPException(status_code=400, detail="No fields to update")
+    if "due_date" in payload and payload["due_date"] is not None:
+        _validate_reminder_due_date(payload["due_date"])
     response = (
         sb.table("reminders").update(payload).eq("id", reminder_id).eq("user_id", user_id).execute()
     )

@@ -24,8 +24,17 @@ function localDateTimeToUtcIso(value) {
   return parsed.toISOString();
 }
 
+function todayLocalDateString() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
   const isEdit = mode === 'edit';
+  const originalDeadline = isEdit ? job?.deadline?.slice(0, 10) ?? '' : '';
   const [values, setValues] = useState(() => (isEdit && job ? toFormValues(job) : EMPTY_JOB));
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState(null);
@@ -86,6 +95,15 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
     const next = {};
     if (!values.title.trim()) next.title = 'Job title is required.';
     if (!values.company.trim()) next.company = 'Company is required.';
+    const deadlineChanged = !isEdit || values.deadline !== originalDeadline;
+    if (values.deadline && deadlineChanged) {
+      const today = todayLocalDateString();
+      if (values.deadline < today) {
+        next.deadline = 'Deadline cannot be before today.';
+      } else if (values.applied_date && values.deadline < values.applied_date) {
+        next.deadline = 'Deadline cannot be before the applied date.';
+      }
+    }
     return next;
   }
 
@@ -448,12 +466,20 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
               </label>
               <input
                 id="jf-deadline-input"
-                className="jf-input jf-input--date"
+                className={`jf-input jf-input--date${errors.deadline ? ' jf-input--error' : ''}`}
                 type="date"
                 name="deadline"
                 value={values.deadline}
                 onChange={handleChange}
+                min={values.applied_date || todayLocalDateString()}
+                aria-describedby={errors.deadline ? 'jf-deadline-error' : undefined}
+                aria-invalid={errors.deadline ? true : undefined}
               />
+              {errors.deadline && (
+                <span id="jf-deadline-error" className="jf-error-msg" role="alert">
+                  {errors.deadline}
+                </span>
+              )}
             </div>
           </div>
 

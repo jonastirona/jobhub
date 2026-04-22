@@ -4,7 +4,7 @@ Backend tests for jobhub.
 Supabase is fully mocked — no live database or credentials required.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -991,6 +991,90 @@ def test_create_job_rejects_unknown_status():
         )
     assert response.status_code == 422
     assert "supported job status" in response.json()["detail"]
+
+
+def test_create_job_rejects_past_deadline():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/jobs",
+            json={"title": "Engineer", "company": "Acme", "deadline": "2000-01-01"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "before today" in response.json()["detail"]
+
+
+def test_create_job_rejects_deadline_before_applied_date():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/jobs",
+            json={
+                "title": "Engineer",
+                "company": "Acme",
+                "applied_date": "2099-01-02",
+                "deadline": "2099-01-01",
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "before the applied date" in response.json()["detail"]
+
+
+def test_create_job_accepts_future_deadline_after_applied_date():
+    created = {**SAMPLE_JOB, "applied_date": "2099-01-01", "deadline": "2099-01-02"}
+    mock_sb, _, _ = make_mock_sb(data=[created])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/jobs",
+            json={
+                "title": "Engineer",
+                "company": "Acme",
+                "applied_date": "2099-01-01",
+                "deadline": "2099-01-02",
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+
+
+def test_update_job_allows_unchanged_past_deadline():
+    existing = {**SAMPLE_JOB, "deadline": "2000-01-01"}
+    mock_sb, _, _ = make_mock_sb(data=[existing])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"deadline": "2000-01-01", "title": "New Title"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+
+
+def test_update_job_rejects_newly_changed_past_deadline():
+    existing = {**SAMPLE_JOB, "deadline": "2099-01-01"}
+    mock_sb, _, _ = make_mock_sb(data=[existing])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"deadline": "2000-01-01"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "before today" in response.json()["detail"]
+
+
+def test_update_job_rejects_new_deadline_before_existing_applied_date():
+    existing = {**SAMPLE_JOB, "applied_date": "2099-06-01", "deadline": "2099-12-01"}
+    mock_sb, _, _ = make_mock_sb(data=[existing])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"deadline": "2099-05-31"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "before the applied date" in response.json()["detail"]
 
 
 # ---------------------------------------------------------------------------
@@ -2790,13 +2874,17 @@ def test_experience_reorder_has_ids():
 # Reminder fixtures
 # ---------------------------------------------------------------------------
 
+FUTURE_DUE_DATE = (date.today() + timedelta(days=7)).isoformat()
+PAST_DUE_DATE = (date.today() - timedelta(days=1)).isoformat()
+TODAY_DUE_DATE = date.today().isoformat()
+
 SAMPLE_REMINDER = {
     "id": "reminder-uuid-1111",
     "job_id": SAMPLE_JOB["id"],
     "user_id": MOCK_USER_ID,
     "title": "Follow up on offer",
     "notes": "Ask about start date",
-    "due_date": "2026-04-20T09:00:00+00:00",
+    "due_date": f"{FUTURE_DUE_DATE}T09:00:00+00:00",
     "completed_at": None,
     "created_at": "2026-04-14T00:00:00+00:00",
     "jobs": {"title": "Backend Engineer", "company": "TechCorp"},
@@ -2819,7 +2907,7 @@ def test_create_reminder_requires_auth():
         json={
             "job_id": SAMPLE_JOB["id"],
             "title": "Follow up",
-            "due_date": "2026-04-20",
+            "due_date": FUTURE_DUE_DATE,
         },
     )
     assert response.status_code == 401
@@ -2900,7 +2988,7 @@ def test_create_reminder_success():
             json={
                 "job_id": SAMPLE_JOB["id"],
                 "title": "Follow up on offer",
-                "due_date": "2026-04-20T09:00:00+00:00",
+                "due_date": f"{FUTURE_DUE_DATE}T09:00:00+00:00",
             },
             headers={"authorization": AUTH_HEADER},
         )
@@ -2916,7 +3004,7 @@ def test_create_reminder_job_not_found_returns_404():
             json={
                 "job_id": "nonexistent-job-id",
                 "title": "Follow up",
-                "due_date": "2026-04-20T09:00:00+00:00",
+                "due_date": f"{FUTURE_DUE_DATE}T09:00:00+00:00",
             },
             headers={"authorization": AUTH_HEADER},
         )
@@ -2926,7 +3014,7 @@ def test_create_reminder_job_not_found_returns_404():
 def test_create_reminder_missing_title_returns_422():
     response = client.post(
         "/reminders",
-        json={"job_id": SAMPLE_JOB["id"], "due_date": "2026-04-20"},
+        json={"job_id": SAMPLE_JOB["id"], "due_date": FUTURE_DUE_DATE},
         headers={"authorization": AUTH_HEADER},
     )
     assert response.status_code == 422
@@ -2949,12 +3037,45 @@ def test_create_reminder_sets_user_id():
             json={
                 "job_id": SAMPLE_JOB["id"],
                 "title": "Follow up",
-                "due_date": "2026-04-20T09:00:00+00:00",
+                "due_date": f"{FUTURE_DUE_DATE}T09:00:00+00:00",
             },
             headers={"authorization": AUTH_HEADER},
         )
     insert_payload = mock_query.insert.call_args[0][0]
     assert insert_payload["user_id"] == MOCK_USER_ID
+
+
+def test_create_reminder_rejects_past_due_date():
+    mock_sb, mock_query = _make_mock_sb_for_reminder_create(reminder_data=SAMPLE_REMINDER)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/reminders",
+            json={
+                "job_id": SAMPLE_JOB["id"],
+                "title": "Follow up",
+                "due_date": PAST_DUE_DATE,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "past" in response.json()["detail"].lower()
+    mock_query.insert.assert_not_called()
+
+
+def test_create_reminder_accepts_today():
+    reminder_today = {**SAMPLE_REMINDER, "due_date": f"{TODAY_DUE_DATE}T09:00:00+00:00"}
+    mock_sb, _ = _make_mock_sb_for_reminder_create(reminder_data=reminder_today)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/reminders",
+            json={
+                "job_id": SAMPLE_JOB["id"],
+                "title": "Follow up",
+                "due_date": TODAY_DUE_DATE,
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
 
 
 # ---------------------------------------------------------------------------
@@ -3008,6 +3129,31 @@ def test_update_reminder_mark_complete():
         )
     assert response.status_code == 200
     assert response.json()["completed_at"] == "2026-04-14T10:00:00+00:00"
+
+
+def test_update_reminder_rejects_past_due_date():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_REMINDER])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/reminders/{SAMPLE_REMINDER['id']}",
+            json={"due_date": PAST_DUE_DATE},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "past" in response.json()["detail"].lower()
+    mock_query.update.assert_not_called()
+
+
+def test_update_reminder_allows_completed_at_without_due_date():
+    completed = {**SAMPLE_REMINDER, "completed_at": "2026-04-21T10:00:00+00:00"}
+    mock_sb, _, _ = make_mock_sb(data=[completed])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/reminders/{SAMPLE_REMINDER['id']}",
+            json={"completed_at": "2026-04-21T10:00:00+00:00"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
 
 
 # ---------------------------------------------------------------------------
