@@ -15,9 +15,11 @@ export default function Login() {
   if (loading) {
     return (
       <div className="AuthScreen">
-        <p role="status" aria-live="polite" aria-busy="true">
-          Loading…
-        </p>
+        <main id="main-content" className="AuthScreen-main">
+          <p role="status" aria-live="polite" aria-busy="true">
+            Loading…
+          </p>
+        </main>
       </div>
     );
   }
@@ -41,65 +43,67 @@ export default function Login() {
 
   return (
     <div className="AuthScreen">
-      <div className="AuthCard">
-        <img src={jobhubLogo} alt="JobHub" className="AuthLogo" />
-        <h1>Log in</h1>
-        <p className="AuthSubtitle">Sign in to continue</p>
+      <main id="main-content" className="AuthScreen-main">
+        <div className="AuthCard">
+          <img src={jobhubLogo} alt="JobHub" className="AuthLogo" />
+          <h1>Log in</h1>
+          <p className="AuthSubtitle">Sign in to continue</p>
 
-        {!supabaseConfigured && (
-          <p className="AuthMessage AuthMessage--error">
-            Missing <code>REACT_APP_SUPABASE_URL</code> or <code>REACT_APP_SUPABASE_ANON_KEY</code>{' '}
-            in <code>.env</code>.
+          {!supabaseConfigured && (
+            <p className="AuthMessage AuthMessage--error" role="alert">
+              Missing <code>REACT_APP_SUPABASE_URL</code> or{' '}
+              <code>REACT_APP_SUPABASE_ANON_KEY</code> in <code>.env</code>.
+            </p>
+          )}
+
+          {error && (
+            <p className="AuthMessage AuthMessage--error" role="alert">
+              {error}
+            </p>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            <label htmlFor="login-email">Email</label>
+            <input
+              id="login-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              disabled={!supabaseConfigured || submitting}
+            />
+
+            <label htmlFor="login-password">Password</label>
+            <input
+              id="login-password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              disabled={!supabaseConfigured || submitting}
+            />
+
+            <button
+              type="submit"
+              className="AuthPrimary"
+              disabled={!supabaseConfigured || submitting}
+            >
+              {submitting ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
+
+          <p className="AuthFooter">
+            <Link to="/forgot-password">Forgot password?</Link>
           </p>
-        )}
-
-        {error && (
-          <p className="AuthMessage AuthMessage--error" role="alert">
-            {error}
+          <p className="AuthFooter">
+            No account? <Link to="/signup">Sign up</Link>
           </p>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          <label htmlFor="login-email">Email</label>
-          <input
-            id="login-email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            disabled={!supabaseConfigured || submitting}
-          />
-
-          <label htmlFor="login-password">Password</label>
-          <input
-            id="login-password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            disabled={!supabaseConfigured || submitting}
-          />
-
-          <button
-            type="submit"
-            className="AuthPrimary"
-            disabled={!supabaseConfigured || submitting}
-          >
-            {submitting ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
-
-        <p className="AuthFooter">
-          <Link to="/forgot-password">Forgot password?</Link>
-        </p>
-        <p className="AuthFooter">
-          No account? <Link to="/signup">Sign up</Link>
-        </p>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

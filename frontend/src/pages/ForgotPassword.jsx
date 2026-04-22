@@ -25,54 +25,56 @@ export default function ForgotPassword() {
 
   return (
     <div className="AuthScreen">
-      <div className="AuthCard">
-        <h1>Reset password</h1>
-        <p className="AuthSubtitle">Enter your email and we&apos;ll send you a reset link.</p>
+      <main id="main-content" className="AuthScreen-main">
+        <div className="AuthCard">
+          <h1>Reset password</h1>
+          <p className="AuthSubtitle">Enter your email and we&apos;ll send you a reset link.</p>
 
-        {!supabaseConfigured && (
-          <p className="AuthMessage AuthMessage--error">
-            Missing <code>REACT_APP_SUPABASE_URL</code> or <code>REACT_APP_SUPABASE_ANON_KEY</code>{' '}
-            in <code>.env</code>.
+          {!supabaseConfigured && (
+            <p className="AuthMessage AuthMessage--error" role="alert">
+              Missing <code>REACT_APP_SUPABASE_URL</code> or{' '}
+              <code>REACT_APP_SUPABASE_ANON_KEY</code> in <code>.env</code>.
+            </p>
+          )}
+
+          {error && (
+            <p className="AuthMessage AuthMessage--error" role="alert">
+              {error}
+            </p>
+          )}
+
+          {submitted ? (
+            <p className="AuthMessage AuthMessage--info" role="status">
+              Check your email for a password reset link.
+            </p>
+          ) : (
+            <form onSubmit={handleSubmit}>
+              <label htmlFor="forgot-email">Email</label>
+              <input
+                id="forgot-email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={!supabaseConfigured || submitting}
+              />
+              <button
+                type="submit"
+                className="AuthPrimary"
+                disabled={!supabaseConfigured || submitting}
+              >
+                {submitting ? 'Sending…' : 'Send reset link'}
+              </button>
+            </form>
+          )}
+
+          <p className="AuthFooter">
+            <Link to="/login">Back to sign in</Link>
           </p>
-        )}
-
-        {error && (
-          <p className="AuthMessage AuthMessage--error" role="alert">
-            {error}
-          </p>
-        )}
-
-        {submitted ? (
-          <p className="AuthMessage AuthMessage--info" role="status">
-            Check your email for a password reset link.
-          </p>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            <label htmlFor="forgot-email">Email</label>
-            <input
-              id="forgot-email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={!supabaseConfigured || submitting}
-            />
-            <button
-              type="submit"
-              className="AuthPrimary"
-              disabled={!supabaseConfigured || submitting}
-            >
-              {submitting ? 'Sending…' : 'Send reset link'}
-            </button>
-          </form>
-        )}
-
-        <p className="AuthFooter">
-          <Link to="/login">Back to sign in</Link>
-        </p>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

@@ -15,7 +15,8 @@ function ProtectedRoute({ children }) {
 
   if (loading) {
     return (
-      <div
+      <main
+        id="main-content"
         style={{
           minHeight: '100vh',
           display: 'flex',
@@ -29,7 +30,7 @@ function ProtectedRoute({ children }) {
         aria-busy="true"
       >
         Loading…
-      </div>
+      </main>
     );
   }
 
