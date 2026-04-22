@@ -65,10 +65,7 @@
 
 .skip-link:focus {
   top: 8px;
-  outline: none;
-}
-
-.skip-link:focus-visible {
+  /* Always show a focus ring here (do not rely on :focus-visible alone) for older browsers */
   outline: 2px solid var(--blue);
   outline-offset: 2px;
 }

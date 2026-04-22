@@ -25,7 +25,7 @@ export default function ForgotPassword() {
 
   return (
     <div className="AuthScreen">
-      <main id="main-content" className="AuthScreen-main">
+      <main id="main-content" className="AuthScreen-main" tabIndex={-1}>
         <div className="AuthCard">
           <h1>Reset password</h1>
           <p className="AuthSubtitle">Enter your email and we&apos;ll send you a reset link.</p>

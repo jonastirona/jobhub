@@ -34,7 +34,7 @@ export default function ResetPassword() {
 
   return (
     <div className="AuthScreen">
-      <main id="main-content" className="AuthScreen-main">
+      <main id="main-content" className="AuthScreen-main" tabIndex={-1}>
         <div className="AuthCard">
           <h1>New password</h1>
           <p className="AuthSubtitle">Enter your new password below.</p>

@@ -26,7 +26,8 @@ export default function AppShell({ title, children }) {
   const [dueTodayDismissed, setDueTodayDismissed] = useState(false);
 
   const pending = useMemo(() => reminders.filter((r) => !r.completed_at), [reminders]);
-  const dueToday = useMemo(() => pending.filter((r) => isToday(r.due_date)), [pending]);
+  // Not memoized: depends on the current calendar day; recomputing each render avoids stale "due today" after midnight when the tree re-renders.
+  const dueToday = pending.filter((r) => isToday(r.due_date));
   const showAlert = dueToday.length > 0 && !dueTodayDismissed;
 
   useEffect(() => {
@@ -66,7 +67,7 @@ export default function AppShell({ title, children }) {
             </div>
           </div>
         )}
-        <main id="main-content" className="app-shell-content">
+        <main id="main-content" className="app-shell-content" tabIndex={-1}>
           {children}
         </main>
       </div>

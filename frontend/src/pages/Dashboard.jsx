@@ -159,7 +159,7 @@ export default function Dashboard() {
   const draftCancelButtonRef = useRef(null);
   const filterControlsRef = useRef(null);
   const [viewJob, setViewJob] = useState(null);
-  // Client-side filter memoized so typing in search does not re-filter the full list on unrelated renders.
+  // Memoized so client-side filtering is not recomputed when unrelated state changes (search still refilters when searchTerm or jobs change).
   const filteredJobs = useMemo(
     () => jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm)),
     [jobs, searchTerm]

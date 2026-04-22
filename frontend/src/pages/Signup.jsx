@@ -16,7 +16,7 @@ export default function Signup() {
   if (loading) {
     return (
       <div className="AuthScreen">
-        <main id="main-content" className="AuthScreen-main">
+        <main id="main-content" className="AuthScreen-main" tabIndex={-1}>
           <p role="status" aria-live="polite" aria-busy="true">
             Loading…
           </p>
@@ -54,7 +54,7 @@ export default function Signup() {
 
   return (
     <div className="AuthScreen">
-      <main id="main-content" className="AuthScreen-main">
+      <main id="main-content" className="AuthScreen-main" tabIndex={-1}>
         <div className="AuthCard">
           <img src={jobhubLogo} alt="JobHub" className="AuthLogo" />
           <h1>Sign up</h1>
