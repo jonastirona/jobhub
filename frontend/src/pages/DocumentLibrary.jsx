@@ -99,8 +99,8 @@ export default function DocumentLibrary() {
 
             {!loading && error && (
               <tr>
-                <td colSpan={6} className="table-empty table-state--error" role="alert">
-                  {error}
+                <td colSpan={6} className="table-empty table-state--error">
+                  <div role="alert">{error}</div>
                 </td>
               </tr>
             )}
