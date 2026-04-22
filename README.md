@@ -1,6 +1,18 @@
 # jobhub
 hub for jobs - cs490 null pointers project
 
+## deployment (Vercel)
+
+The app runs on **two Vercel projects** (frontend and backend), both connected to this Git repository. Pushes trigger automatic deployments; **`main`** updates production, and **other branches** get preview deployments (each preview has its own URL in the Vercel dashboard).
+
+| Environment | Frontend | Backend API base |
+|---------------|----------|------------------|
+| Production | [jobhub-eight-weld.vercel.app](https://jobhub-eight-weld.vercel.app) | [jobhubbackend-tan.vercel.app](https://jobhubbackend-tan.vercel.app) |
+
+**Vercel environment variables:** configure secrets in each Vercel project (not in git). The frontend build must include the same Supabase and backend settings as local dev: see **Frontend** below. The backend project needs the Supabase server variables from **Backend** below. For production, set `REACT_APP_BACKEND_URL` on the frontend project to the production backend URL above (no trailing slash). For preview deployments, either use the production API or set `REACT_APP_BACKEND_URL` per preview in Vercel if you need branch-specific APIs.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs tests and builds on pushes and pull requests to `main`; deployment is handled by Vercel’s Git integration.
+
 ## environment variables
 
 local secrets live in **`frontend/.env`** and **`backend/.env`**. Use **`.env.example`** in each folder as a template.
@@ -9,7 +21,7 @@ local secrets live in **`frontend/.env`** and **`backend/.env`**. Use **`.env.ex
 
 - `REACT_APP_SUPABASE_URL` — Supabase project URL
 - `REACT_APP_SUPABASE_ANON_KEY` — Supabase anon (public) key
-- `REACT_APP_BACKEND_URL` — backend API base URL (`http://localhost:8000` for local dev, or your deployed API URL for prod/preview)
+- `REACT_APP_BACKEND_URL` — backend API base URL (`http://localhost:8000` for local dev; production: `https://jobhubbackend-tan.vercel.app`; preview builds use whatever you configure in Vercel for that deployment)
 
 ### backend
 
