@@ -202,11 +202,12 @@ test('job overview shows linked documents sorted by latest version and supports 
   const dialogText = dialog.textContent || '';
   expect(dialogText.indexOf('Latest (v2)')).toBeLessThan(dialogText.indexOf('v1'));
 
-  const openButtons = within(dialog).getAllByRole('button', { name: 'Open' });
-  const downloadButtons = within(dialog).getAllByRole('button', { name: 'Download' });
-
-  fireEvent.click(openButtons[0]);
-  fireEvent.click(downloadButtons[0]);
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: 'Open Resume - Contoso (Latest (v2))' })
+  );
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: 'Download Resume - Contoso (Latest (v2))' })
+  );
 
   await waitFor(() => {
     expect(global.fetch).toHaveBeenCalledWith(

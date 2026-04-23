@@ -225,38 +225,43 @@ export default function JobOverviewModal({
 
               {linkedDocuments.length > 0 && (
                 <ul className="job-overview-doc-list" aria-label="Documents linked to this job">
-                  {linkedDocuments.map((documentRecord) => (
-                    <li className="job-overview-doc-item" key={documentRecord.id}>
-                      <div className="job-overview-doc-main">
-                        <span className="job-overview-doc-name">{documentRecord.name}</span>
-                        <span className="job-overview-doc-meta">
-                          {documentRecord.doc_type || 'Draft'} •{' '}
-                          {formatDocumentVersion(
-                            documentRecord.versionIndexFromLatest,
-                            documentRecord.totalVersions
-                          )}{' '}
-                          • Updated{' '}
-                          {formatDate(documentRecord.updated_at || documentRecord.created_at)}
-                        </span>
-                      </div>
-                      <div className="job-overview-doc-actions">
-                        <button
-                          type="button"
-                          className="job-overview-doc-btn"
-                          onClick={() => onOpenDocument?.(documentRecord.id)}
-                        >
-                          Open
-                        </button>
-                        <button
-                          type="button"
-                          className="job-overview-doc-btn"
-                          onClick={() => onDownloadDocument?.(documentRecord)}
-                        >
-                          Download
-                        </button>
-                      </div>
-                    </li>
-                  ))}
+                  {linkedDocuments.map((documentRecord) => {
+                    const versionLabel = formatDocumentVersion(
+                      documentRecord.versionIndexFromLatest,
+                      documentRecord.totalVersions
+                    );
+                    const documentLabel = `${documentRecord.name} (${versionLabel})`;
+
+                    return (
+                      <li className="job-overview-doc-item" key={documentRecord.id}>
+                        <div className="job-overview-doc-main">
+                          <span className="job-overview-doc-name">{documentRecord.name}</span>
+                          <span className="job-overview-doc-meta">
+                            {documentRecord.doc_type || 'Draft'} • {versionLabel} • Updated{' '}
+                            {formatDate(documentRecord.updated_at || documentRecord.created_at)}
+                          </span>
+                        </div>
+                        <div className="job-overview-doc-actions">
+                          <button
+                            type="button"
+                            className="job-overview-doc-btn"
+                            aria-label={`Open ${documentLabel}`}
+                            onClick={() => onOpenDocument?.(documentRecord.id)}
+                          >
+                            Open
+                          </button>
+                          <button
+                            type="button"
+                            className="job-overview-doc-btn"
+                            aria-label={`Download ${documentLabel}`}
+                            onClick={() => onDownloadDocument?.(documentRecord)}
+                          >
+                            Download
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
