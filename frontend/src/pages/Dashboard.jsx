@@ -137,6 +137,11 @@ export default function Dashboard() {
     pageSize,
   });
   const {
+    documents,
+    loading: documentsLoading,
+    error: documentsError,
+    refetch: refetchDocuments,
+    viewDocument,
     createDocument,
     clearSaveError,
     saving: savingDraft,
@@ -159,6 +164,7 @@ export default function Dashboard() {
   const draftCancelButtonRef = useRef(null);
   const filterControlsRef = useRef(null);
   const [viewJob, setViewJob] = useState(null);
+  const viewedJobId = viewJob?.id;
   // Memoized so client-side filtering is not recomputed when unrelated state changes (search still refilters when searchTerm or jobs change).
   const filteredJobs = useMemo(
     () => jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm)),
@@ -256,6 +262,11 @@ export default function Dashboard() {
     setViewJob(job);
   }
 
+  useEffect(() => {
+    if (!viewedJobId) return;
+    refetchDocuments();
+  }, [viewedJobId, refetchDocuments]);
+
   function openHistory(job) {
     setFormState(null);
     setViewJob(null);
@@ -316,6 +327,34 @@ export default function Dashboard() {
   function handleSaved() {
     refetch();
   }
+
+  const handleOpenDocument = useCallback(
+    async (documentId) => {
+      const url = await viewDocument(documentId);
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    },
+    [viewDocument]
+  );
+
+  const handleDownloadDocument = useCallback(
+    async (documentRecord) => {
+      if (!documentRecord?.id) return;
+      const url = await viewDocument(documentRecord.id);
+      if (!url) return;
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.download = `${documentRecord.name || 'document'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    },
+    [viewDocument]
+  );
 
   function requestDelete(job) {
     setDeleteError('');
@@ -876,7 +915,18 @@ export default function Dashboard() {
       </div>
 
       {viewJob && (
-        <JobOverviewModal job={viewJob} onClose={closeView} accessToken={session?.access_token} />
+        <JobOverviewModal
+          job={viewJob}
+          onClose={closeView}
+          accessToken={session?.access_token}
+          documents={documents}
+          documentsLoading={documentsLoading}
+          documentsError={documentsError}
+          onRefreshDocuments={refetchDocuments}
+          onOpenDocument={handleOpenDocument}
+          onDownloadDocument={handleDownloadDocument}
+          onDocumentSaved={refetchDocuments}
+        />
       )}
 
       {formState && (
