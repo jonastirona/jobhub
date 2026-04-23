@@ -213,17 +213,17 @@ export default function JobOverviewModal({
                 </p>
               )}
 
-              {!documentsError && documentsLoading && (
+              {documentsLoading && linkedDocuments.length === 0 && (
                 <p className="job-overview-doc-empty" role="status" aria-live="polite">
                   Loading linked documents...
                 </p>
               )}
 
-              {!documentsError && !documentsLoading && linkedDocuments.length === 0 && (
+              {!documentsLoading && !documentsError && linkedDocuments.length === 0 && (
                 <p className="job-overview-doc-empty">No documents are linked to this job yet.</p>
               )}
 
-              {!documentsError && !documentsLoading && linkedDocuments.length > 0 && (
+              {linkedDocuments.length > 0 && (
                 <ul className="job-overview-doc-list" aria-label="Documents linked to this job">
                   {linkedDocuments.map((documentRecord) => (
                     <li className="job-overview-doc-item" key={documentRecord.id}>
