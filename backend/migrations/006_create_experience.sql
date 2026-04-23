@@ -1,4 +1,4 @@
--- 005_create_experience
+-- 006_create_experience
 -- Work experience entries for user profiles.
 
 create table if not exists experience (

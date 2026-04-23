@@ -1,4 +1,4 @@
--- 012_create_documents_bucket
+-- 014_create_documents_bucket
 -- Supabase Storage bucket and policies for user-scoped document files.
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

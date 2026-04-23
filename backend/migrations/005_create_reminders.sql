@@ -1,4 +1,4 @@
--- 004_create_reminders
+-- 005_create_reminders
 -- Run once in the Supabase SQL editor.
 
 create table if not exists reminders (

@@ -1,3 +1,4 @@
+-- 012_create_skills
 -- Create skills table
 -- Stores skills with optional category and proficiency per user.
 -- Ordered by position (ascending) for user-defined ordering.

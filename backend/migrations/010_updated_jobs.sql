@@ -1,5 +1,5 @@
--- 008_create_jobs
--- Run once in the Supabase SQL editor.
+-- 010_updated_jobs
+-- Aligns jobs table definition, RLS, and update_updated_at trigger (idempotent with 001).
 
 create table if not exists jobs (
   id           uuid        primary key default gen_random_uuid(),
