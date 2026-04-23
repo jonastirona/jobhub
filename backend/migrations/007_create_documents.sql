@@ -1,4 +1,4 @@
--- 006_create_documents
+-- 007_create_documents
 -- User-owned document records with optional link to a job application.
 
 create table if not exists documents (

@@ -1,4 +1,4 @@
--- 013_add_jobs_is_archived
+-- 015_add_jobs_is_archived
 -- Adds soft-archive support so jobs can be hidden/restored without deleting linked records.
 
 alter table if exists jobs

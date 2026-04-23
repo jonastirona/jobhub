@@ -1,4 +1,4 @@
--- 006_create_interview_events
+-- 008_create_interview_events
 
 create table if not exists interview_events (
   id           uuid primary key default gen_random_uuid(),

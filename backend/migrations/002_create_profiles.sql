@@ -1,3 +1,4 @@
+-- 002_create_profiles
 -- Create profiles table
 -- Stores identity/contact fields and professional summary per user.
 -- One row per user (enforced by UNIQUE on user_id).

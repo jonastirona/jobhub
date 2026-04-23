@@ -1,3 +1,4 @@
+-- 011_create_career_preferences
 -- Create career_preferences table
 -- Stores target roles, location preferences, work mode, and salary range per user.
 -- One row per user (enforced by UNIQUE on user_id).
