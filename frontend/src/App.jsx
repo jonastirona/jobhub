@@ -15,7 +15,9 @@ function ProtectedRoute({ children }) {
 
   if (loading) {
     return (
-      <div
+      <main
+        id="main-content"
+        tabIndex={-1}
         style={{
           minHeight: '100vh',
           display: 'flex',
@@ -24,9 +26,12 @@ function ProtectedRoute({ children }) {
           background: '#282c34',
           color: '#fff',
         }}
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
       >
         Loading…
-      </div>
+      </main>
     );
   }
 

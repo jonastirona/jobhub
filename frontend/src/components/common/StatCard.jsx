@@ -2,8 +2,10 @@ import './StatCard.css';
 
 export default function StatCard({ icon, label, value, trend, trendDirection, accentClass, bars }) {
   return (
-    <div className="stat-card">
-      <div className={`stat-icon-wrap ${accentClass}`}>{icon}</div>
+    <div className="stat-card" role="region" aria-label={`${label}: ${value}. ${trend}.`}>
+      <div className={`stat-icon-wrap ${accentClass}`} aria-hidden="true">
+        {icon}
+      </div>
 
       <div className="stat-text">
         <div className="stat-label">{label}</div>

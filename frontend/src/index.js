@@ -11,7 +11,12 @@ root.render(
   </React.StrictMode>
 );
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals();
+// Core Web Vitals: log in development only (see README — Performance & accessibility).
+reportWebVitals(
+  process.env.NODE_ENV === 'development'
+    ? ({ name, value, id }) => {
+        // eslint-disable-next-line no-console -- intentional dev-only vitals logging
+        console.log('[vitals]', name, value, id);
+      }
+    : undefined
+);

@@ -48,6 +48,45 @@
   --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
 }
 
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -100px;
+  z-index: 10000;
+  padding: 10px 14px;
+  background: var(--orange-600);
+  color: var(--text-white);
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition: top 0.12s ease-out;
+}
+
+.skip-link:focus {
+  top: 8px;
+  /* Always show a focus ring here (do not rely on :focus-visible alone) for older browsers */
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--orange-600);
+  outline-offset: 2px;
+}
+
 body {
   margin: 0;
   font-family:

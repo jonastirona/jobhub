@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useReminders } from '../../hooks/useReminders';
 import ReminderPanel from '../ReminderPanel/ReminderPanel';
@@ -25,7 +25,8 @@ export default function AppShell({ title, children }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [dueTodayDismissed, setDueTodayDismissed] = useState(false);
 
-  const pending = reminders.filter((r) => !r.completed_at);
+  const pending = useMemo(() => reminders.filter((r) => !r.completed_at), [reminders]);
+  // Not memoized: depends on the current calendar day; recomputing each render avoids stale "due today" after midnight when the tree re-renders.
   const dueToday = pending.filter((r) => isToday(r.due_date));
   const showAlert = dueToday.length > 0 && !dueTodayDismissed;
 
@@ -43,7 +44,7 @@ export default function AppShell({ title, children }) {
           onBellClick={() => setPanelOpen(true)}
         />
         {showAlert && (
-          <div className="app-shell-alert">
+          <div className="app-shell-alert" role="status" aria-live="polite">
             <span>
               🔔 You have {dueToday.length} reminder{dueToday.length > 1 ? 's' : ''} due today.
             </span>
@@ -66,7 +67,9 @@ export default function AppShell({ title, children }) {
             </div>
           </div>
         )}
-        <main className="app-shell-content">{children}</main>
+        <main id="main-content" className="app-shell-content" tabIndex={-1}>
+          {children}
+        </main>
       </div>
 
       {panelOpen && (

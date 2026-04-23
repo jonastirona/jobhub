@@ -8,6 +8,15 @@
   padding: 24px;
 }
 
+/* Skip link target: matches #main-content in AppShell for authenticated routes */
+.AuthScreen-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
 .AuthCard {
   width: 100%;
   max-width: 380px;

@@ -19,7 +19,7 @@ export default function TopBar({ title, notificationCount, onBellClick }) {
 
   return (
     <header className="topbar">
-      <div className="topbar-title">{title}</div>
+      <h1 className="topbar-title">{title}</h1>
       <div className="topbar-right">
         <button type="button" className="notif-btn" aria-label="Reminders" onClick={onBellClick}>
           🔔

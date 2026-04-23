@@ -739,7 +739,9 @@ export default function ProfilePage() {
     return (
       <AppShell title="My Profile" notificationCount={0}>
         <div className="profile-content">
-          <p className="profile-state">Loading profile...</p>
+          <p className="profile-state" role="status" aria-live="polite" aria-busy="true">
+            Loading profile...
+          </p>
         </div>
       </AppShell>
     );
@@ -1114,7 +1116,11 @@ export default function ProfilePage() {
             </h2>
           </div>
 
-          {experienceLoading && <p className="profile-state">Loading experience...</p>}
+          {experienceLoading && (
+            <p className="profile-state" role="status" aria-live="polite" aria-busy="true">
+              Loading experience...
+            </p>
+          )}
 
           {experienceError && (
             <p className="profile-state profile-state--error" role="alert">
@@ -1331,7 +1337,11 @@ export default function ProfilePage() {
             </h2>
           </div>
 
-          {educationLoading && <p className="profile-state">Loading education...</p>}
+          {educationLoading && (
+            <p className="profile-state" role="status" aria-live="polite" aria-busy="true">
+              Loading education...
+            </p>
+          )}
 
           {educationError && (
             <p className="profile-state profile-state--error" role="alert">
@@ -1551,7 +1561,11 @@ export default function ProfilePage() {
             </h2>
           </div>
 
-          {skillsLoading && <p className="profile-state">Loading skills...</p>}
+          {skillsLoading && (
+            <p className="profile-state" role="status" aria-live="polite" aria-busy="true">
+              Loading skills...
+            </p>
+          )}
 
           {skillsError && (
             <p className="profile-state profile-state--error" role="alert">

@@ -34,57 +34,59 @@ export default function ResetPassword() {
 
   return (
     <div className="AuthScreen">
-      <div className="AuthCard">
-        <h1>New password</h1>
-        <p className="AuthSubtitle">Enter your new password below.</p>
+      <main id="main-content" className="AuthScreen-main" tabIndex={-1}>
+        <div className="AuthCard">
+          <h1>New password</h1>
+          <p className="AuthSubtitle">Enter your new password below.</p>
 
-        {!supabaseConfigured && (
-          <p className="AuthMessage AuthMessage--error">
-            Missing <code>REACT_APP_SUPABASE_URL</code> or <code>REACT_APP_SUPABASE_ANON_KEY</code>{' '}
-            in <code>.env</code>.
-          </p>
-        )}
+          {!supabaseConfigured && (
+            <p className="AuthMessage AuthMessage--error" role="alert">
+              Missing <code>REACT_APP_SUPABASE_URL</code> or{' '}
+              <code>REACT_APP_SUPABASE_ANON_KEY</code> in <code>.env</code>.
+            </p>
+          )}
 
-        {error && (
-          <p className="AuthMessage AuthMessage--error" role="alert">
-            {error}
-          </p>
-        )}
+          {error && (
+            <p className="AuthMessage AuthMessage--error" role="alert">
+              {error}
+            </p>
+          )}
 
-        <form onSubmit={handleSubmit}>
-          <label htmlFor="reset-password">New password</label>
-          <input
-            id="reset-password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            disabled={!supabaseConfigured || submitting}
-          />
+          <form onSubmit={handleSubmit}>
+            <label htmlFor="reset-password">New password</label>
+            <input
+              id="reset-password"
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              disabled={!supabaseConfigured || submitting}
+            />
 
-          <label htmlFor="reset-confirm">Confirm password</label>
-          <input
-            id="reset-confirm"
-            name="confirm"
-            type="password"
-            autoComplete="new-password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            required
-            disabled={!supabaseConfigured || submitting}
-          />
+            <label htmlFor="reset-confirm">Confirm password</label>
+            <input
+              id="reset-confirm"
+              name="confirm"
+              type="password"
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+              disabled={!supabaseConfigured || submitting}
+            />
 
-          <button
-            type="submit"
-            className="AuthPrimary"
-            disabled={!supabaseConfigured || submitting}
-          >
-            {submitting ? 'Updating…' : 'Update password'}
-          </button>
-        </form>
-      </div>
+            <button
+              type="submit"
+              className="AuthPrimary"
+              disabled={!supabaseConfigured || submitting}
+            >
+              {submitting ? 'Updating…' : 'Update password'}
+            </button>
+          </form>
+        </div>
+      </main>
     </div>
   );
 }

@@ -73,6 +73,9 @@ export default function DocumentLibrary() {
         )}
 
         <table className="shell-table">
+          <caption className="visually-hidden">
+            Saved documents with name, type, linked job, last updated, and actions.
+          </caption>
           <thead>
             <tr>
               <th>#</th>
@@ -87,7 +90,9 @@ export default function DocumentLibrary() {
             {loading && (
               <tr>
                 <td colSpan={6} className="table-empty">
-                  Loading documents...
+                  <span role="status" aria-live="polite" aria-busy="true">
+                    Loading documents...
+                  </span>
                 </td>
               </tr>
             )}
@@ -95,7 +100,7 @@ export default function DocumentLibrary() {
             {!loading && error && (
               <tr>
                 <td colSpan={6} className="table-empty table-state--error">
-                  {error}
+                  <div role="alert">{error}</div>
                 </td>
               </tr>
             )}

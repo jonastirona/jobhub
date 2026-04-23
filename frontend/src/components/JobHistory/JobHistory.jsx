@@ -161,8 +161,16 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
         </div>
 
         <div className="jh-body">
-          {(loading || interviewLoading) && <p className="jh-state">Loading history...</p>}
-          {error && <p className="jh-state jh-state--error">{error}</p>}
+          {(loading || interviewLoading) && (
+            <p className="jh-state" role="status" aria-live="polite" aria-busy="true">
+              Loading history...
+            </p>
+          )}
+          {error && (
+            <p className="jh-state jh-state--error" role="alert">
+              {error}
+            </p>
+          )}
 
           {!(loading || interviewLoading) && !error && timelineEntries.length === 0 && (
             <p className="jh-state">No activity recorded yet.</p>
