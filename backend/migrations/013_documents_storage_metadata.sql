@@ -1,4 +1,4 @@
--- 011_documents_storage_metadata
+-- 013_documents_storage_metadata
 -- Store document files in Supabase Storage and keep metadata in documents table.
 
 alter table if exists documents

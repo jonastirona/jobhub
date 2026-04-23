@@ -75,15 +75,46 @@ uvicorn main:app --reload
 
 this will start the api server (usually at `http://localhost:8000`)
 
-## database setup
+## database (production) & migrations
 
-Run the migration in the **Supabase SQL editor** for your project (one-time setup):
+**Production data store:** the live app uses a **Supabase** project (Postgres + Auth + Storage as needed). Production credentials are **not** in git: set `SUPABASE_*` on the backend (Vercel) and `REACT_APP_SUPABASE_*` on the frontend per [Deployment (Vercel)](#deployment-vercel).
 
-```bash
-# paste the contents of backend/migrations/001_create_jobs.sql into the Supabase SQL editor
-```
+### Migration strategy
 
-The migration creates the `jobs` table with row-level security enabled so each user can only access their own records.
+- **Source of truth:** versioned SQL in **`backend/migrations/`** (forward-only). Each file is applied **once** per environment (typically via the **Supabase SQL editor** on the target project, or any Postgres client with the same ordering).
+- **Rules:** do **not** edit a file after it has been applied to **production**—add a new numbered migration instead. Keep migrations **idempotent** where practical (`if not exists`, `drop policy if exists`, etc.) so re-runs in dev are safer.
+- **Apply order:** run every `.sql` in the folder **in numeric filename order** (`001` … `015`). Filenames are unique—apply the whole chain on greenfield environments:
+
+  1. `001_create_jobs.sql`
+  2. `002_create_profiles.sql`
+  3. `003_create_job_status_history.sql`
+  4. `004_create_education.sql`
+  5. `005_create_reminders.sql`
+  6. `006_create_experience.sql`
+  7. `007_create_documents.sql`
+  8. `008_create_interview_events.sql`
+  9. `009_add_deadline_recruiter_notes_to_jobs.sql`
+  10. `010_updated_jobs.sql`
+  11. `011_create_career_preferences.sql`
+  12. `012_create_skills.sql`
+  13. `013_documents_storage_metadata.sql`
+  14. `014_create_documents_bucket.sql`
+  15. `015_add_jobs_is_archived.sql`
+
+- **CI / drift:** optional hardening is to run these against an empty Postgres in CI (see team runbooks); the repo still treats **git + this list** as the contract for schema evolution.
+
+### Rollback plan
+
+We do **not** ship automated “down” migrations to production. Rollback is **operational** and chosen by severity:
+
+| Severity | Action |
+|----------|--------|
+| **Schema or data wrong, change not yet acceptable in prod** | **Forward fix:** add a new migration (or hotfix SQL reviewed in a PR) that corrects schema/data. Prefer this over rewriting history. |
+| **Bad migration shipped, app broken, data integrity uncertain** | **Database restore:** use **Supabase backup / point-in-time recovery (PITR)** for the production project (availability depends on your Supabase plan—configure and test in the Supabase dashboard ahead of time). Restore to a point **before** the bad migration, then re-apply only migrations you still need, or restore into a new project and cut over credentials after validation. |
+| **Bad migration shipped, DB OK, app incompatible** | **Redeploy** the previous backend (and frontend if needed) from Vercel/Git while you prepare a forward migration for the schema the old app expects. |
+| **Planned risky change** (drops column, rewrites data) | Open a **short rollback note** in the PR: either “restore from backup” or attach **hand-written undo SQL** to run in the SQL editor after review (not committed as auto-run scripts unless the team standardizes on that). |
+
+**Team norms:** after any production migration, note the **Supabase project**, **approximate time**, and **migration filenames** in the release ticket or changelog so restore windows are obvious.
 
 ## backend api
 
