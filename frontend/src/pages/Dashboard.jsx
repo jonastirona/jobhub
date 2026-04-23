@@ -146,7 +146,7 @@ export default function Dashboard() {
     clearSaveError,
     saving: savingDraft,
     saveError: draftSaveError,
-  } = useDocuments(session?.access_token, true);
+  } = useDocuments(session?.access_token, false);
   const [formState, setFormState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', job }
   const [historyJob, setHistoryJob] = useState(null);
   const [deleteError, setDeleteError] = useState('');
