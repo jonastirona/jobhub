@@ -126,6 +126,99 @@ test('clicking View opens read-only overview with job details', async () => {
   });
 });
 
+test('job overview shows linked documents sorted by latest version and supports open/download', async () => {
+  const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+
+  global.fetch = jest.fn((url) => {
+    if (url.startsWith('http://localhost:8000/jobs')) {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'job-1',
+              title: 'DevRel Engineer',
+              company: 'Contoso',
+              location: 'Remote',
+              status: 'interviewing',
+              applied_date: '2026-02-01',
+              deadline: '2026-03-01',
+              description: 'Talk at conferences.',
+              notes: 'Great fit.',
+              recruiter_notes: 'pat@example.com',
+            },
+          ]),
+      });
+    }
+
+    if (url === 'http://localhost:8000/documents') {
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'doc-old',
+              job_id: 'job-1',
+              name: 'Resume - Contoso',
+              doc_type: 'Resume',
+              created_at: '2026-03-01T00:00:00+00:00',
+              updated_at: '2026-03-02T00:00:00+00:00',
+            },
+            {
+              id: 'doc-latest',
+              job_id: 'job-1',
+              name: 'Resume - Contoso',
+              doc_type: 'Resume',
+              created_at: '2026-03-10T00:00:00+00:00',
+              updated_at: '2026-03-11T00:00:00+00:00',
+            },
+          ]),
+      });
+    }
+
+    if (
+      url === 'http://localhost:8000/documents/doc-old/view-url' ||
+      url === 'http://localhost:8000/documents/doc-latest/view-url'
+    ) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ url: 'https://example.test/document.pdf' }),
+      });
+    }
+
+    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+  });
+
+  render(<App />);
+  await waitFor(() => screen.getByText('DevRel Engineer'));
+
+  fireEvent.click(screen.getByRole('button', { name: /view application/i }));
+
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByText('Linked documents')).toBeInTheDocument();
+  expect(await within(dialog).findByText(/Latest \(v2\)/i)).toBeInTheDocument();
+  expect(within(dialog).getByText(/\bv1\b/i)).toBeInTheDocument();
+
+  const dialogText = dialog.textContent || '';
+  expect(dialogText.indexOf('Latest (v2)')).toBeLessThan(dialogText.indexOf('v1'));
+
+  const openButtons = within(dialog).getAllByRole('button', { name: 'Open' });
+  const downloadButtons = within(dialog).getAllByRole('button', { name: 'Download' });
+
+  fireEvent.click(openButtons[0]);
+  fireEvent.click(downloadButtons[0]);
+
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/documents/doc-latest/view-url',
+      expect.objectContaining({ headers: { Authorization: 'Bearer test-token' } })
+    );
+  });
+
+  expect(openSpy).toHaveBeenCalled();
+  openSpy.mockRestore();
+});
+
 // Verifies API failures surface a user-visible load error message.
 test('shows error state when api request fails', async () => {
   global.fetch = jest.fn(() =>

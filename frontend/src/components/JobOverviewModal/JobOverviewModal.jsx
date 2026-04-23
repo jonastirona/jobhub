@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import StatusBadge from '../common/StatusBadge';
 import AIDraftModal from '../AIDraftModal/AIDraftModal';
 import '../JobForm/JobForm.css';
@@ -16,6 +16,20 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function getDocumentTimestamp(documentRecord) {
+  const source = documentRecord?.updated_at || documentRecord?.created_at;
+  const parsed = source ? new Date(source) : null;
+  return parsed && !isNaN(parsed.getTime()) ? parsed.getTime() : 0;
+}
+
+function formatDocumentVersion(versionIndexFromLatest, totalVersions) {
+  const versionNumber = totalVersions - versionIndexFromLatest + 1;
+  if (versionIndexFromLatest === 1) {
+    return `Latest (v${versionNumber})`;
+  }
+  return `v${versionNumber}`;
+}
+
 function Field({ label, children, muted }) {
   return (
     <div className="job-overview-section">
@@ -27,7 +41,18 @@ function Field({ label, children, muted }) {
   );
 }
 
-export default function JobOverviewModal({ job, onClose, accessToken }) {
+export default function JobOverviewModal({
+  job,
+  onClose,
+  accessToken,
+  documents = [],
+  documentsLoading = false,
+  documentsError = null,
+  onRefreshDocuments,
+  onOpenDocument,
+  onDownloadDocument,
+  onDocumentSaved,
+}) {
   const overlayRef = useRef(null);
   const modalRef = useRef(null);
   const [aiDraftType, setAiDraftType] = useState(null);
@@ -77,6 +102,47 @@ export default function JobOverviewModal({ job, onClose, accessToken }) {
   const notes = job.notes?.trim() || '—';
   const recruiter = job.recruiter_notes?.trim() || '—';
 
+  const linkedDocuments = useMemo(() => {
+    const records = (Array.isArray(documents) ? documents : []).filter((documentRecord) => {
+      return documentRecord?.job_id === job.id;
+    });
+
+    const grouped = new Map();
+    records.forEach((documentRecord) => {
+      const key = `${documentRecord.doc_type || 'Draft'}::${documentRecord.name || ''}`;
+      const existing = grouped.get(key) || [];
+      existing.push(documentRecord);
+      grouped.set(key, existing);
+    });
+
+    const flattened = [];
+    Array.from(grouped.values())
+      .sort((leftGroup, rightGroup) => {
+        const leftLatest = Math.max(
+          ...leftGroup.map((documentRecord) => getDocumentTimestamp(documentRecord))
+        );
+        const rightLatest = Math.max(
+          ...rightGroup.map((documentRecord) => getDocumentTimestamp(documentRecord))
+        );
+        return rightLatest - leftLatest;
+      })
+      .forEach((group) => {
+        const sortedGroup = [...group].sort(
+          (left, right) => getDocumentTimestamp(right) - getDocumentTimestamp(left)
+        );
+        const totalVersions = sortedGroup.length;
+        sortedGroup.forEach((documentRecord, index) => {
+          flattened.push({
+            ...documentRecord,
+            versionIndexFromLatest: index + 1,
+            totalVersions,
+          });
+        });
+      });
+
+    return flattened;
+  }, [documents, job.id]);
+
   return (
     <>
       <div className="jf-overlay" ref={overlayRef} onClick={handleOverlayClick} role="presentation">
@@ -125,6 +191,75 @@ export default function JobOverviewModal({ job, onClose, accessToken }) {
             <Field label="Job description">{description}</Field>
             <Field label="Notes">{notes}</Field>
             <Field label="Recruiter / contact notes">{recruiter}</Field>
+
+            <div className="job-overview-section">
+              <div className="job-overview-documents-header">
+                <div className="job-overview-label">Linked documents</div>
+                {onRefreshDocuments && (
+                  <button
+                    type="button"
+                    className="job-overview-doc-refresh"
+                    onClick={onRefreshDocuments}
+                    disabled={documentsLoading}
+                  >
+                    {documentsLoading ? 'Refreshing…' : 'Refresh'}
+                  </button>
+                )}
+              </div>
+
+              {documentsError && (
+                <p className="job-overview-doc-empty" role="alert">
+                  {documentsError}
+                </p>
+              )}
+
+              {!documentsError && documentsLoading && (
+                <p className="job-overview-doc-empty" role="status" aria-live="polite">
+                  Loading linked documents...
+                </p>
+              )}
+
+              {!documentsError && !documentsLoading && linkedDocuments.length === 0 && (
+                <p className="job-overview-doc-empty">No documents are linked to this job yet.</p>
+              )}
+
+              {!documentsError && !documentsLoading && linkedDocuments.length > 0 && (
+                <ul className="job-overview-doc-list" aria-label="Documents linked to this job">
+                  {linkedDocuments.map((documentRecord) => (
+                    <li className="job-overview-doc-item" key={documentRecord.id}>
+                      <div className="job-overview-doc-main">
+                        <span className="job-overview-doc-name">{documentRecord.name}</span>
+                        <span className="job-overview-doc-meta">
+                          {documentRecord.doc_type || 'Draft'} •{' '}
+                          {formatDocumentVersion(
+                            documentRecord.versionIndexFromLatest,
+                            documentRecord.totalVersions
+                          )}{' '}
+                          • Updated{' '}
+                          {formatDate(documentRecord.updated_at || documentRecord.created_at)}
+                        </span>
+                      </div>
+                      <div className="job-overview-doc-actions">
+                        <button
+                          type="button"
+                          className="job-overview-doc-btn"
+                          onClick={() => onOpenDocument?.(documentRecord.id)}
+                        >
+                          Open
+                        </button>
+                        <button
+                          type="button"
+                          className="job-overview-doc-btn"
+                          onClick={() => onDownloadDocument?.(documentRecord)}
+                        >
+                          Download
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
 
           <div className="job-overview-footer">
@@ -162,6 +297,9 @@ export default function JobOverviewModal({ job, onClose, accessToken }) {
           job={job}
           accessToken={accessToken}
           onClose={() => setAiDraftType(null)}
+          onSaved={() => {
+            onDocumentSaved?.();
+          }}
         />
       )}
     </>
