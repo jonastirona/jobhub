@@ -113,11 +113,7 @@ export default function AIResearchModal({ job, accessToken, onClose }) {
             </>
           ) : (
             <>
-              <button
-                type="button"
-                className="ai-btn ai-btn--ghost"
-                onClick={handleResearchAgain}
-              >
+              <button type="button" className="ai-btn ai-btn--ghost" onClick={handleResearchAgain}>
                 Research Again
               </button>
               <button type="button" className="ai-btn ai-btn--ghost" onClick={onClose}>

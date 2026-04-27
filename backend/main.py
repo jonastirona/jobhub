@@ -1291,7 +1291,7 @@ Return only the rewritten document. No commentary, no preamble, no explanation."
 
 
 def _build_company_research_prompt(job: dict, context: str) -> str:
-    return f"""You are a career research assistant helping a job candidate prepare their application.
+    return f"""You are a career research assistant helping a job candidate.
 
 COMPANY: {job.get("company")}
 ROLE: {job.get("title")}
@@ -1300,16 +1300,22 @@ JOB DESCRIPTION: {job.get("description") or "Not provided"}
 CANDIDATE'S RESEARCH REQUEST:
 {context}
 
-Write a concise, conversational research briefing that directly answers the candidate's questions. This is NOT a resume or formal document — write in plain prose and bullet points, like a well-informed friend giving advice.
+Write a concise, conversational research briefing that directly answers the
+candidate's questions. This is NOT a resume or formal document — write in plain
+prose and bullet points, like a well-informed friend giving advice.
 
 Format using markdown:
 - ## for section headings (keep them short and descriptive)
 - Bullet points (-) for lists of facts or tips
 - **Bold** only for genuinely important terms
 
-Do not use headers like "Name:", "Company:", or any resume-style structure. Do not number every point or create a document outline. Just answer the questions clearly and practically.
+Do not use headers like "Name:", "Company:", or any resume-style structure.
+Do not number every point or create a document outline.
+Just answer the questions clearly and practically.
 
-If you are uncertain about specific facts (e.g. exact revenue, headcount), say so and suggest reliable sources like the company website, LinkedIn, or Glassdoor. Do not fabricate figures."""
+If you are uncertain about specific facts (e.g. exact revenue, headcount),
+say so and suggest reliable sources like the company website, LinkedIn, or
+Glassdoor. Do not fabricate figures."""
 
 
 def _call_groq(prompt: str) -> str:

@@ -68,9 +68,8 @@ export function contentToPdfBlob(content) {
   const naturalBottom = processLines(doc, content, marginX, maxWidth, 1.0, false, 0);
 
   // Scale down to fit one page (floor at 0.72 to stay legible)
-  const scale = naturalBottom > availableHeight
-    ? Math.max(0.72, availableHeight / naturalBottom)
-    : 1.0;
+  const scale =
+    naturalBottom > availableHeight ? Math.max(0.72, availableHeight / naturalBottom) : 1.0;
 
   processLines(doc, content, marginX, maxWidth, scale, true, marginY);
 
