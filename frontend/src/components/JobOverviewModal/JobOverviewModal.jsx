@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import StatusBadge from '../common/StatusBadge';
 import AIDraftModal from '../AIDraftModal/AIDraftModal';
+import AIResearchModal from '../AIResearchModal/AIResearchModal';
 import '../JobForm/JobForm.css';
 import './JobOverviewModal.css';
 
@@ -56,6 +57,7 @@ export default function JobOverviewModal({
   const overlayRef = useRef(null);
   const modalRef = useRef(null);
   const [aiDraftType, setAiDraftType] = useState(null);
+  const [showResearch, setShowResearch] = useState(false);
 
   useEffect(() => {
     function onKey(e) {
@@ -270,7 +272,7 @@ export default function JobOverviewModal({
           <div className="job-overview-footer">
             {accessToken && (
               <div className="job-overview-ai-actions">
-                <p className="job-overview-ai-label">Generate draft with AI</p>
+                <p className="job-overview-ai-label">AI tools</p>
                 <div className="job-overview-ai-buttons">
                   <button
                     type="button"
@@ -285,6 +287,13 @@ export default function JobOverviewModal({
                     onClick={() => setAiDraftType('cover_letter')}
                   >
                     Cover Letter
+                  </button>
+                  <button
+                    type="button"
+                    className="job-overview-ai-btn"
+                    onClick={() => setShowResearch(true)}
+                  >
+                    Company Research
                   </button>
                 </div>
               </div>
@@ -305,6 +314,14 @@ export default function JobOverviewModal({
           onSaved={() => {
             onDocumentSaved?.();
           }}
+        />
+      )}
+
+      {showResearch && (
+        <AIResearchModal
+          job={job}
+          accessToken={accessToken}
+          onClose={() => setShowResearch(false)}
         />
       )}
     </>

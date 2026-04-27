@@ -4233,3 +4233,108 @@ def test_ai_rewrite_returns_rewritten_content():
         )
     assert response.status_code == 200
     assert response.json()["content"] == "Rewritten cover letter"
+
+
+# ---------------------------------------------------------------------------
+# AI company research
+# ---------------------------------------------------------------------------
+
+
+def test_ai_company_research_returns_content():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
+    with (
+        patch("main.get_supabase", return_value=mock_sb),
+        patch("main._call_groq", return_value="Company research results"),
+    ):
+        response = client.post(
+            "/ai/company-research",
+            json={"job_id": SAMPLE_JOB["id"], "context": "What is the culture like?"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["content"] == "Company research results"
+
+
+def test_ai_company_research_prompt_includes_job_and_context():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_JOB])
+    captured = {}
+
+    def capture(prompt):
+        captured["prompt"] = prompt
+        return "ok"
+
+    with (
+        patch("main.get_supabase", return_value=mock_sb),
+        patch("main._call_groq", side_effect=capture),
+    ):
+        client.post(
+            "/ai/company-research",
+            json={"job_id": SAMPLE_JOB["id"], "context": "What tech stack do they use?"},
+            headers={"authorization": AUTH_HEADER},
+        )
+
+    prompt = captured["prompt"]
+    assert SAMPLE_JOB["company"] in prompt
+    assert SAMPLE_JOB["title"] in prompt
+    assert "What tech stack do they use?" in prompt
+
+
+def test_ai_company_research_rejects_blank_context():
+    mock_sb, _, _ = make_mock_sb()
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/ai/company-research",
+            json={"job_id": SAMPLE_JOB["id"], "context": "   "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "blank" in response.json()["detail"]
+
+
+def test_ai_company_research_returns_404_for_unknown_job():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with (
+        patch("main.get_supabase", return_value=mock_sb),
+        patch("main._call_groq", return_value=""),
+    ):
+        response = client.post(
+            "/ai/company-research",
+            json={"job_id": "nonexistent-id", "context": "Tell me about the company."},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_ai_company_research_requires_auth():
+    response = client.post(
+        "/ai/company-research",
+        json={"job_id": SAMPLE_JOB["id"], "context": "Tell me about the company."},
+    )
+    assert response.status_code in (401, 403)
+
+
+def test_build_company_research_prompt_includes_key_fields():
+    from main import _build_company_research_prompt
+
+    job = {
+        "company": "Acme Corp",
+        "title": "Site Reliability Engineer",
+        "description": "Kubernetes experience required",
+    }
+    prompt = _build_company_research_prompt(job, "What is the interview process like?")
+
+    assert "Acme Corp" in prompt
+    assert "Site Reliability Engineer" in prompt
+    assert "Kubernetes experience required" in prompt
+    assert "What is the interview process like?" in prompt
+
+
+def test_build_resume_prompt_instructs_no_commentary():
+    from main import _build_resume_prompt
+
+    ctx = {"profile": {}, "experience": [], "skills": [], "education": []}
+    job = {"company": "Acme", "title": "Engineer", "description": None}
+    prompt = _build_resume_prompt(ctx, job)
+
+    assert "Output only the resume" in prompt
+    assert "No commentary" in prompt
