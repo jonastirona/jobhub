@@ -595,17 +595,28 @@ def _build_job_analytics_payload(job: dict, history: list[dict], as_of: datetime
         t_last = changed_at_utc(rows[-1])
         add_segment(job.get("status"), t_last, as_of)
 
+    current_status_raw = job.get("status")
+    current_stage_key = (
+        _analytics_stage_key(current_status_raw)
+        if current_status_raw is not None and str(current_status_raw).strip()
+        else None
+    )
+    if current_stage_key is not None and current_stage_key not in seconds_by_stage:
+        seconds_by_stage[current_stage_key] = 0
+
     time_in_stage = {
         stage: {
             "seconds": secs,
             "label": _stage_display_label(stage),
+            "is_current": stage == current_stage_key,
         }
         for stage, secs in sorted(seconds_by_stage.items(), key=lambda kv: (-kv[1], kv[0]))
-        if secs > 0
+        if secs > 0 or stage == current_stage_key
     }
 
     return {
         "job_id": str(job.get("id") or ""),
+        "current_status": current_stage_key,
         "status_changes_last_7_days": status_changes_last_7_days,
         "status_changes_last_30_days": status_changes_last_30_days,
         "time_in_stage": time_in_stage,

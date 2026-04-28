@@ -1,7 +1,21 @@
 import { useMemo, useState } from 'react';
+import StatusBadge from '../common/StatusBadge';
 import { useJobAnalytics } from '../../hooks/useJobAnalytics';
 import { useJobPickerJobs } from '../../hooks/useJobPickerJobs';
 import './JobAnalyticsCard.css';
+
+function formatStatusLabel(status) {
+  const raw = String(status || '').trim();
+  if (!raw) return 'Unknown';
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function formatPickerJobLabel(job) {
+  const company = String(job?.company || '').trim() || 'Unknown company';
+  const title = String(job?.title || '').trim() || 'Untitled role';
+  const status = formatStatusLabel(job?.status);
+  return `${company} — ${title} (${status})`;
+}
 
 function formatDurationSeconds(totalSeconds) {
   const n = Math.max(0, Math.floor(Number(totalSeconds) || 0));
@@ -29,6 +43,11 @@ export default function JobAnalyticsCard({ accessToken, jobsDataVersion = 0 }) {
     loading: analyticsLoading,
     error: analyticsError,
   } = useJobAnalytics(accessToken, selectedJobId || null, jobsDataVersion);
+
+  const selectedJob = useMemo(
+    () => pickerJobs.find((j) => j.id === selectedJobId) || null,
+    [pickerJobs, selectedJobId]
+  );
 
   const maxStageSeconds = useMemo(() => {
     if (!data?.time_in_stage) return 0;
@@ -71,11 +90,21 @@ export default function JobAnalyticsCard({ accessToken, jobsDataVersion = 0 }) {
             </option>
             {pickerJobs.map((j) => (
               <option key={j.id} value={j.id}>
-                {j.company} — {j.title}
+                {formatPickerJobLabel(j)}
               </option>
             ))}
           </select>
         </div>
+
+        {selectedJob && (
+          <div
+            className="job-analytics-card__current-stage"
+            data-testid="job-analytics-current-stage"
+          >
+            <span className="job-analytics-card__current-stage-label">Current stage</span>
+            <StatusBadge status={selectedJob.status} />
+          </div>
+        )}
       </div>
 
       {pickerError && (
@@ -135,9 +164,18 @@ export default function JobAnalyticsCard({ accessToken, jobsDataVersion = 0 }) {
                 {stageEntries.map(([key, entry]) => {
                   const secs = entry.seconds ?? 0;
                   const pct = Math.round((secs / maxStageSeconds) * 100);
+                  const isCurrent = Boolean(entry.is_current);
                   return (
-                    <tr key={key}>
-                      <td>{entry.label || key}</td>
+                    <tr
+                      key={key}
+                      className={isCurrent ? 'job-analytics-card__stage-row--current' : undefined}
+                    >
+                      <td>
+                        {entry.label || key}
+                        {isCurrent && (
+                          <span className="job-analytics-card__current-pill">current</span>
+                        )}
+                      </td>
                       <td>{formatDurationSeconds(secs)}</td>
                       <td>
                         <div className="job-analytics-card__bar-wrap" title={`${pct}%`}>
@@ -152,7 +190,7 @@ export default function JobAnalyticsCard({ accessToken, jobsDataVersion = 0 }) {
           )}
           {data.as_of && (
             <p className="job-analytics-card__as-of">
-              Figures as of {new Date(data.as_of).toLocaleString()} (UTC)
+              Figures as of {new Date(data.as_of).toLocaleString()}
             </p>
           )}
         </>

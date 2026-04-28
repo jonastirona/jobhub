@@ -1319,6 +1319,7 @@ def test_get_job_analytics_counts_and_time_in_stage():
     assert response.status_code == 200
     body = response.json()
     assert body["job_id"] == SAMPLE_JOB["id"]
+    assert body["current_status"] == "interviewing"
     assert body["status_changes_last_7_days"] == 1
     assert body["status_changes_last_30_days"] == 1
     assert "applied" in body["time_in_stage"]
@@ -1327,6 +1328,8 @@ def test_get_job_analytics_counts_and_time_in_stage():
     interviewing_secs = body["time_in_stage"]["interviewing"]["seconds"]
     assert applied_secs == int(4 * 86400 + 14 * 3600 + 32 * 60)
     assert interviewing_secs == int(4 * 86400 + 9 * 3600 + 28 * 60)
+    assert body["time_in_stage"]["interviewing"]["is_current"] is True
+    assert body["time_in_stage"]["applied"]["is_current"] is False
 
 
 def test_get_job_analytics_empty_history_uses_created_at():
@@ -1343,9 +1346,54 @@ def test_get_job_analytics_empty_history_uses_created_at():
         )
     assert response.status_code == 200
     body = response.json()
+    assert body["current_status"] == "applied"
     assert body["status_changes_last_7_days"] == 0
     assert body["status_changes_last_30_days"] == 0
     assert body["time_in_stage"]["applied"]["seconds"] == 2 * 86400
+    assert body["time_in_stage"]["applied"]["is_current"] is True
+
+
+def test_get_job_analytics_includes_current_stage_when_zero_seconds():
+    """A status change that just landed should still appear in the breakdown.
+
+    Without this, a freshly-entered stage like "declined" would be filtered
+    out by the `secs > 0` rule and the user would not see their latest move
+    reflected in the analytics card.
+    """
+    job_id = SAMPLE_JOB["id"]
+    history_just_changed = [
+        {
+            "job_id": job_id,
+            "user_id": SAMPLE_JOB["user_id"],
+            "from_status": None,
+            "to_status": "applied",
+            "changed_at": "2026-04-20T00:00:00+00:00",
+        },
+        {
+            "job_id": job_id,
+            "user_id": SAMPLE_JOB["user_id"],
+            "from_status": "applied",
+            "to_status": "declined",
+            "changed_at": "2026-04-27T21:33:46+00:00",
+        },
+    ]
+    job = {**SAMPLE_JOB, "status": "declined"}
+    mock_sb = make_mock_sb_by_table({"jobs": [job], "job_status_history": history_just_changed})
+    fixed_now = datetime(2026, 4, 27, 21, 33, 46, tzinfo=timezone.utc)
+    with (
+        patch("main.get_supabase", return_value=mock_sb),
+        patch("main._utc_now", return_value=fixed_now),
+    ):
+        response = client.get(
+            f"/jobs/{job_id}/analytics",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["current_status"] == "declined"
+    assert "declined" in body["time_in_stage"]
+    assert body["time_in_stage"]["declined"]["is_current"] is True
+    assert body["time_in_stage"]["declined"]["seconds"] == 0
 
 
 # ---------------------------------------------------------------------------
