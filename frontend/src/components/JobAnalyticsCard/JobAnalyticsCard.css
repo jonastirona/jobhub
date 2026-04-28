@@ -1,0 +1,145 @@
+.job-analytics-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 20px 24px;
+  margin-bottom: 28px;
+  border: 1px solid var(--border-light);
+}
+
+.job-analytics-card__title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.job-analytics-card__hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 16px;
+}
+
+.job-analytics-card__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  margin-bottom: 20px;
+}
+
+.job-analytics-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+  flex: 1;
+}
+
+.job-analytics-card__label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.job-analytics-card__select {
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  width: 100%;
+  max-width: 420px;
+}
+
+.job-analytics-card__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.job-analytics-card__metric {
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+}
+
+.job-analytics-card__metric-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--orange-600);
+  line-height: 1.2;
+}
+
+.job-analytics-card__metric-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.job-analytics-card__subsection-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+}
+
+.job-analytics-card__stage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.job-analytics-card__stage-table th,
+.job-analytics-card__stage-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.job-analytics-card__stage-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.job-analytics-card__bar-wrap {
+  height: 8px;
+  background: var(--border-light);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.job-analytics-card__bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--orange-400), var(--orange-600));
+  border-radius: 4px;
+}
+
+.job-analytics-card__error {
+  color: #b91c1c;
+  font-size: 13px;
+  margin: 0;
+}
+
+.job-analytics-card__muted {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.job-analytics-card__as-of {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 12px 0 0;
+}

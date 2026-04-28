@@ -5,6 +5,7 @@ import { useJobs } from '../hooks/useJobs';
 import AppShell from '../components/layout/AppShell';
 import StatCard from '../components/common/StatCard';
 import StatusBadge from '../components/common/StatusBadge';
+import JobAnalyticsCard from '../components/JobAnalyticsCard/JobAnalyticsCard';
 import JobForm from '../components/JobForm/JobForm';
 import JobHistory from '../components/JobHistory/JobHistory';
 import JobOverviewModal from '../components/JobOverviewModal/JobOverviewModal';
@@ -127,6 +128,8 @@ export default function Dashboard() {
   const [selectedSortBy, setSelectedSortBy] = useState('created_at');
   const [showArchivedJobs, setShowArchivedJobs] = useState(false);
   const [updatingArchiveJobId, setUpdatingArchiveJobId] = useState(null);
+  const [jobsDataVersion, setJobsDataVersion] = useState(0);
+  const bumpJobsDataVersion = useCallback(() => setJobsDataVersion((v) => v + 1), []);
   const { jobs, meta, loading, error, refetch } = useJobs(session?.access_token, searchTerm, {
     statuses: selectedStatuses,
     locations: selectedLocations,
@@ -326,6 +329,7 @@ export default function Dashboard() {
 
   function handleSaved() {
     refetch();
+    bumpJobsDataVersion();
   }
 
   const handleOpenDocument = useCallback(
@@ -496,6 +500,7 @@ export default function Dashboard() {
         throw new Error(`Failed to delete application (${res.status})`);
       }
       await refetch();
+      bumpJobsDataVersion();
       setJobPendingDelete(null);
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete application.');
@@ -527,6 +532,7 @@ export default function Dashboard() {
         throw new Error(`Failed to update archive state (${res.status})`);
       }
       await refetch();
+      bumpJobsDataVersion();
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Failed to update archive state.');
     } finally {
@@ -542,6 +548,8 @@ export default function Dashboard() {
             <StatCard key={card.label} {...card} />
           ))}
         </div>
+
+        <JobAnalyticsCard accessToken={session?.access_token} jobsDataVersion={jobsDataVersion} />
 
         <div className="table-section">
           <div className="table-header">

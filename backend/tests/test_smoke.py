@@ -4,7 +4,7 @@ Backend tests for jobhub.
 Supabase is fully mocked — no live database or credentials required.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -1282,6 +1282,70 @@ def test_get_job_history_scoped_to_job():
         )
     eq_calls = [call[0] for call in mock_query.eq.call_args_list]
     assert ("job_id", SAMPLE_JOB["id"]) in eq_calls
+
+
+# ---------------------------------------------------------------------------
+# GET /jobs/{job_id}/analytics
+# ---------------------------------------------------------------------------
+
+
+def test_get_job_analytics_requires_auth():
+    response = client.get(f"/jobs/{SAMPLE_JOB['id']}/analytics")
+    assert response.status_code == 401
+
+
+def test_get_job_analytics_not_found():
+    mock_sb = make_mock_sb_by_table({"jobs": [], "job_status_history": []})
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            f"/jobs/{SAMPLE_JOB['id']}/analytics",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_get_job_analytics_counts_and_time_in_stage():
+    job = {**SAMPLE_JOB, "status": "interviewing"}
+    mock_sb = make_mock_sb_by_table({"jobs": [job], "job_status_history": SAMPLE_HISTORY})
+    fixed_now = datetime(2026, 4, 10, 0, 0, 0, tzinfo=timezone.utc)
+    with (
+        patch("main.get_supabase", return_value=mock_sb),
+        patch("main._utc_now", return_value=fixed_now),
+    ):
+        response = client.get(
+            f"/jobs/{SAMPLE_JOB['id']}/analytics",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["job_id"] == SAMPLE_JOB["id"]
+    assert body["status_changes_last_7_days"] == 1
+    assert body["status_changes_last_30_days"] == 1
+    assert "applied" in body["time_in_stage"]
+    assert "interviewing" in body["time_in_stage"]
+    applied_secs = body["time_in_stage"]["applied"]["seconds"]
+    interviewing_secs = body["time_in_stage"]["interviewing"]["seconds"]
+    assert applied_secs == int(4 * 86400 + 14 * 3600 + 32 * 60)
+    assert interviewing_secs == int(4 * 86400 + 9 * 3600 + 28 * 60)
+
+
+def test_get_job_analytics_empty_history_uses_created_at():
+    job = {**SAMPLE_JOB, "status": "applied", "created_at": "2026-04-01T00:00:00+00:00"}
+    mock_sb = make_mock_sb_by_table({"jobs": [job], "job_status_history": []})
+    fixed_now = datetime(2026, 4, 3, 0, 0, 0, tzinfo=timezone.utc)
+    with (
+        patch("main.get_supabase", return_value=mock_sb),
+        patch("main._utc_now", return_value=fixed_now),
+    ):
+        response = client.get(
+            f"/jobs/{SAMPLE_JOB['id']}/analytics",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status_changes_last_7_days"] == 0
+    assert body["status_changes_last_30_days"] == 0
+    assert body["time_in_stage"]["applied"]["seconds"] == 2 * 86400
 
 
 # ---------------------------------------------------------------------------
