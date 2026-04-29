@@ -2,7 +2,7 @@ import calendar
 import os
 import uuid
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from math import ceil
 from pathlib import Path
 from typing import Optional
@@ -507,6 +507,120 @@ def _build_available_locations(jobs: list[dict]) -> list[str]:
     return sorted(deduped.values(), key=lambda location: location.casefold())
 
 
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _ensure_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _analytics_stage_key(raw: Optional[str]) -> str:
+    if raw is None or not str(raw).strip():
+        return "unknown"
+    normalized = _normalize_job_status_alias(str(raw).strip().lower())
+    if normalized and normalized in JOB_STATUSES:
+        return normalized
+    return str(raw).strip().lower() or "unknown"
+
+
+def _stage_display_label(stage_key: str) -> str:
+    return stage_key.replace("_", " ").title()
+
+
+def _build_job_analytics_payload(job: dict, history: list[dict], as_of: datetime) -> dict:
+    """Conversion = count of status transitions (from_status set) in rolling windows.
+
+    Time in stage = cumulative seconds in each to_status between history rows,
+    plus an open-ended tail to as_of.
+    """
+    as_of = _ensure_utc(as_of)
+    cut_7d = as_of - timedelta(days=7)
+    cut_30d = as_of - timedelta(days=30)
+
+    def is_tracked_change(row: dict) -> bool:
+        fs = row.get("from_status")
+        return fs is not None and str(fs).strip() != ""
+
+    def changed_at_utc(row: dict) -> Optional[datetime]:
+        dt = _parse_datetime_value(row.get("changed_at"))
+        return _ensure_utc(dt) if dt is not None else None
+
+    status_changes_last_7_days = 0
+    status_changes_last_30_days = 0
+    for row in history:
+        if not is_tracked_change(row):
+            continue
+        dt = changed_at_utc(row)
+        if dt is None:
+            continue
+        if dt >= cut_7d:
+            status_changes_last_7_days += 1
+        if dt >= cut_30d:
+            status_changes_last_30_days += 1
+
+    seconds_by_stage: dict[str, int] = defaultdict(int)
+
+    def add_segment(stage_raw: Optional[str], t0: Optional[datetime], t1: datetime) -> None:
+        if t0 is None:
+            return
+        t0 = _ensure_utc(t0)
+        t1 = _ensure_utc(t1)
+        if t1 <= t0:
+            return
+        key = _analytics_stage_key(stage_raw)
+        seconds_by_stage[key] += int((t1 - t0).total_seconds())
+
+    # Normalize history into (changed_at_dt, row) tuples once to avoid reparsing
+    rows_with_dt = [(dt, r) for r in history if (dt := changed_at_utc(r)) is not None]
+    rows_with_dt.sort(key=lambda x: x[0])
+
+    if not rows_with_dt:
+        anchor = _parse_datetime_value(job.get("created_at"))
+        if anchor is None:
+            anchor = as_of
+        else:
+            anchor = _ensure_utc(anchor)
+        add_segment(job.get("status"), anchor, as_of)
+    else:
+        for i in range(len(rows_with_dt) - 1):
+            t0, r0 = rows_with_dt[i]
+            t1, _ = rows_with_dt[i + 1]
+            add_segment(r0.get("to_status"), t0, t1)
+        t_last, _ = rows_with_dt[-1]
+        add_segment(job.get("status"), t_last, as_of)
+
+    current_status_raw = job.get("status")
+    current_stage_key = (
+        _analytics_stage_key(current_status_raw)
+        if current_status_raw is not None and str(current_status_raw).strip()
+        else None
+    )
+    if current_stage_key is not None and current_stage_key not in seconds_by_stage:
+        seconds_by_stage[current_stage_key] = 0
+
+    time_in_stage = {
+        stage: {
+            "seconds": secs,
+            "label": _stage_display_label(stage),
+            "is_current": stage == current_stage_key,
+        }
+        for stage, secs in sorted(seconds_by_stage.items(), key=lambda kv: (-kv[1], kv[0]))
+        if secs > 0 or stage == current_stage_key
+    }
+
+    return {
+        "job_id": str(job.get("id") or ""),
+        "current_status": current_stage_key,
+        "status_changes_last_7_days": status_changes_last_7_days,
+        "status_changes_last_30_days": status_changes_last_30_days,
+        "time_in_stage": time_in_stage,
+        "as_of": as_of.isoformat(),
+    }
+
+
 def _parse_datetime_value(value) -> Optional[datetime]:
     if isinstance(value, datetime):
         return value
@@ -825,6 +939,28 @@ def get_job_history(job_id: str, authorization: Optional[str] = Header(default=N
     if response.data is None:
         raise HTTPException(status_code=500, detail="Failed to fetch job history")
     return response.data or []
+
+
+@app.get("/jobs/{job_id}/analytics")
+def get_job_analytics(job_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    job_response = sb.table("jobs").select("*").eq("id", job_id).eq("user_id", user_id).execute()
+    if not job_response.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job = job_response.data[0]
+    hist_response = (
+        sb.table("job_status_history")
+        .select("*")
+        .eq("job_id", job_id)
+        .eq("user_id", user_id)
+        .order("changed_at", desc=False)
+        .execute()
+    )
+    if hist_response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch job status history")
+    history = hist_response.data or []
+    return _build_job_analytics_payload(job, history, _utc_now())
 
 
 @app.get("/jobs/{job_id}/interviews")

@@ -42,6 +42,11 @@ jest.mock('../components/common/StatusBadge', () => ({
   default: ({ status }) => <span>{status}</span>,
 }));
 
+jest.mock('../components/JobAnalyticsCard/JobAnalyticsCard', () => ({
+  __esModule: true,
+  default: () => <div data-testid="job-analytics-card">Job Analytics</div>,
+}));
+
 jest.mock('../components/JobForm/JobForm', () => ({
   __esModule: true,
   default: () => <div>Job Form</div>,

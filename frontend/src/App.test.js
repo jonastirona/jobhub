@@ -230,7 +230,9 @@ test('shows error state when api request fails', async () => {
   );
   render(<App />);
   await waitFor(() => {
-    expect(screen.getByText(/failed to load jobs/i)).toBeInTheDocument();
+    const tableSection = document.querySelector('.table-section');
+    expect(tableSection).toBeTruthy();
+    expect(within(tableSection).getByText(/failed to load jobs/i)).toBeInTheDocument();
   });
 });
 
@@ -506,35 +508,35 @@ test('delete modal traps focus within its action buttons', async () => {
 });
 
 test('confirming delete calls endpoint and refetches jobs', async () => {
+  let deleted = false;
+  const jobRow = [
+    {
+      id: 'job-1',
+      title: 'Delete Me',
+      company: 'DataCorp',
+      status: 'applied',
+      applied_date: null,
+    },
+  ];
   global.fetch = jest.fn((url, options = {}) => {
+    const u = String(url);
     if (!options.method) {
-      if (String(url).startsWith('http://localhost:8000/jobs')) {
-        getJobsCallCount += 1;
+      if (u.includes('/reminders')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
-      return Promise.resolve({
-        ok: true,
-        json: () => {
-          if (getJobsCallCount === 1) {
-            return Promise.resolve([
-              {
-                id: 'job-1',
-                title: 'Delete Me',
-                company: 'DataCorp',
-                status: 'applied',
-                applied_date: null,
-              },
-            ]);
-          }
-          return Promise.resolve([]);
-        },
-      });
+      if (u.startsWith('http://localhost:8000/jobs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(deleted ? [] : jobRow),
+        });
+      }
     }
     if (options.method === 'DELETE') {
+      deleted = true;
       return Promise.resolve({ ok: true, status: 204 });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
   });
-  let getJobsCallCount = 0;
 
   render(<App />);
   await waitFor(() => screen.getByText('Delete Me'));
@@ -556,45 +558,43 @@ test('confirming delete calls endpoint and refetches jobs', async () => {
 });
 
 test('location filter options only show locations still present after delete', async () => {
-  let getJobsCallCount = 0;
+  let deleted = false;
+  const twoJobsPayload = {
+    items: [
+      { id: 'job-1', title: 'Boston Role', company: 'Acme', status: 'applied' },
+      { id: 'job-2', title: 'Remote Role', company: 'Beta', status: 'applied' },
+    ],
+    total: 2,
+    page: 1,
+    page_size: 10,
+    total_pages: 1,
+    available_statuses: ['applied'],
+    available_locations: ['Boston, MA', 'Remote'],
+    status_counts: { interviewing: 0, offered: 0 },
+  };
+  const oneJobPayload = {
+    items: [{ id: 'job-2', title: 'Remote Role', company: 'Beta', status: 'applied' }],
+    total: 1,
+    page: 1,
+    page_size: 10,
+    total_pages: 1,
+    available_statuses: ['applied'],
+    available_locations: ['Remote'],
+    status_counts: { interviewing: 0, offered: 0 },
+  };
   global.fetch = jest.fn((url, options = {}) => {
+    const u = String(url);
     if (!options.method) {
-      getJobsCallCount += 1;
-      if (getJobsCallCount <= 2) {
-        return Promise.resolve({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              items: [
-                { id: 'job-1', title: 'Boston Role', company: 'Acme', status: 'applied' },
-                { id: 'job-2', title: 'Remote Role', company: 'Beta', status: 'applied' },
-              ],
-              total: 2,
-              page: 1,
-              page_size: 10,
-              total_pages: 1,
-              available_statuses: ['applied'],
-              available_locations: ['Boston, MA', 'Remote'],
-              status_counts: { interviewing: 0, offered: 0 },
-            }),
-        });
+      if (u.includes('/reminders')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
       }
-      return Promise.resolve({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            items: [{ id: 'job-2', title: 'Remote Role', company: 'Beta', status: 'applied' }],
-            total: 1,
-            page: 1,
-            page_size: 10,
-            total_pages: 1,
-            available_statuses: ['applied'],
-            available_locations: ['Remote'],
-            status_counts: { interviewing: 0, offered: 0 },
-          }),
-      });
+      if (u.startsWith('http://localhost:8000/jobs')) {
+        const body = deleted ? oneJobPayload : twoJobsPayload;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+      }
     }
     if (options.method === 'DELETE') {
+      deleted = true;
       return Promise.resolve({ ok: true, status: 204 });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
