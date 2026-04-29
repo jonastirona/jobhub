@@ -99,7 +99,7 @@ export default function AIDraftModal({ type, job, accessToken, onClose, onSaved 
   const handleSave = async () => {
     clearSaveError();
     clearError();
-    const pdfBlob = contentToPdfBlob(content);
+    const pdfBlob = contentToPdfBlob(content, { singlePage: type === 'resume' });
     const filename = `${typeLabel} - ${job.company} - ${job.title}.pdf`;
     const file = new File([pdfBlob], filename, { type: 'application/pdf' });
     const result = await createDocument({

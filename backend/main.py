@@ -1240,7 +1240,12 @@ Write a complete resume tailored to this role. Use this exact markdown hierarchy
 
 Always include year ranges (e.g. 2020 – 2023, or 2021 – Present) for every
 experience and education entry. Never omit dates.
-Be concise and professional. Do not invent information not in the profile."""
+Be concise and professional. Do not invent information not in the profile.
+Output only the resume. No commentary, disclaimers, notes, or explanations before or after.
+
+IMPORTANT: The resume must fit on a single page. Keep the total content under 450 words.
+Limit bullet points to 2–3 per role. Write tight, punchy bullets. Omit or condense
+older or less relevant positions if needed to stay within one page."""
 
 
 def _build_cover_letter_prompt(ctx: dict, job: dict) -> str:
@@ -1285,6 +1290,34 @@ USER INSTRUCTIONS:
 Return only the rewritten document. No commentary, no preamble, no explanation."""
 
 
+def _build_company_research_prompt(job: dict, context: str) -> str:
+    return f"""You are a career research assistant helping a job candidate.
+
+COMPANY: {job.get("company")}
+ROLE: {job.get("title")}
+JOB DESCRIPTION: {job.get("description") or "Not provided"}
+
+CANDIDATE'S RESEARCH REQUEST:
+{context}
+
+Write a concise, conversational research briefing that directly answers the
+candidate's questions. This is NOT a resume or formal document — write in plain
+prose and bullet points, like a well-informed friend giving advice.
+
+Format using markdown:
+- ## for section headings (keep them short and descriptive)
+- Bullet points (-) for lists of facts or tips
+- **Bold** only for genuinely important terms
+
+Do not use headers like "Name:", "Company:", or any resume-style structure.
+Do not number every point or create a document outline.
+Just answer the questions clearly and practically.
+
+If you are uncertain about specific facts (e.g. exact revenue, headcount),
+say so and suggest reliable sources like the company website, LinkedIn, or
+Glassdoor. Do not fabricate figures."""
+
+
 def _call_groq(prompt: str) -> str:
     groq_key = os.getenv("GROQ_API_KEY")
     if not groq_key:
@@ -1312,6 +1345,11 @@ class GenerateDraftRequest(BaseModel):
 class RewriteDraftRequest(BaseModel):
     content: str
     instructions: str
+
+
+class CompanyResearchRequest(BaseModel):
+    job_id: str
+    context: str
 
 
 @app.post("/ai/generate")
@@ -1349,6 +1387,25 @@ def rewrite_draft(
         raise HTTPException(status_code=422, detail="instructions must not be blank")
     _check_ai_rate_limit(user_id)
     prompt = _build_rewrite_prompt(request.content, request.instructions)
+    return {"content": _call_groq(prompt)}
+
+
+@app.post("/ai/company-research")
+def company_research(
+    request: CompanyResearchRequest, authorization: Optional[str] = Header(default=None)
+):
+    user_id = get_user_id(authorization)
+    if not request.context.strip():
+        raise HTTPException(status_code=422, detail="context must not be blank")
+    _check_ai_rate_limit(user_id)
+    sb = get_supabase()
+    job_resp = (
+        sb.table("jobs").select("*").eq("id", request.job_id).eq("user_id", user_id).execute()
+    )
+    if not job_resp.data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job = job_resp.data[0]
+    prompt = _build_company_research_prompt(job, request.context.strip())
     return {"content": _call_groq(prompt)}
 
 
