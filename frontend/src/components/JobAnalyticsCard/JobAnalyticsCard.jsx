@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import StatusBadge from '../common/StatusBadge';
 import { useJobAnalytics } from '../../hooks/useJobAnalytics';
 import { useJobPickerJobs } from '../../hooks/useJobPickerJobs';
@@ -20,15 +20,12 @@ function formatPickerJobLabel(job) {
 function formatDurationSeconds(totalSeconds) {
   const n = Math.max(0, Math.floor(Number(totalSeconds) || 0));
   if (n === 0) return '0s';
+  if (n < 60) return `${n}s`;
+  if (n < 3600) return `${Math.floor(n / 60)}m`;
+  if (n < 86400) return `${Math.floor(n / 3600)}h`;
   const days = Math.floor(n / 86400);
   const hours = Math.floor((n % 86400) / 3600);
-  const mins = Math.floor((n % 3600) / 60);
-  const parts = [];
-  if (days) parts.push(`${days}d`);
-  if (hours) parts.push(`${hours}h`);
-  if (!days && mins) parts.push(`${mins}m`);
-  if (parts.length === 0) parts.push(`${n % 60}s`);
-  return parts.join(' ');
+  return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
 }
 
 export default function JobAnalyticsCard({ accessToken, jobsDataVersion = 0 }) {
@@ -49,15 +46,51 @@ export default function JobAnalyticsCard({ accessToken, jobsDataVersion = 0 }) {
     [pickerJobs, selectedJobId]
   );
 
-  const maxStageSeconds = useMemo(() => {
-    if (!data?.time_in_stage) return 0;
-    return Math.max(...Object.values(data.time_in_stage).map((e) => e.seconds || 0), 1);
+  const [tickSeconds, setTickSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!selectedJobId || pickerLoading) return;
+    if (!selectedJob) {
+      setSelectedJobId('');
+    }
+  }, [selectedJobId, selectedJob, pickerLoading]);
+
+  useEffect(() => {
+    setTickSeconds(0);
+    if (!data?.as_of) return undefined;
+    const hasCurrentStage = Object.values(data.time_in_stage || {}).some(
+      (entry) => entry.is_current
+    );
+    if (!hasCurrentStage) return undefined;
+    const asOfTs = new Date(data.as_of).getTime();
+    if (Number.isNaN(asOfTs)) return undefined;
+
+    const updateTick = () => {
+      const elapsed = Math.max(0, Math.floor((Date.now() - asOfTs) / 1000));
+      setTickSeconds(elapsed);
+    };
+    updateTick();
+    const id = window.setInterval(updateTick, 1000);
+    return () => window.clearInterval(id);
   }, [data]);
 
   const stageEntries = useMemo(() => {
     if (!data?.time_in_stage) return [];
     return Object.entries(data.time_in_stage);
   }, [data]);
+
+  const displayedStageEntries = useMemo(() => {
+    return stageEntries.map(([key, entry]) => {
+      const baseSeconds = Math.max(0, Math.floor(Number(entry.seconds) || 0));
+      const seconds = entry.is_current ? baseSeconds + tickSeconds : baseSeconds;
+      return [key, { ...entry, seconds }];
+    });
+  }, [stageEntries, tickSeconds]);
+
+  const maxStageSeconds = useMemo(() => {
+    if (displayedStageEntries.length === 0) return 0;
+    return Math.max(...displayedStageEntries.map(([, e]) => e.seconds || 0), 1);
+  }, [displayedStageEntries]);
 
   return (
     <section className="job-analytics-card" aria-labelledby="job-analytics-heading">
@@ -161,7 +194,7 @@ export default function JobAnalyticsCard({ accessToken, jobsDataVersion = 0 }) {
                 </tr>
               </thead>
               <tbody>
-                {stageEntries.map(([key, entry]) => {
+                {displayedStageEntries.map(([key, entry]) => {
                   const secs = entry.seconds ?? 0;
                   const pct = Math.round((secs / maxStageSeconds) * 100);
                   const isCurrent = Boolean(entry.is_current);
