@@ -573,12 +573,11 @@ def _build_job_analytics_payload(job: dict, history: list[dict], as_of: datetime
         key = _analytics_stage_key(stage_raw)
         seconds_by_stage[key] += int((t1 - t0).total_seconds())
 
-    rows = sorted(
-        (r for r in history if changed_at_utc(r) is not None),
-        key=lambda r: changed_at_utc(r) or datetime.min.replace(tzinfo=timezone.utc),
-    )
+    # Normalize history into (changed_at_dt, row) tuples once to avoid reparsing
+    rows_with_dt = [(dt, r) for r in history if (dt := changed_at_utc(r)) is not None]
+    rows_with_dt.sort(key=lambda x: x[0])
 
-    if not rows:
+    if not rows_with_dt:
         anchor = _parse_datetime_value(job.get("created_at"))
         if anchor is None:
             anchor = as_of
@@ -586,13 +585,11 @@ def _build_job_analytics_payload(job: dict, history: list[dict], as_of: datetime
             anchor = _ensure_utc(anchor)
         add_segment(job.get("status"), anchor, as_of)
     else:
-        for i in range(len(rows) - 1):
-            t0 = changed_at_utc(rows[i])
-            t1 = changed_at_utc(rows[i + 1])
-            if t0 is None or t1 is None:
-                continue
-            add_segment(rows[i].get("to_status"), t0, t1)
-        t_last = changed_at_utc(rows[-1])
+        for i in range(len(rows_with_dt) - 1):
+            t0, r0 = rows_with_dt[i]
+            t1, _ = rows_with_dt[i + 1]
+            add_segment(r0.get("to_status"), t0, t1)
+        t_last, _ = rows_with_dt[-1]
         add_segment(job.get("status"), t_last, as_of)
 
     current_status_raw = job.get("status")
