@@ -13,9 +13,7 @@ const JOB = { id: 'job-1', title: 'Backend Engineer', company: 'Acme' };
 const TOKEN = 'test-token';
 
 function renderModal(props = {}) {
-  return render(
-    <AIResearchModal job={JOB} accessToken={TOKEN} onClose={jest.fn()} {...props} />
-  );
+  return render(<AIResearchModal job={JOB} accessToken={TOKEN} onClose={jest.fn()} {...props} />);
 }
 
 describe('AIResearchModal', () => {
@@ -77,7 +75,7 @@ describe('AIResearchModal', () => {
     });
     renderModal();
     expect(screen.getByText(/researching acme/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^research$/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /researching…/i })).toBeDisabled();
   });
 
   test('shows results after successful research', async () => {
