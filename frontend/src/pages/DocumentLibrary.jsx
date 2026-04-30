@@ -39,6 +39,7 @@ export default function DocumentLibrary() {
   } = useDocuments(session?.access_token);
 
   const [rewriteDoc, setRewriteDoc] = useState(null);
+  const [selectedDoc, setSelectedDoc] = useState(null);
 
   async function handleViewDocument(documentId) {
     clearDeleteError();
@@ -46,6 +47,15 @@ export default function DocumentLibrary() {
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
     }
+  }
+
+  function openDocumentModal(doc) {
+    clearDeleteError();
+    setSelectedDoc(doc);
+  }
+
+  function closeDocumentModal() {
+    setSelectedDoc(null);
   }
 
   async function handleDeleteDocument(documentId) {
@@ -132,7 +142,7 @@ export default function DocumentLibrary() {
                         type="button"
                         className="action-btn"
                         aria-label="View document"
-                        onClick={() => handleViewDocument(doc.id)}
+                        onClick={() => openDocumentModal(doc)}
                         disabled={deletingId === doc.id}
                       >
                         👁
@@ -176,6 +186,65 @@ export default function DocumentLibrary() {
             refetch();
           }}
         />
+      )}
+
+      {selectedDoc && (
+        <div className="delete-modal-overlay" role="presentation" onClick={closeDocumentModal}>
+          <div
+            className="draft-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="document-view-title"
+            onClick={(e) => e.stopPropagation()}
+            tabIndex={-1}
+          >
+            <h2 className="delete-modal-title" id="document-view-title">
+              {selectedDoc.name || 'Document'}
+            </h2>
+            <p className="delete-modal-text">
+              <strong>Type:</strong> {selectedDoc.doc_type || 'Draft'}
+            </p>
+            <p className="delete-modal-text">
+              <strong>Status:</strong> {selectedDoc.status || '—'}
+            </p>
+            <p className="delete-modal-text">
+              <strong>Tags:</strong>{' '}
+              {Array.isArray(selectedDoc.tags) && selectedDoc.tags.length > 0 ? (
+                selectedDoc.tags.map((t) => (
+                  <span key={t} className="draft-field-label" style={{ display: 'inline-block', marginRight: 8 }}>
+                    {t}
+                  </span>
+                ))
+              ) : (
+                '—'
+              )}
+            </p>
+            <p className="delete-modal-text">
+              <strong>Linked:</strong> {getLinkedJobLabel(selectedDoc)}
+            </p>
+            <p className="delete-modal-text">
+              <strong>Uploaded:</strong> {formatDocumentDate(selectedDoc.created_at)}
+            </p>
+            <p className="delete-modal-text">
+              <strong>Last Updated:</strong> {formatDocumentDate(selectedDoc.updated_at)}
+            </p>
+            <div style={{ marginTop: 18, display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="delete-modal-btn"
+                onClick={async () => {
+                  const url = await viewDocument(selectedDoc.id);
+                  if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                }}
+              >
+                Open file
+              </button>
+              <button type="button" className="delete-modal-btn delete-modal-btn--cancel" onClick={closeDocumentModal}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </AppShell>
   );
