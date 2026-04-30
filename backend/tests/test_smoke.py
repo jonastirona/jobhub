@@ -1995,7 +1995,7 @@ def test_create_document_persists_status_and_tags():
         )
     inserted_payload = mock_query.insert.call_args[0][0]
     assert inserted_payload["status"] == "final"
-    assert inserted_payload["tags"] == ["a", "b"] or inserted_payload["tags"] == '["a","b"]'
+    assert inserted_payload["tags"] == ["a", "b"]
 
 
 def test_create_document_rejects_non_array_json_tags():
