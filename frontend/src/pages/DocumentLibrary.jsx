@@ -91,7 +91,8 @@ export default function DocumentLibrary() {
 
         <table className="shell-table">
           <caption className="visually-hidden">
-            Saved documents with name, type, linked job, created date, last updated date, and actions.
+            Saved documents with name, type, linked job, created date, last updated date, and
+            actions.
           </caption>
           <thead>
             <tr>
@@ -140,9 +141,7 @@ export default function DocumentLibrary() {
                   <td>{doc.doc_type || 'Draft'}</td>
                   <td>{getLinkedJobLabel(doc)}</td>
                   <td>
-                    <span className="date-text">
-                      {formatDocumentDate(doc.created_at, true)}
-                    </span>
+                    <span className="date-text">{formatDocumentDate(doc.created_at, true)}</span>
                   </td>
                   <td>
                     <span className="date-text">
@@ -222,21 +221,32 @@ export default function DocumentLibrary() {
             </p>
             <p className="delete-modal-text">
               <strong>Tags:</strong>{' '}
-              {Array.isArray(selectedDoc.tags) && selectedDoc.tags.length > 0 ? (
-                selectedDoc.tags.map((t) => (
-                  <span key={t} className="draft-field-label" style={{ display: 'inline-block', marginRight: 8 }}>
-                    {t}
-                  </span>
-                ))
-              ) : (
-                '—'
-              )}
+              {Array.isArray(selectedDoc.tags) && selectedDoc.tags.length > 0
+                ? selectedDoc.tags.map((t) => (
+                    <span
+                      key={t}
+                      className="draft-field-label"
+                      style={{ display: 'inline-block', marginRight: 8 }}
+                    >
+                      {t}
+                    </span>
+                  ))
+                : '—'}
             </p>
             <p className="delete-modal-text">
               <strong>Linked:</strong> {getLinkedJobLabel(selectedDoc)}
             </p>
-            <hr style={{ margin: '12px 0', border: 'none', borderTop: '1px solid var(--border)' }} />
-            <p style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 8 }}>
+            <hr
+              style={{ margin: '12px 0', border: 'none', borderTop: '1px solid var(--border)' }}
+            />
+            <p
+              style={{
+                fontSize: '12px',
+                fontWeight: '600',
+                color: 'var(--text-secondary)',
+                marginBottom: 8,
+              }}
+            >
               Timestamps
             </p>
             <p className="delete-modal-text">
@@ -256,7 +266,11 @@ export default function DocumentLibrary() {
               >
                 Open file
               </button>
-              <button type="button" className="delete-modal-btn delete-modal-btn--cancel" onClick={closeDocumentModal}>
+              <button
+                type="button"
+                className="delete-modal-btn delete-modal-btn--cancel"
+                onClick={closeDocumentModal}
+              >
                 Close
               </button>
             </div>

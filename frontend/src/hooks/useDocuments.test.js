@@ -54,9 +54,9 @@ describe('useDocuments', () => {
     expect(options.body.get('doc_type')).toBe('Resume');
     expect(options.body.get('job_id')).toBe('job-1');
     expect(options.body.get('file')).toBe(file);
-      // status and tags should be appended (tags sent as JSON string)
-      expect(options.body.get('status')).toBe('final');
-      expect(options.body.get('tags')).toBe(JSON.stringify(['backend', '2026']));
+    // status and tags should be appended (tags sent as JSON string)
+    expect(options.body.get('status')).toBe('final');
+    expect(options.body.get('tags')).toBe(JSON.stringify(['backend', '2026']));
   });
 
   test('createDocument sets saveError when upload fails', async () => {
