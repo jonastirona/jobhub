@@ -1998,6 +1998,25 @@ def test_create_document_persists_status_and_tags():
     assert inserted_payload["tags"] == ["a", "b"] or inserted_payload["tags"] == '["a","b"]'
 
 
+def test_create_document_rejects_non_array_json_tags():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            data={"name": "Draft", "tags": '"a,b"'},
+            files={
+                "file": (
+                    "draft.pdf",
+                    b"%PDF-1.7\nDraft content",
+                    "application/pdf",
+                )
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "tags must be a JSON array or comma-separated list" in response.json()["detail"]
+
+
 def test_create_document_rejects_blank_name():
     mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -2172,10 +2191,7 @@ def test_delete_document_not_found():
 def test_delete_document_scoped_to_user():
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
     with patch("main.get_supabase", return_value=mock_sb):
-        client.delete(
-            f"/documents/{SAMPLE_DOCUMENT['id']}",
-            headers={"authorization": AUTH_HEADER},
-        )
+        client.delete(f"/documents/{SAMPLE_DOCUMENT['id']}", headers={"authorization": AUTH_HEADER})
     eq_calls = [call[0] for call in mock_query.eq.call_args_list]
     assert ("user_id", MOCK_USER_ID) in eq_calls
 

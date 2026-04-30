@@ -1183,11 +1183,16 @@ async def create_document(
         t = tags.strip()
         try:
             parsed = json.loads(t)
-            if isinstance(parsed, list):
-                parsed_tags = [str(x).strip() for x in parsed if str(x).strip()]
-        except Exception:
+        except json.JSONDecodeError:
             # fallback to comma-separated
             parsed_tags = [p.strip() for p in t.split(",") if p.strip()]
+        else:
+            if not isinstance(parsed, list):
+                raise HTTPException(
+                    status_code=422,
+                    detail="tags must be a JSON array or comma-separated list",
+                )
+            parsed_tags = [str(x).strip() for x in parsed if str(x).strip()]
     payload = {
         "user_id": user_id,
         "job_id": job_id,
