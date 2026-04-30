@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useAIResearch } from '../../hooks/useAIResearch';
+import { useJobResearch } from '../../hooks/useJobResearch';
 import './AIResearchModal.css';
 
-export default function AIResearchModal({ job, accessToken, onClose }) {
+export default function AIResearchModal({ job, accessToken, onClose, onResearchSaved }) {
   const { research, researching, error, clearError } = useAIResearch(accessToken);
+  const {
+    saveResearch,
+    saving: savingResearch,
+    error: saveError,
+    clearError: clearSaveError,
+  } = useJobResearch(accessToken);
   const [context, setContext] = useState('');
   const [content, setContent] = useState(null);
+  const [saved, setSaved] = useState(false);
   const overlayRef = useRef(null);
 
   useEffect(() => {
@@ -34,7 +42,19 @@ export default function AIResearchModal({ job, accessToken, onClose }) {
   const handleResearchAgain = () => {
     setContent(null);
     setContext('');
+    setSaved(false);
     clearError();
+    clearSaveError();
+  };
+
+  const handleSave = async () => {
+    if (!content) return;
+    clearSaveError();
+    const result = await saveResearch(job.id, content);
+    if (result) {
+      setSaved(true);
+      onResearchSaved?.(result);
+    }
   };
 
   const isInputStep = content === null;
@@ -62,9 +82,9 @@ export default function AIResearchModal({ job, accessToken, onClose }) {
         </div>
 
         <div className="ai-body">
-          {error && (
+          {(error || saveError) && (
             <p className="ai-error" role="alert">
-              {error}
+              {error || saveError}
             </p>
           )}
 
@@ -115,6 +135,14 @@ export default function AIResearchModal({ job, accessToken, onClose }) {
             <>
               <button type="button" className="ai-btn ai-btn--ghost" onClick={handleResearchAgain}>
                 Research Again
+              </button>
+              <button
+                type="button"
+                className="ai-btn ai-btn--save"
+                onClick={handleSave}
+                disabled={savingResearch || saved}
+              >
+                {saved ? 'Saved!' : savingResearch ? 'Saving…' : 'Save to Job'}
               </button>
               <button type="button" className="ai-btn ai-btn--ghost" onClick={onClose}>
                 Close

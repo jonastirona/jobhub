@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import StatusBadge from '../common/StatusBadge';
 import AIDraftModal from '../AIDraftModal/AIDraftModal';
 import AIResearchModal from '../AIResearchModal/AIResearchModal';
+import SavedResearchModal from './SavedResearchModal';
 import '../JobForm/JobForm.css';
 import './JobOverviewModal.css';
 
@@ -53,17 +54,24 @@ export default function JobOverviewModal({
   onOpenDocument,
   onDownloadDocument,
   onDocumentSaved,
+  onJobUpdated,
 }) {
   const overlayRef = useRef(null);
   const modalRef = useRef(null);
   const [aiDraftType, setAiDraftType] = useState(null);
   const [showResearch, setShowResearch] = useState(false);
+  const [showSavedResearch, setShowSavedResearch] = useState(false);
+  const [jobWithResearch, setJobWithResearch] = useState(null);
 
   useEffect(() => {
     function onKey(e) {
       if (e.key === 'Escape') {
-        if (aiDraftType) {
+        if (showSavedResearch) {
+          setShowSavedResearch(false);
+        } else if (aiDraftType) {
           setAiDraftType(null);
+        } else if (showResearch) {
+          setShowResearch(false);
         } else {
           onClose();
         }
@@ -71,7 +79,7 @@ export default function JobOverviewModal({
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose, aiDraftType]);
+  }, [onClose, aiDraftType, showResearch, showSavedResearch]);
 
   const handleOverlayClick = useCallback(
     (e) => {
@@ -178,8 +186,20 @@ export default function JobOverviewModal({
             <div className="job-overview-row-two">
               <div className="job-overview-section">
                 <div className="job-overview-label">Status</div>
-                <div className="job-overview-value">
+                <div className="job-overview-value job-overview-status-row">
                   <StatusBadge status={job.status} />
+                  <button
+                    type="button"
+                    className={`srm-research-indicator ${
+                      job.research?.trim() ? 'srm-research-indicator--active' : ''
+                    }`}
+                    onClick={() => setShowSavedResearch(true)}
+                    aria-label={job.research?.trim() ? 'View saved research' : 'No research saved'}
+                    title={job.research?.trim() ? 'View saved research' : 'No research saved'}
+                  >
+                    <span className="srm-research-icon">📚</span>
+                    {job.research?.trim() && <span className="srm-research-dot" />}
+                  </button>
                 </div>
               </div>
               <Field label="Location">{location}</Field>
@@ -322,6 +342,31 @@ export default function JobOverviewModal({
           job={job}
           accessToken={accessToken}
           onClose={() => setShowResearch(false)}
+          onResearchSaved={(updatedJob) => {
+            setShowResearch(false);
+            onJobUpdated?.();
+            if (updatedJob) {
+              setJobWithResearch(updatedJob);
+              setShowSavedResearch(true);
+            }
+          }}
+        />
+      )}
+
+      {showSavedResearch && (
+        <SavedResearchModal
+          job={jobWithResearch || job}
+          accessToken={accessToken}
+          onClose={() => {
+            setShowSavedResearch(false);
+            setJobWithResearch(null);
+          }}
+          onResearchUpdated={(updatedJob) => {
+            if (updatedJob) {
+              setJobWithResearch(updatedJob);
+            }
+            onJobUpdated?.();
+          }}
         />
       )}
     </>

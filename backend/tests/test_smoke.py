@@ -1171,6 +1171,22 @@ def test_update_job_partial_fields():
     assert "company" not in update_payload
 
 
+def test_update_job_research_field():
+    """Updating research field should persist markdown content."""
+    research_content = "## Company Culture\n\nGreat work-life balance."
+    updated = {**SAMPLE_JOB, "research": research_content}
+    mock_sb, mock_query, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"research": research_content},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    update_payload = mock_query.update.call_args[0][0]
+    assert update_payload == {"research": research_content}
+
+
 def test_update_job_accepts_new_final_outcome_status():
     updated = {**SAMPLE_JOB, "status": "withdrawn"}
     mock_sb, _ = _make_mock_sb_with_status_change("applied", "withdrawn")
