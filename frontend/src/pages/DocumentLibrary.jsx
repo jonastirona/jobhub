@@ -48,14 +48,6 @@ export default function DocumentLibrary() {
   const [rewriteDoc, setRewriteDoc] = useState(null);
   const [selectedDoc, setSelectedDoc] = useState(null);
 
-  async function handleViewDocument(documentId) {
-    clearDeleteError();
-    const url = await viewDocument(documentId);
-    if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-  }
-
   function openDocumentModal(doc) {
     clearDeleteError();
     setSelectedDoc(doc);

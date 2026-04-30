@@ -1175,8 +1175,8 @@ async def create_document(
         raise HTTPException(status_code=422, detail="name must not be blank")
     trimmed_doc_type = (doc_type or "").strip() or "Draft"
     _assert_linked_job_exists_for_user(sb, user_id, job_id)
-    storage_path, mime_type, file_size = await _upload_document_to_storage(sb, user_id, file)
     normalized_status = _assert_document_status(status)
+    storage_path, mime_type, file_size = await _upload_document_to_storage(sb, user_id, file)
     parsed_tags = None
     if tags:
         # Accept either JSON array or comma-separated list
