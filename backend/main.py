@@ -100,6 +100,7 @@ def get_user_id(authorization: Optional[str]) -> str:
         response = sb.auth.get_user(token)
         if not response or not response.user:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
+        sentry_sdk.set_user({"id": response.user.id})
         return response.user.id
     except HTTPException:
         raise
