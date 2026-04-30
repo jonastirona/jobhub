@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppShell from '../components/layout/AppShell';
 import AIRewriteModal from '../components/AIRewriteModal/AIRewriteModal';
 import { useAuth } from '../context/AuthContext';
@@ -47,6 +47,11 @@ export default function DocumentLibrary() {
   const [selectedDocType, setSelectedDocType] = useState('');
   const [selectedSortBy, setSelectedSortBy] = useState('updated_at');
 
+  const filters = useMemo(
+    () => ({ docType: selectedDocType || undefined, sortBy: selectedSortBy }),
+    [selectedDocType, selectedSortBy]
+  );
+
   const {
     documents,
     loading,
@@ -57,10 +62,7 @@ export default function DocumentLibrary() {
     deleteDocument,
     clearDeleteError,
     refetch,
-  } = useDocuments(session?.access_token, true, {
-    docType: selectedDocType || undefined,
-    sortBy: selectedSortBy,
-  });
+  } = useDocuments(session?.access_token, true, filters);
 
   const [rewriteDoc, setRewriteDoc] = useState(null);
   const [selectedDoc, setSelectedDoc] = useState(null);

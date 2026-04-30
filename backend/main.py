@@ -1155,7 +1155,10 @@ def list_documents(
 ):
     user_id = get_user_id(authorization)
     if sort_by not in DOCUMENT_SORT_OPTIONS:
-        raise HTTPException(status_code=422, detail="sort_by contains unsupported values")
+        allowed = ", ".join(sorted(DOCUMENT_SORT_OPTIONS))
+        raise HTTPException(
+            status_code=422, detail=f"unsupported sort_by value; allowed: {allowed}"
+        )
     normalized_doc_type = doc_type.strip() if isinstance(doc_type, str) else None
     if normalized_doc_type and normalized_doc_type not in DOCUMENT_TYPE_OPTIONS:
         raise HTTPException(status_code=422, detail="doc_type contains unsupported values")
