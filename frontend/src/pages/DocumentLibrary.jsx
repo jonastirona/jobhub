@@ -110,7 +110,7 @@ export default function DocumentLibrary() {
 
             {!loading && error && (
               <tr>
-                <td colSpan={6} className="table-empty table-state--error">
+                <td colSpan={7} className="table-empty table-state--error">
                   <div role="alert">{error}</div>
                 </td>
               </tr>
@@ -118,7 +118,7 @@ export default function DocumentLibrary() {
 
             {!loading && !error && documents.length === 0 && (
               <tr>
-                <td colSpan={6} className="table-empty">
+                <td colSpan={7} className="table-empty">
                   No saved documents yet. Create a draft from any job in your dashboard.
                 </td>
               </tr>
