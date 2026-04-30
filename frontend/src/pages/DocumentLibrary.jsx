@@ -100,7 +100,7 @@ export default function DocumentLibrary() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="table-empty">
+                <td colSpan={7} className="table-empty">
                   <span role="status" aria-live="polite" aria-busy="true">
                     Loading documents...
                   </span>
