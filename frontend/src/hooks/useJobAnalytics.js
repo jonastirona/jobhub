@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import * as Sentry from '@sentry/react';
+import { extractErrorMessage } from '../utils/apiError';
+
 export function useJobAnalytics(accessToken, jobId, refreshKey = 0) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -31,14 +34,14 @@ export function useJobAnalytics(accessToken, jobId, refreshKey = 0) {
         signal,
       });
       if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(text || `Failed to load analytics (${res.status})`);
+        throw new Error((await extractErrorMessage(res)) || `Failed to load analytics (${res.status})`);
       }
       const body = await res.json();
       if (signal.aborted) return;
       setData(body);
     } catch (err) {
       if (signal.aborted) return;
+      Sentry.captureException(err);
       setData(null);
       setError(err instanceof Error ? err.message : String(err));
     } finally {

@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 
+import * as Sentry from '@sentry/react';
+
 export function useAIDraft(accessToken) {
   const [generating, setGenerating] = useState(false);
   const [rewriting, setRewriting] = useState(false);
@@ -31,6 +33,7 @@ export function useAIDraft(accessToken) {
         const data = await res.json();
         return data.content;
       } catch (err) {
+        Sentry.captureException(err);
         setError(err instanceof Error ? err.message : String(err));
         return null;
       } finally {
@@ -64,6 +67,7 @@ export function useAIDraft(accessToken) {
         const data = await res.json();
         return data.content;
       } catch (err) {
+        Sentry.captureException(err);
         setError(err instanceof Error ? err.message : String(err));
         return null;
       } finally {

@@ -1,20 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-async function extractErrorMessage(res) {
-  const text = await res.text().catch(() => '');
-  const contentType = res.headers?.get?.('content-type') ?? '';
-  if (contentType.includes('application/json')) {
-    try {
-      const body = JSON.parse(text);
-      if (typeof body?.detail === 'string') return body.detail;
-      if (body?.detail != null) return JSON.stringify(body.detail);
-      if (body != null) return JSON.stringify(body);
-    } catch {
-      // fall through to raw text
-    }
-  }
-  return text;
-}
+import * as Sentry from '@sentry/react';
+import { extractErrorMessage } from '../utils/apiError';
 
 export function useExperience(accessToken) {
   const [experience, setExperience] = useState([]);
@@ -50,6 +37,7 @@ export function useExperience(accessToken) {
         setExperience(data);
       } catch (err) {
         if (signal?.aborted) return;
+        Sentry.captureException(err);
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         if (!signal?.aborted) setLoading(false);
@@ -108,6 +96,7 @@ export function useExperience(accessToken) {
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
+        Sentry.captureException(err);
         setSaveError(err instanceof Error ? err.message : String(err));
         return false;
       } finally {
@@ -155,6 +144,7 @@ export function useExperience(accessToken) {
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
+        Sentry.captureException(err);
         setSaveError(err instanceof Error ? err.message : String(err));
         return false;
       } finally {
@@ -197,6 +187,7 @@ export function useExperience(accessToken) {
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
+        Sentry.captureException(err);
         setSaveError(err instanceof Error ? err.message : String(err));
         return false;
       } finally {
@@ -244,6 +235,7 @@ export function useExperience(accessToken) {
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
+        Sentry.captureException(err);
         setSaveError(err instanceof Error ? err.message : String(err));
         return false;
       } finally {

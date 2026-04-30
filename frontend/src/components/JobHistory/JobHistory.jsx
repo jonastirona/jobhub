@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import * as Sentry from '@sentry/react';
 import { useJobHistory } from '../../hooks/useJobHistory';
 import StatusBadge from '../common/StatusBadge';
 import './JobHistory.css';
@@ -82,6 +83,7 @@ export default function JobHistory({ job, accessToken, onClose, onSaved }) {
       setNotesSaved(true);
       onSaved?.();
     } catch (err) {
+      Sentry.captureException(err);
       setNotesError(err instanceof Error ? err.message : String(err));
     } finally {
       setSavingNotes(false);

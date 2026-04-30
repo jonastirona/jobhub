@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import * as Sentry from '@sentry/react';
 import { useJobs } from '../../hooks/useJobs';
 import './ReminderPanel.css';
 
@@ -90,6 +91,7 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
       setForm({ job_id: '', title: '', notes: '', due_date: '' });
       onRefetch();
     } catch (err) {
+      Sentry.captureException(err);
       setFormError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
@@ -112,6 +114,7 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
       if (!res.ok) throw new Error(`Failed to mark reminder complete (${res.status})`);
       onRefetch();
     } catch (err) {
+      Sentry.captureException(err);
       setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setCompleting(null);
@@ -130,6 +133,7 @@ export default function ReminderPanel({ accessToken, reminders, onClose, onRefet
       if (!res.ok) throw new Error(`Failed to delete reminder (${res.status})`);
       onRefetch();
     } catch (err) {
+      Sentry.captureException(err);
       setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setDeleting(null);

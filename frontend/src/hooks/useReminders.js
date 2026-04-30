@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import * as Sentry from '@sentry/react';
+
 export function useReminders(accessToken) {
   const [reminders, setReminders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -29,6 +31,7 @@ export function useReminders(accessToken) {
         setReminders(Array.isArray(data) ? data : []);
       } catch (err) {
         if (err.name === 'AbortError') return;
+        Sentry.captureException(err);
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         if (!signal?.aborted) setLoading(false);

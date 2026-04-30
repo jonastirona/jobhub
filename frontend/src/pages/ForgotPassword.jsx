@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import * as Sentry from '@sentry/react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import '../AuthPages.css';
@@ -17,6 +18,7 @@ export default function ForgotPassword() {
     const { error: err } = await resetPassword(email.trim());
     setSubmitting(false);
     if (err) {
+      Sentry.captureException(err);
       setError(err.message);
       return;
     }

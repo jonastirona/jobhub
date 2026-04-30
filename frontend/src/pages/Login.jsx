@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import * as Sentry from '@sentry/react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import jobhubLogo from '../assets/jobhub_logo.svg';
@@ -35,6 +36,7 @@ export default function Login() {
     const { error: err } = await signIn(email.trim(), password);
     setSubmitting(false);
     if (err) {
+      Sentry.captureException(err);
       setError(err.message);
       return;
     }

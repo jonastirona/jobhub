@@ -1,15 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-async function extractErrorMessage(res) {
-  const contentType = res.headers?.get?.('content-type') ?? '';
-  if (contentType.includes('application/json')) {
-    const body = await res.json().catch(() => null);
-    if (typeof body?.detail === 'string') return body.detail;
-    if (body?.detail != null) return JSON.stringify(body.detail);
-    if (body != null) return JSON.stringify(body);
-  }
-  return res.text().catch(() => '');
-}
+import * as Sentry from '@sentry/react';
+import { extractErrorMessage } from '../utils/apiError';
 
 export function useSkills(accessToken) {
   const [skills, setSkills] = useState([]);
@@ -45,6 +37,7 @@ export function useSkills(accessToken) {
         setSkills(data);
       } catch (err) {
         if (signal?.aborted) return;
+        Sentry.captureException(err);
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         if (!signal?.aborted) setLoading(false);
@@ -103,6 +96,7 @@ export function useSkills(accessToken) {
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
+        Sentry.captureException(err);
         setSaveError(err instanceof Error ? err.message : String(err));
         return false;
       } finally {
@@ -150,6 +144,7 @@ export function useSkills(accessToken) {
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
+        Sentry.captureException(err);
         setSaveError(err instanceof Error ? err.message : String(err));
         return false;
       } finally {
@@ -192,6 +187,7 @@ export function useSkills(accessToken) {
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
+        Sentry.captureException(err);
         setSaveError(err instanceof Error ? err.message : String(err));
         return false;
       } finally {
@@ -239,6 +235,7 @@ export function useSkills(accessToken) {
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
+        Sentry.captureException(err);
         setSaveError(err instanceof Error ? err.message : String(err));
         return false;
       } finally {

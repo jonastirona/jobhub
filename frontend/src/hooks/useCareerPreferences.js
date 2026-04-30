@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import * as Sentry from '@sentry/react';
+import { extractErrorMessage } from '../utils/apiError';
+
 export function useCareerPreferences(accessToken) {
   const [preferences, setPreferences] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +37,7 @@ export function useCareerPreferences(accessToken) {
         setPreferences(data);
       } catch (err) {
         if (signal?.aborted) return;
+        Sentry.captureException(err);
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         if (!signal?.aborted) setLoading(false);
@@ -84,20 +88,7 @@ export function useCareerPreferences(accessToken) {
           signal: controller.signal,
         });
         if (!res.ok) {
-          const contentType = res.headers?.get?.('content-type') ?? '';
-          let message = '';
-          if (contentType.includes('application/json')) {
-            const body = await res.json().catch(() => null);
-            if (typeof body?.detail === 'string') {
-              message = body.detail;
-            } else if (body?.detail != null) {
-              message = JSON.stringify(body.detail);
-            } else if (body != null) {
-              message = JSON.stringify(body);
-            }
-          } else {
-            message = await res.text().catch(() => '');
-          }
+          const message = await extractErrorMessage(res);
           throw new Error(message || `Save failed (${res.status})`);
         }
         const saved = await res.json();
@@ -106,6 +97,7 @@ export function useCareerPreferences(accessToken) {
         return true;
       } catch (err) {
         if (controller.signal.aborted) return false;
+        Sentry.captureException(err);
         setSaveError(err instanceof Error ? err.message : String(err));
         return false;
       } finally {
