@@ -128,7 +128,9 @@ export function useDocuments(accessToken, loadOnMount = true) {
         });
 
         if (!res.ok) {
-          throw new Error((await extractErrorMessage(res)) || `Failed to save document (${res.status})`);
+          throw new Error(
+            (await extractErrorMessage(res)) || `Failed to save document (${res.status})`
+          );
         }
 
         const created = await res.json();
@@ -158,7 +160,9 @@ export function useDocuments(accessToken, loadOnMount = true) {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (!res.ok) {
-          throw new Error((await extractErrorMessage(res)) || `Failed to open document (${res.status})`);
+          throw new Error(
+            (await extractErrorMessage(res)) || `Failed to open document (${res.status})`
+          );
         }
         const data = await res.json();
         const url = data?.url;
@@ -203,7 +207,9 @@ export function useDocuments(accessToken, loadOnMount = true) {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (!res.ok) {
-          throw new Error((await extractErrorMessage(res)) || `Failed to delete document (${res.status})`);
+          throw new Error(
+            (await extractErrorMessage(res)) || `Failed to delete document (${res.status})`
+          );
         }
         setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
         return true;

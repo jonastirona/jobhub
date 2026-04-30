@@ -15,7 +15,9 @@ Sentry.init({
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <Sentry.ErrorBoundary fallback={<p role="alert">Something went wrong. Please refresh the page.</p>}>
+    <Sentry.ErrorBoundary
+      fallback={<p role="alert">Something went wrong. Please refresh the page.</p>}
+    >
       <App />
     </Sentry.ErrorBoundary>
   </React.StrictMode>

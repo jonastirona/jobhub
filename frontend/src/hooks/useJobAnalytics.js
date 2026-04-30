@@ -34,7 +34,9 @@ export function useJobAnalytics(accessToken, jobId, refreshKey = 0) {
         signal,
       });
       if (!res.ok) {
-        throw new Error((await extractErrorMessage(res)) || `Failed to load analytics (${res.status})`);
+        throw new Error(
+          (await extractErrorMessage(res)) || `Failed to load analytics (${res.status})`
+        );
       }
       const body = await res.json();
       if (signal.aborted) return;
