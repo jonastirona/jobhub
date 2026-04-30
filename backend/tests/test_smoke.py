@@ -1981,7 +1981,7 @@ def test_create_document_sets_user_id():
 def test_create_document_persists_status_and_tags():
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
     with patch("main.get_supabase", return_value=mock_sb):
-        client.post(
+        response = client.post(
             "/documents",
             data={"name": "Draft", "status": "final", "tags": '["a","b"]'},
             files={
@@ -1993,6 +1993,7 @@ def test_create_document_persists_status_and_tags():
             },
             headers={"authorization": AUTH_HEADER},
         )
+    assert response.status_code == 201
     inserted_payload = mock_query.insert.call_args[0][0]
     assert inserted_payload["status"] == "final"
     assert inserted_payload["tags"] == ["a", "b"]
