@@ -18,7 +18,7 @@ export default function ForgotPassword() {
     const { error: err } = await resetPassword(email.trim());
     setSubmitting(false);
     if (err) {
-      Sentry.captureException(err);
+      if (!err.status || err.status >= 500) Sentry.captureException(err);
       setError(err.message);
       return;
     }

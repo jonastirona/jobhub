@@ -36,7 +36,7 @@ export default function Login() {
     const { error: err } = await signIn(email.trim(), password);
     setSubmitting(false);
     if (err) {
-      Sentry.captureException(err);
+      if (!err.status || err.status >= 500) Sentry.captureException(err);
       setError(err.message);
       return;
     }

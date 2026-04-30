@@ -9,7 +9,7 @@ Sentry.init({
   dsn: process.env.REACT_APP_SENTRY_DSN,
   environment: process.env.NODE_ENV,
   enabled: !!process.env.REACT_APP_SENTRY_DSN,
-  traces_sample_rate: 0.1,
+  tracesSampleRate: 0.1,
 });
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
