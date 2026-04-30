@@ -4450,3 +4450,16 @@ def test_build_resume_prompt_instructs_no_commentary():
 
     assert "Output only the resume" in prompt
     assert "No commentary" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Global exception handler
+# ---------------------------------------------------------------------------
+
+
+def test_unhandled_exception_returns_500_json():
+    no_raise_client = TestClient(app, raise_server_exceptions=False)
+    with patch("main.get_supabase", side_effect=RuntimeError("boom")):
+        response = no_raise_client.get("/jobs", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal server error"}
