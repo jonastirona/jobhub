@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from math import ceil
 from pathlib import Path
 from typing import Optional
+import json
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Response, UploadFile
@@ -50,6 +51,7 @@ JOB_STATUSES = {
     "withdrawn",
     "archived",
 }
+DOCUMENT_STATUSES = {"draft", "final", "archived"}
 JOB_STATUS_ALIAS = {"interview": "interviewing", "offer": "offered"}
 PDF_EXTENSION = ".pdf"
 PDF_MIME_TYPE = "application/pdf"
@@ -322,6 +324,17 @@ def _assert_pdf_signature(content: bytes) -> None:
 
 def _build_storage_document_path(user_id: str, extension: str) -> str:
     return f"{user_id}/{uuid.uuid4().hex}{extension}"
+
+
+def _assert_document_status(status: Optional[str]) -> Optional[str]:
+    if status is None:
+        return None
+    s = str(status).strip().lower()
+    if not s:
+        return None
+    if s not in DOCUMENT_STATUSES:
+        raise HTTPException(status_code=422, detail="status must be one of: draft, final, archived")
+    return s
 
 
 async def _upload_document_to_storage(sb, user_id: str, upload: UploadFile) -> tuple[str, str, int]:
@@ -1150,6 +1163,8 @@ async def create_document(
     doc_type: str = Form("Draft"),
     job_id: Optional[str] = Form(default=None),
     content: Optional[str] = Form(default=None),
+    status: Optional[str] = Form(default=None),
+    tags: Optional[str] = Form(default=None),
     file: UploadFile = File(...),
     authorization: Optional[str] = Header(default=None),
 ):
@@ -1161,11 +1176,25 @@ async def create_document(
     trimmed_doc_type = (doc_type or "").strip() or "Draft"
     _assert_linked_job_exists_for_user(sb, user_id, job_id)
     storage_path, mime_type, file_size = await _upload_document_to_storage(sb, user_id, file)
+    normalized_status = _assert_document_status(status)
+    parsed_tags = None
+    if tags:
+        # Accept either JSON array or comma-separated list
+        t = tags.strip()
+        try:
+            parsed = json.loads(t)
+            if isinstance(parsed, list):
+                parsed_tags = [str(x).strip() for x in parsed if str(x).strip()]
+        except Exception:
+            # fallback to comma-separated
+            parsed_tags = [p.strip() for p in t.split(",") if p.strip()]
     payload = {
         "user_id": user_id,
         "job_id": job_id,
         "name": trimmed_name,
         "doc_type": trimmed_doc_type,
+        "status": normalized_status,
+        "tags": parsed_tags,
         "storage_bucket": DOCUMENTS_BUCKET,
         "storage_path": storage_path,
         "mime_type": mime_type,

@@ -1978,6 +1978,26 @@ def test_create_document_sets_user_id():
     assert inserted_payload["user_id"] == MOCK_USER_ID
 
 
+def test_create_document_persists_status_and_tags():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/documents",
+            data={"name": "Draft", "status": "final", "tags": '["a","b"]'},
+            files={
+                "file": (
+                    "draft.pdf",
+                    b"%PDF-1.7\nDraft content",
+                    "application/pdf",
+                )
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    inserted_payload = mock_query.insert.call_args[0][0]
+    assert inserted_payload["status"] == "final"
+    assert inserted_payload["tags"] == ["a", "b"] or inserted_payload["tags"] == '["a","b"]'
+
+
 def test_create_document_rejects_blank_name():
     mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
     with patch("main.get_supabase", return_value=mock_sb):
