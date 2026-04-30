@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import AppShell from '../components/layout/AppShell';
 import AIRewriteModal from '../components/AIRewriteModal/AIRewriteModal';
 import { useAuth } from '../context/AuthContext';
@@ -31,6 +31,9 @@ function getLinkedJobLabel(doc) {
   return `${title} - ${company}`;
 }
 
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export default function DocumentLibrary() {
   const { session } = useAuth();
   const {
@@ -47,6 +50,8 @@ export default function DocumentLibrary() {
 
   const [rewriteDoc, setRewriteDoc] = useState(null);
   const [selectedDoc, setSelectedDoc] = useState(null);
+  const overlayRef = useRef(null);
+  const modalRef = useRef(null);
 
   function openDocumentModal(doc) {
     clearDeleteError();
@@ -56,6 +61,35 @@ export default function DocumentLibrary() {
   function closeDocumentModal() {
     setSelectedDoc(null);
   }
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') closeDocumentModal();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const handleOverlayClick = useCallback((e) => {
+    if (e.target === overlayRef.current) closeDocumentModal();
+  }, []);
+
+  const handleModalKeyDown = useCallback((e) => {
+    if (e.key !== 'Tab' || !modalRef.current) return;
+    const focusable = Array.from(modalRef.current.querySelectorAll(FOCUSABLE_SELECTOR));
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (window.document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else if (window.document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }, []);
 
   async function handleDeleteDocument(documentId) {
     await deleteDocument(documentId);
@@ -193,30 +227,37 @@ export default function DocumentLibrary() {
       )}
 
       {selectedDoc && (
-        <div className="delete-modal-overlay" role="presentation" onClick={closeDocumentModal}>
+        <div
+          className="document-view-modal-overlay"
+          role="presentation"
+          onClick={handleOverlayClick}
+          ref={overlayRef}
+        >
           <div
             className="draft-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="document-view-title"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={handleModalKeyDown}
             tabIndex={-1}
+            ref={modalRef}
           >
-            <h2 className="delete-modal-title" id="document-view-title">
+            <h2 className="document-view-modal-title" id="document-view-title">
               {selectedDoc.name || 'Document'}
             </h2>
-            <p className="delete-modal-text">
+            <p className="document-view-modal-text">
               <strong>Type:</strong> {selectedDoc.doc_type || 'Draft'}
             </p>
-            <p className="delete-modal-text">
+            <p className="document-view-modal-text">
               <strong>Status:</strong> {selectedDoc.status || '—'}
             </p>
-            <p className="delete-modal-text">
+            <p className="document-view-modal-text">
               <strong>Tags:</strong>{' '}
               {Array.isArray(selectedDoc.tags) && selectedDoc.tags.length > 0
-                ? selectedDoc.tags.map((t) => (
+                ? selectedDoc.tags.map((t, index) => (
                     <span
-                      key={t}
+                      key={`${t}-${index}`}
                       className="draft-field-label"
                       style={{ display: 'inline-block', marginRight: 8 }}
                     >
@@ -225,7 +266,7 @@ export default function DocumentLibrary() {
                   ))
                 : '—'}
             </p>
-            <p className="delete-modal-text">
+            <p className="document-view-modal-text">
               <strong>Linked:</strong> {getLinkedJobLabel(selectedDoc)}
             </p>
             <hr
@@ -241,16 +282,17 @@ export default function DocumentLibrary() {
             >
               Timestamps
             </p>
-            <p className="delete-modal-text">
+            <p className="document-view-modal-text">
               <strong>Uploaded:</strong> {formatDocumentDate(selectedDoc.created_at, true)}
             </p>
-            <p className="delete-modal-text">
-              <strong>Last Updated:</strong> {formatDocumentDate(selectedDoc.updated_at, true)}
+            <p className="document-view-modal-text">
+              <strong>Last Updated:</strong>{' '}
+              {formatDocumentDate(selectedDoc.updated_at || selectedDoc.created_at, true)}
             </p>
             <div style={{ marginTop: 18, display: 'flex', gap: 8 }}>
               <button
                 type="button"
-                className="delete-modal-btn"
+                className="document-view-modal-btn"
                 onClick={async () => {
                   const url = await viewDocument(selectedDoc.id);
                   if (url) window.open(url, '_blank', 'noopener,noreferrer');
@@ -260,7 +302,7 @@ export default function DocumentLibrary() {
               </button>
               <button
                 type="button"
-                className="delete-modal-btn delete-modal-btn--cancel"
+                className="document-view-modal-btn document-view-modal-btn--cancel"
                 onClick={closeDocumentModal}
               >
                 Close

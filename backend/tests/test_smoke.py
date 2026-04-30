@@ -2018,6 +2018,26 @@ def test_create_document_rejects_non_array_json_tags():
     assert "tags must be a JSON array or comma-separated list" in response.json()["detail"]
 
 
+def test_create_document_accepts_comma_separated_tags():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            data={"name": "Draft", "tags": "python, backend, fastapi"},
+            files={
+                "file": (
+                    "draft.pdf",
+                    b"%PDF-1.7\nDraft content",
+                    "application/pdf",
+                )
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    inserted_payload = mock_query.insert.call_args[0][0]
+    assert inserted_payload["tags"] == ["python", "backend", "fastapi"]
+
+
 def test_create_document_rejects_blank_name():
     mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
     with patch("main.get_supabase", return_value=mock_sb):
@@ -2061,6 +2081,45 @@ def test_create_document_rejects_non_pdf_content_with_pdf_extension():
         )
     assert response.status_code == 422
     assert "Uploaded file is not a valid PDF" in response.json()["detail"]
+
+
+def test_create_document_rejects_invalid_status():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            data={"name": "Draft", "status": "pending"},
+            files={
+                "file": (
+                    "draft.pdf",
+                    b"%PDF-1.7\nDraft content",
+                    "application/pdf",
+                )
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "status must be one of: draft, final, archived" in response.json()["detail"]
+
+
+def test_create_document_normalizes_status_case_and_whitespace():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            data={"name": "Draft", "status": "  FINAL  "},
+            files={
+                "file": (
+                    "draft.pdf",
+                    b"%PDF-1.7\nDraft content",
+                    "application/pdf",
+                )
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    inserted_payload = mock_query.insert.call_args[0][0]
+    assert inserted_payload["status"] == "final"
 
 
 def test_update_document_success():
