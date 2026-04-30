@@ -5,11 +5,18 @@ import { useAuth } from '../context/AuthContext';
 import { useDocuments } from '../hooks/useDocuments';
 import './ShellPages.css';
 
-function formatDocumentDate(dateStr) {
+function formatDocumentDate(dateStr, includeTime = false) {
   if (!dateStr) return '—';
   const parsed = new Date(dateStr);
   if (isNaN(parsed.getTime())) return '—';
-  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const dateOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+  if (includeTime) {
+    const timeOptions = { hour: 'numeric', minute: '2-digit', hour12: true };
+    const date = parsed.toLocaleDateString('en-US', dateOptions);
+    const time = parsed.toLocaleTimeString('en-US', timeOptions);
+    return `${date} ${time}`;
+  }
+  return parsed.toLocaleDateString('en-US', dateOptions);
 }
 
 function getLinkedJobLabel(doc) {
@@ -84,7 +91,7 @@ export default function DocumentLibrary() {
 
         <table className="shell-table">
           <caption className="visually-hidden">
-            Saved documents with name, type, linked job, last updated, and actions.
+            Saved documents with name, type, linked job, created date, last updated date, and actions.
           </caption>
           <thead>
             <tr>
@@ -92,6 +99,7 @@ export default function DocumentLibrary() {
               <th>Name</th>
               <th>Type</th>
               <th>Linked To</th>
+              <th>Created</th>
               <th>Last Updated</th>
               <th>Actions</th>
             </tr>
@@ -133,7 +141,12 @@ export default function DocumentLibrary() {
                   <td>{getLinkedJobLabel(doc)}</td>
                   <td>
                     <span className="date-text">
-                      {formatDocumentDate(doc.updated_at || doc.created_at)}
+                      {formatDocumentDate(doc.created_at, true)}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="date-text">
+                      {formatDocumentDate(doc.updated_at || doc.created_at, true)}
                     </span>
                   </td>
                   <td>
@@ -222,11 +235,15 @@ export default function DocumentLibrary() {
             <p className="delete-modal-text">
               <strong>Linked:</strong> {getLinkedJobLabel(selectedDoc)}
             </p>
-            <p className="delete-modal-text">
-              <strong>Uploaded:</strong> {formatDocumentDate(selectedDoc.created_at)}
+            <hr style={{ margin: '12px 0', border: 'none', borderTop: '1px solid var(--border)' }} />
+            <p style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: 8 }}>
+              Timestamps
             </p>
             <p className="delete-modal-text">
-              <strong>Last Updated:</strong> {formatDocumentDate(selectedDoc.updated_at)}
+              <strong>Uploaded:</strong> {formatDocumentDate(selectedDoc.created_at, true)}
+            </p>
+            <p className="delete-modal-text">
+              <strong>Last Updated:</strong> {formatDocumentDate(selectedDoc.updated_at, true)}
             </p>
             <div style={{ marginTop: 18, display: 'flex', gap: 8 }}>
               <button
