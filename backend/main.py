@@ -51,6 +51,8 @@ JOB_STATUSES = {
     "withdrawn",
     "archived",
 }
+# Must stay in sync with the DB CHECK constraint added in migration 016
+# (`documents_status_allowed_values`).
 DOCUMENT_STATUSES = {"draft", "final", "archived"}
 JOB_STATUS_ALIAS = {"interview": "interviewing", "offer": "offered"}
 PDF_EXTENSION = ".pdf"
