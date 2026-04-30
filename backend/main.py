@@ -1143,17 +1143,24 @@ def delete_job(job_id: str, authorization: Optional[str] = Header(default=None))
 # --- Document routes ---
 
 
+DOCUMENT_SORT_OPTIONS = {"updated_at", "created_at", "name"}
+
+
 @app.get("/documents")
-def list_documents(authorization: Optional[str] = Header(default=None)):
+def list_documents(
+    authorization: Optional[str] = Header(default=None),
+    doc_type: Optional[str] = Query(default=None),
+    sort_by: str = Query(default="updated_at"),
+):
     user_id = get_user_id(authorization)
+    if sort_by not in DOCUMENT_SORT_OPTIONS:
+        raise HTTPException(status_code=422, detail="sort_by contains unsupported values")
     sb = get_supabase()
-    response = (
-        sb.table("documents")
-        .select("*, jobs(title, company)")
-        .eq("user_id", user_id)
-        .order("updated_at", desc=True)
-        .execute()
-    )
+    query = sb.table("documents").select("*, jobs(title, company)").eq("user_id", user_id)
+    if doc_type:
+        query = query.eq("doc_type", doc_type)
+    query = query.order(sort_by, desc=(sort_by != "name"))
+    response = query.execute()
     if response.data is None:
         raise HTTPException(status_code=500, detail="Failed to fetch documents")
     return response.data or []

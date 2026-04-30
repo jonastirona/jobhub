@@ -4,6 +4,14 @@ import AIRewriteModal from '../components/AIRewriteModal/AIRewriteModal';
 import { useAuth } from '../context/AuthContext';
 import { useDocuments } from '../hooks/useDocuments';
 import './ShellPages.css';
+import '../styles/Dashboard.css';
+
+const DOC_TYPES = ['Resume', 'Cover Letter', 'Draft'];
+const SORT_OPTIONS = [
+  { value: 'updated_at', label: 'Last Updated' },
+  { value: 'created_at', label: 'Date Added' },
+  { value: 'name', label: 'Name (A–Z)' },
+];
 
 function formatDocumentDate(dateStr, includeTime = false) {
   if (!dateStr) return '—';
@@ -36,6 +44,9 @@ const FOCUSABLE_SELECTOR =
 
 export default function DocumentLibrary() {
   const { session } = useAuth();
+  const [selectedDocType, setSelectedDocType] = useState('');
+  const [selectedSortBy, setSelectedSortBy] = useState('updated_at');
+
   const {
     documents,
     loading,
@@ -46,7 +57,10 @@ export default function DocumentLibrary() {
     deleteDocument,
     clearDeleteError,
     refetch,
-  } = useDocuments(session?.access_token);
+  } = useDocuments(session?.access_token, true, {
+    docType: selectedDocType || undefined,
+    sortBy: selectedSortBy,
+  });
 
   const [rewriteDoc, setRewriteDoc] = useState(null);
   const [selectedDoc, setSelectedDoc] = useState(null);
@@ -106,6 +120,44 @@ export default function DocumentLibrary() {
             <p className="shell-card-subtitle">
               Uploaded draft documents are stored in secure storage and linked to job context.
             </p>
+          </div>
+        </div>
+
+        <div className="table-search-row">
+          <div className="dashboard-filter-controls">
+            <div className="dashboard-sort-control">
+              <label className="dashboard-sort-label" htmlFor="doc-type-filter">
+                Type
+              </label>
+              <select
+                id="doc-type-filter"
+                value={selectedDocType}
+                onChange={(e) => setSelectedDocType(e.target.value)}
+              >
+                <option value="">All Types</option>
+                {DOC_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="dashboard-sort-control">
+              <label className="dashboard-sort-label" htmlFor="doc-sort-select">
+                Sort by
+              </label>
+              <select
+                id="doc-sort-select"
+                value={selectedSortBy}
+                onChange={(e) => setSelectedSortBy(e.target.value)}
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
