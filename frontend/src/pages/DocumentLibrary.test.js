@@ -267,6 +267,21 @@ describe('DocumentLibrary', () => {
     expect(screen.getByRole('button', { name: /delete document/i })).toBeDisabled();
   });
 
+  test('keeps rename input open when renameDocument returns null', async () => {
+    const renameDocument = jest.fn().mockResolvedValue(null);
+    renderPage({ renameDocument });
+
+    fireEvent.click(screen.getByRole('button', { name: /rename document/i }));
+    const input = screen.getByRole('textbox', { name: /new document name/i });
+    fireEvent.change(input, { target: { value: 'Still Editing' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(renameDocument).toHaveBeenCalledWith('doc-1', 'Still Editing');
+    });
+    expect(screen.getByRole('textbox', { name: /new document name/i })).toBeInTheDocument();
+  });
+
   test('renders rename error alert when renameError exists', () => {
     renderPage({ renameError: 'Failed to rename document (500)' });
     expect(screen.getByRole('alert')).toHaveTextContent(/failed to rename document/i);
