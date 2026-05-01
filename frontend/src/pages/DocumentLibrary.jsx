@@ -107,7 +107,8 @@ export default function DocumentLibrary() {
     }
   }, []);
 
-  async function handleDeleteDocument(documentId) {
+  async function handleDeleteDocument(documentId, docName) {
+    if (!window.confirm(`Delete "${docName}"? This cannot be undone.`)) return;
     await deleteDocument(documentId);
   }
 
@@ -255,7 +256,7 @@ export default function DocumentLibrary() {
                         type="button"
                         className="action-btn"
                         aria-label="Delete document"
-                        onClick={() => handleDeleteDocument(doc.id)}
+                        onClick={() => handleDeleteDocument(doc.id, doc.name)}
                         disabled={deletingId === doc.id}
                       >
                         {deletingId === doc.id ? '…' : '🗑'}

@@ -379,7 +379,9 @@ def _create_document_signed_url(
         return signed_url
     if not SUPABASE_URL:
         raise HTTPException(status_code=500, detail="Storage URL is not configured")
-    return f"{SUPABASE_URL}/storage/v1{signed_url}"
+    base = SUPABASE_URL.rstrip("/")
+    path = signed_url.lstrip("/")
+    return f"{base}/storage/v1/{path}"
 
 
 def _delete_document_from_storage(sb, bucket: str, storage_path: Optional[str]) -> None:

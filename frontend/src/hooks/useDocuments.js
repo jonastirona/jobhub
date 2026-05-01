@@ -156,6 +156,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         if (!controller.signal.aborted) {
           setSaving(false);
         }
+        if (pendingSaveRef.current === controller) pendingSaveRef.current = null;
       }
     },
     [accessToken]
@@ -178,6 +179,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         if (!url) {
           throw new Error('Document link is unavailable.');
         }
+        setError(null);
         return url;
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
