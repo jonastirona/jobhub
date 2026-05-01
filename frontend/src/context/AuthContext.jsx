@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import * as Sentry from '@sentry/react';
 import { supabase, supabaseConfigured } from '../supabaseClient';
 
 const AuthContext = createContext(null);
@@ -20,6 +21,7 @@ export function AuthProvider({ children }) {
       if (!cancelled) {
         setSession(s);
         setLoading(false);
+        if (s?.user) Sentry.setUser({ id: s.user.id, email: s.user.email });
       }
     });
 
@@ -27,6 +29,11 @@ export function AuthProvider({ children }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
+      if (s?.user) {
+        Sentry.setUser({ id: s.user.id, email: s.user.email });
+      } else {
+        Sentry.setUser(null);
+      }
     });
 
     return () => {

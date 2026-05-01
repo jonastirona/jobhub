@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import * as Sentry from '@sentry/react';
 import { useAuth } from '../context/AuthContext';
 import { useDocuments } from '../hooks/useDocuments';
 import { useJobs } from '../hooks/useJobs';
@@ -503,6 +504,7 @@ export default function Dashboard() {
       bumpJobsDataVersion();
       setJobPendingDelete(null);
     } catch (err) {
+      Sentry.captureException(err);
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete application.');
     } finally {
       setDeletingJobId(null);
@@ -534,6 +536,7 @@ export default function Dashboard() {
       await refetch();
       bumpJobsDataVersion();
     } catch (err) {
+      Sentry.captureException(err);
       setDeleteError(err instanceof Error ? err.message : 'Failed to update archive state.');
     } finally {
       setUpdatingArchiveJobId(null);

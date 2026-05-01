@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import * as Sentry from '@sentry/react';
+
 const DEFAULT_META = {
   total: 0,
   page: 1,
@@ -109,6 +111,7 @@ export function useJobs(accessToken, searchTerm = '', options = {}) {
       }));
     } catch (err) {
       if (signal.aborted) return;
+      Sentry.captureException(err);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       if (!signal.aborted) {

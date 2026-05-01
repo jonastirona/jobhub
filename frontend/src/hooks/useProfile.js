@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import * as Sentry from '@sentry/react';
+import { extractErrorMessage } from '../utils/apiError';
+
 function normalizeProfileResponse(data) {
   if (data && typeof data === 'object' && ('profile' in data || 'completion' in data)) {
     return {
@@ -53,6 +56,7 @@ export function useProfile(accessToken) {
         setCompletion(normalized.completion);
       } catch (err) {
         if (signal?.aborted) return;
+        Sentry.captureException(err);
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         if (!signal?.aborted) setLoading(false);
@@ -112,16 +116,7 @@ export function useProfile(accessToken) {
           signal: controller.signal,
         });
         if (!res.ok) {
-          const contentType = res.headers?.get?.('content-type') ?? '';
-          let message = '';
-          if (contentType.includes('application/json')) {
-            const body = await res.json().catch(() => null);
-            if (typeof body?.detail === 'string') message = body.detail;
-            else if (body?.detail != null) message = JSON.stringify(body.detail);
-            else if (body != null) message = JSON.stringify(body);
-          } else {
-            message = await res.text().catch(() => '');
-          }
+          const message = await extractErrorMessage(res);
           throw new Error(message || `Save failed (${res.status})`);
         }
         const saved = await res.json();
@@ -132,6 +127,7 @@ export function useProfile(accessToken) {
         return { ok: true, profile: normalized.profile, completion: normalized.completion };
       } catch (err) {
         if (controller.signal.aborted) return { ok: false, error: null };
+        Sentry.captureException(err);
         const message = err instanceof Error ? err.message : String(err);
         setSaveError(message);
         return { ok: false, error: message };

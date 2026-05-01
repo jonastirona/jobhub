@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import * as Sentry from '@sentry/react';
+
 /**
  * Loads up to 100 jobs with no facet filters — for UI pickers (e.g. analytics)
  * that must not depend on the main dashboard filter state.
@@ -48,6 +50,7 @@ export function useJobPickerJobs(accessToken, refreshKey = 0) {
       setJobs(items);
     } catch (err) {
       if (signal.aborted) return;
+      Sentry.captureException(err);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       if (!signal.aborted) {

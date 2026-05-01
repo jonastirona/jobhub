@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import * as Sentry from '@sentry/react';
 import { EMPTY_JOB, JOB_STATUS_ALIAS, JOB_STATUSES } from '../../models/job';
 import './JobForm.css';
 
@@ -191,6 +192,7 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
             throw new Error(text || `Interview request failed (${interviewRes.status})`);
           }
         } catch (err) {
+          Sentry.captureException(err);
           interviewWarning = err instanceof Error ? err.message : String(err);
         }
       }
@@ -201,6 +203,7 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
       }
       onClose();
     } catch (err) {
+      Sentry.captureException(err);
       setApiError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
@@ -256,6 +259,7 @@ export default function JobForm({ mode, job, accessToken, onClose, onSaved }) {
       setNextInterview({ round_type: '', scheduled_at: '', notes: '' });
       setInterviewLogMessage('Interview logged.');
     } catch (err) {
+      Sentry.captureException(err);
       setApiError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoggingInterview(false);

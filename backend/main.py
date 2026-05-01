@@ -1,5 +1,6 @@
 import calendar
 import json
+import logging
 import os
 import uuid
 from collections import defaultdict
@@ -8,14 +9,23 @@ from math import ceil
 from pathlib import Path
 from typing import Optional
 
+import sentry_sdk
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from groq import Groq
 from postgrest.exceptions import APIError
 from pydantic import BaseModel, Field
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logger = logging.getLogger(__name__)
+
+_sentry_dsn = os.getenv("SENTRY_DSN")
+if _sentry_dsn:
+    sentry_sdk.init(dsn=_sentry_dsn, traces_sample_rate=0.1, send_default_pii=False)
 
 app = FastAPI()
 app.add_middleware(
@@ -25,6 +35,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request, exc):
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
@@ -88,6 +105,7 @@ def get_user_id(authorization: Optional[str]) -> str:
         response = sb.auth.get_user(token)
         if not response or not response.user:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
+        sentry_sdk.set_user({"id": response.user.id})
         return response.user.id
     except HTTPException:
         raise
@@ -1796,9 +1814,7 @@ def reorder_experience(
         try:
             sb.table("experience").upsert(temp_rows, on_conflict="id").execute()
         except Exception:
-            import traceback
-
-            traceback.print_exc()
+            logger.exception("Failed to reorder experience (phase 1) for user %s", user_id)
             raise HTTPException(status_code=500, detail="Failed to reorder experience")
 
         # Phase 2: batch upsert with final 0..n-1 positions.
@@ -1811,9 +1827,7 @@ def reorder_experience(
             sb.table("experience").upsert(final_rows, on_conflict="id").execute()
             result = sb.table("experience").select("*").eq("user_id", user_id).execute()
         except Exception:
-            import traceback
-
-            traceback.print_exc()
+            logger.exception("Failed to reorder experience (phase 2) for user %s", user_id)
             _restore_experience_positions()
             raise HTTPException(status_code=500, detail="Failed to reorder experience")
 
@@ -2047,9 +2061,7 @@ def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(def
         try:
             sb.table("skills").upsert(temp_rows, on_conflict="id").execute()
         except Exception:
-            import traceback
-
-            traceback.print_exc()
+            logger.exception("Failed to reorder skills (phase 1) for user %s", user_id)
             raise HTTPException(status_code=500, detail="Failed to reorder skills")
 
         # Phase 2: batch upsert with final 0..n-1 positions.
@@ -2061,9 +2073,7 @@ def reorder_skills(data: SkillReorder, authorization: Optional[str] = Header(def
             sb.table("skills").upsert(final_rows, on_conflict="id").execute()
             result = sb.table("skills").select("*").eq("user_id", user_id).execute()
         except Exception:
-            import traceback
-
-            traceback.print_exc()
+            logger.exception("Failed to reorder skills (phase 2) for user %s", user_id)
             _restore_skills_positions()
             raise HTTPException(status_code=500, detail="Failed to reorder skills")
 

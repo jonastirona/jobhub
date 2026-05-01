@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import * as Sentry from '@sentry/react';
+
 export function useAIResearch(accessToken) {
   const [researching, setResearching] = useState(false);
   const [error, setError] = useState(null);
@@ -47,6 +49,7 @@ export function useAIResearch(accessToken) {
         return data.content;
       } catch (err) {
         if (signal.aborted) return null;
+        Sentry.captureException(err);
         setError(err instanceof Error ? err.message : String(err));
         return null;
       } finally {

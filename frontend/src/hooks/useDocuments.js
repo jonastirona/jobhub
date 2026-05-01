@@ -1,4 +1,6 @@
+import * as Sentry from '@sentry/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { extractErrorMessage } from '../utils/apiError';
 
 export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
   const [documents, setDocuments] = useState([]);
@@ -45,6 +47,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         setDocuments(Array.isArray(data) ? data : []);
       } catch (err) {
         if (signal?.aborted) return;
+        Sentry.captureException(err);
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         if (!signal?.aborted) {
@@ -140,8 +143,9 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         });
 
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Failed to save document (${res.status})`);
+          throw new Error(
+            (await extractErrorMessage(res)) || `Failed to save document (${res.status})`
+          );
         }
 
         const created = await res.json();
@@ -150,6 +154,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         return created;
       } catch (err) {
         if (controller.signal.aborted) return null;
+        Sentry.captureException(err);
         setSaveError(err instanceof Error ? err.message : String(err));
         return null;
       } finally {
@@ -171,8 +176,9 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Failed to open document (${res.status})`);
+          throw new Error(
+            (await extractErrorMessage(res)) || `Failed to open document (${res.status})`
+          );
         }
         const data = await res.json();
         const url = data?.url;
@@ -182,6 +188,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         setError(null);
         return url;
       } catch (err) {
+        Sentry.captureException(err);
         setError(err instanceof Error ? err.message : String(err));
         return null;
       }
@@ -217,12 +224,14 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Failed to delete document (${res.status})`);
+          throw new Error(
+            (await extractErrorMessage(res)) || `Failed to delete document (${res.status})`
+          );
         }
         setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
         return true;
       } catch (err) {
+        Sentry.captureException(err);
         setDeleteError(err instanceof Error ? err.message : String(err));
         return false;
       } finally {

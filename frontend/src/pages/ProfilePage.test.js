@@ -1897,6 +1897,7 @@ describe('career preferences section', () => {
           ok: false,
           status: 422,
           headers: { get: (name) => (name === 'content-type' ? 'application/json' : null) },
+          text: () => Promise.resolve(JSON.stringify({ detail: 'Invalid work_mode' })),
           json: () => Promise.resolve({ detail: 'Invalid work_mode' }),
         });
       }

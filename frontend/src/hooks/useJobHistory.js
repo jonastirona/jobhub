@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import * as Sentry from '@sentry/react';
+import { extractErrorMessage } from '../utils/apiError';
+
 export function useJobHistory(jobId, accessToken) {
   const [history, setHistory] = useState([]);
   const [interviews, setInterviews] = useState([]);
@@ -29,6 +32,7 @@ export function useJobHistory(jobId, accessToken) {
       const data = await res.json();
       setHistory(data);
     } catch (err) {
+      Sentry.captureException(err);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
@@ -49,6 +53,7 @@ export function useJobHistory(jobId, accessToken) {
       setInterviews(data);
       setInterviewError(null);
     } catch (err) {
+      Sentry.captureException(err);
       setInterviewError(err instanceof Error ? err.message : String(err));
     } finally {
       setInterviewLoading(false);
@@ -71,11 +76,11 @@ export function useJobHistory(jobId, accessToken) {
           body: JSON.stringify(payload),
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Request failed (${res.status})`);
+          throw new Error((await extractErrorMessage(res)) || `Request failed (${res.status})`);
         }
         await fetchInterviews();
       } catch (err) {
+        Sentry.captureException(err);
         const msg = err instanceof Error ? err.message : String(err);
         setInterviewError(msg);
         throw err;
@@ -102,11 +107,11 @@ export function useJobHistory(jobId, accessToken) {
           body: JSON.stringify(payload),
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Request failed (${res.status})`);
+          throw new Error((await extractErrorMessage(res)) || `Request failed (${res.status})`);
         }
         await fetchInterviews();
       } catch (err) {
+        Sentry.captureException(err);
         const msg = err instanceof Error ? err.message : String(err);
         setInterviewError(msg);
         throw err;
@@ -129,11 +134,11 @@ export function useJobHistory(jobId, accessToken) {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Request failed (${res.status})`);
+          throw new Error((await extractErrorMessage(res)) || `Request failed (${res.status})`);
         }
         await fetchInterviews();
       } catch (err) {
+        Sentry.captureException(err);
         const msg = err instanceof Error ? err.message : String(err);
         setInterviewError(msg);
         throw err;
