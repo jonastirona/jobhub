@@ -1165,7 +1165,10 @@ def list_documents(
     sb = get_supabase()
     query = sb.table("documents").select("*, jobs(title, company)").eq("user_id", user_id)
     if normalized_doc_type:
-        query = query.eq("doc_type", normalized_doc_type)
+        if normalized_doc_type == "Draft":
+            query = query.or_("doc_type.eq.Draft,doc_type.is.null")
+        else:
+            query = query.eq("doc_type", normalized_doc_type)
     query = query.order(sort_by, desc=(sort_by != "name"))
     response = query.execute()
     if response.data is None:
