@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export function useDocuments(accessToken, loadOnMount = true) {
+export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(loadOnMount);
   const [error, setError] = useState(null);
@@ -10,6 +10,8 @@ export function useDocuments(accessToken, loadOnMount = true) {
   const [deleteError, setDeleteError] = useState(null);
   const pendingFetchRef = useRef(null);
   const pendingSaveRef = useRef(null);
+
+  const { docType, sortBy } = filters;
 
   const fetchDocuments = useCallback(
     async (signal) => {
@@ -27,7 +29,11 @@ export function useDocuments(accessToken, loadOnMount = true) {
       setError(null);
 
       try {
-        const res = await fetch(`${backendBase}/documents`, {
+        const params = new URLSearchParams();
+        if (docType) params.set('doc_type', docType);
+        if (sortBy) params.set('sort_by', sortBy);
+        const qs = params.toString() ? `?${params.toString()}` : '';
+        const res = await fetch(`${backendBase}/documents${qs}`, {
           headers: { Authorization: `Bearer ${accessToken}` },
           signal,
         });
@@ -46,7 +52,7 @@ export function useDocuments(accessToken, loadOnMount = true) {
         }
       }
     },
-    [accessToken]
+    [accessToken, docType, sortBy]
   );
 
   useEffect(() => {
@@ -150,6 +156,7 @@ export function useDocuments(accessToken, loadOnMount = true) {
         if (!controller.signal.aborted) {
           setSaving(false);
         }
+        if (pendingSaveRef.current === controller) pendingSaveRef.current = null;
       }
     },
     [accessToken]
@@ -172,6 +179,7 @@ export function useDocuments(accessToken, loadOnMount = true) {
         if (!url) {
           throw new Error('Document link is unavailable.');
         }
+        setError(null);
         return url;
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));

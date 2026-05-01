@@ -114,7 +114,8 @@ describe('DocumentLibrary', () => {
     });
   });
 
-  test('calls deleteDocument when Delete is clicked', async () => {
+  test('calls deleteDocument when Delete is clicked and confirmed', async () => {
+    window.confirm = jest.fn().mockReturnValue(true);
     const deleteDocument = jest.fn().mockResolvedValue(true);
     renderPage({ deleteDocument });
 
@@ -122,6 +123,18 @@ describe('DocumentLibrary', () => {
 
     await waitFor(() => {
       expect(deleteDocument).toHaveBeenCalledWith('doc-1');
+    });
+  });
+
+  test('does not call deleteDocument when Delete is cancelled', async () => {
+    window.confirm = jest.fn().mockReturnValue(false);
+    const deleteDocument = jest.fn();
+    renderPage({ deleteDocument });
+
+    fireEvent.click(screen.getByRole('button', { name: /delete document/i }));
+
+    await waitFor(() => {
+      expect(deleteDocument).not.toHaveBeenCalled();
     });
   });
 

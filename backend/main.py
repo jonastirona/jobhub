@@ -379,7 +379,9 @@ def _create_document_signed_url(
         return signed_url
     if not SUPABASE_URL:
         raise HTTPException(status_code=500, detail="Storage URL is not configured")
-    return f"{SUPABASE_URL}/storage/v1{signed_url}"
+    base = SUPABASE_URL.rstrip("/")
+    path = signed_url.lstrip("/")
+    return f"{base}/storage/v1/{path}"
 
 
 def _delete_document_from_storage(sb, bucket: str, storage_path: Optional[str]) -> None:
@@ -1143,17 +1145,34 @@ def delete_job(job_id: str, authorization: Optional[str] = Header(default=None))
 # --- Document routes ---
 
 
+DOCUMENT_SORT_OPTIONS = {"updated_at", "created_at", "name"}
+DOCUMENT_TYPE_OPTIONS = {"Resume", "Cover Letter", "Draft", "Other"}
+
+
 @app.get("/documents")
-def list_documents(authorization: Optional[str] = Header(default=None)):
+def list_documents(
+    authorization: Optional[str] = Header(default=None),
+    doc_type: Optional[str] = Query(default=None),
+    sort_by: str = Query(default="updated_at"),
+):
     user_id = get_user_id(authorization)
+    if sort_by not in DOCUMENT_SORT_OPTIONS:
+        allowed = ", ".join(sorted(DOCUMENT_SORT_OPTIONS))
+        raise HTTPException(
+            status_code=422, detail=f"unsupported sort_by value; allowed: {allowed}"
+        )
+    normalized_doc_type = doc_type.strip() if isinstance(doc_type, str) else None
+    if normalized_doc_type and normalized_doc_type not in DOCUMENT_TYPE_OPTIONS:
+        raise HTTPException(status_code=422, detail="doc_type contains unsupported values")
     sb = get_supabase()
-    response = (
-        sb.table("documents")
-        .select("*, jobs(title, company)")
-        .eq("user_id", user_id)
-        .order("updated_at", desc=True)
-        .execute()
-    )
+    query = sb.table("documents").select("*, jobs(title, company)").eq("user_id", user_id)
+    if normalized_doc_type:
+        if normalized_doc_type == "Draft":
+            query = query.or_("doc_type.eq.Draft,doc_type.is.null")
+        else:
+            query = query.eq("doc_type", normalized_doc_type)
+    query = query.order(sort_by, desc=(sort_by != "name"))
+    response = query.execute()
     if response.data is None:
         raise HTTPException(status_code=500, detail="Failed to fetch documents")
     return response.data or []
