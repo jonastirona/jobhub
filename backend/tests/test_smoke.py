@@ -2263,7 +2263,7 @@ def test_delete_document_scoped_to_user():
 
 def test_rename_document_success():
     renamed = {**SAMPLE_DOCUMENT, "name": "New Resume Name"}
-    mock_sb, _ = _make_mock_sb_with_side_effects(
+    mock_sb, mock_query = _make_mock_sb_with_side_effects(
         [SAMPLE_DOCUMENT],
         [renamed],
     )
@@ -2275,6 +2275,7 @@ def test_rename_document_success():
         )
     assert response.status_code == 200
     assert response.json()["name"] == "New Resume Name"
+    mock_query.eq.assert_any_call("user_id", MOCK_USER_ID)
 
 
 def test_rename_document_not_found():
@@ -2316,7 +2317,7 @@ def test_duplicate_document_success():
         "name": f"Copy of {SAMPLE_DOCUMENT['name']}",
         "storage_path": f"{MOCK_USER_ID}/doc-copy-uuid.pdf",
     }
-    mock_sb, _ = _make_mock_sb_with_side_effects(
+    mock_sb, mock_query = _make_mock_sb_with_side_effects(
         [SAMPLE_DOCUMENT],
         [duplicate],
     )
@@ -2329,6 +2330,8 @@ def test_duplicate_document_success():
     body = response.json()
     assert body["name"] == f"Copy of {SAMPLE_DOCUMENT['name']}"
     assert body["id"] == "doc-copy-uuid"
+    insert_payload = mock_query.insert.call_args[0][0]
+    assert insert_payload["user_id"] == MOCK_USER_ID
 
 
 def test_duplicate_document_not_found():
@@ -2366,6 +2369,7 @@ def test_duplicate_document_copies_storage_file():
     mock_sb.storage.from_().copy.assert_called_once()
     call_args = mock_sb.storage.from_().copy.call_args[0]
     assert call_args[0] == SAMPLE_DOCUMENT["storage_path"]
+    assert call_args[1].startswith(MOCK_USER_ID + "/")
 
 
 # ---------------------------------------------------------------------------

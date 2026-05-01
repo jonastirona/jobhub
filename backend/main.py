@@ -1331,7 +1331,7 @@ def rename_document(
         .execute()
     )
     if not response.data:
-        raise HTTPException(status_code=500, detail="Failed to rename document")
+        raise HTTPException(status_code=404, detail="Document not found")
     return response.data[0]
 
 
@@ -1373,7 +1373,12 @@ def duplicate_document(
         "original_filename": source.get("original_filename"),
         "content": source.get("content"),
     }
-    response = sb.table("documents").insert(payload).execute()
+    try:
+        response = sb.table("documents").insert(payload).execute()
+    except Exception:
+        if new_storage_path:
+            _delete_document_from_storage(sb, bucket, new_storage_path)
+        raise HTTPException(status_code=500, detail="Failed to duplicate document")
     if not response.data:
         if new_storage_path:
             _delete_document_from_storage(sb, bucket, new_storage_path)

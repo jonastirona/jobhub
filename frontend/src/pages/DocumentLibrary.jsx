@@ -132,8 +132,10 @@ export default function DocumentLibrary() {
       setRenamingDocId(null);
       return;
     }
-    await renameDocument(documentId, renameValue);
-    setRenamingDocId(null);
+    const result = await renameDocument(documentId, renameValue);
+    if (result) {
+      setRenamingDocId(null);
+    }
   }
 
   function cancelRename() {
@@ -293,58 +295,66 @@ export default function DocumentLibrary() {
                   </td>
                   <td>
                     <div className="actions-cell">
-                      <button
-                        type="button"
-                        className="action-btn"
-                        aria-label="View document"
-                        onClick={() => openDocumentModal(doc)}
-                        disabled={deletingId === doc.id || duplicatingId === doc.id}
-                      >
-                        👁
-                      </button>
-                      <button
-                        type="button"
-                        className="action-btn"
-                        aria-label="Rename document"
-                        title="Rename"
-                        onClick={() => startRename(doc)}
-                        disabled={
-                          deletingId === doc.id || renamingId === doc.id || duplicatingId === doc.id
-                        }
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        type="button"
-                        className="action-btn"
-                        aria-label="Duplicate document"
-                        title="Duplicate"
-                        onClick={() => duplicateDocument(doc.id)}
-                        disabled={deletingId === doc.id || duplicatingId === doc.id}
-                      >
-                        {duplicatingId === doc.id ? '…' : '📋'}
-                      </button>
-                      {doc.content && (
-                        <button
-                          type="button"
-                          className="action-btn"
-                          aria-label="Rewrite with AI"
-                          title="Rewrite with AI"
-                          onClick={() => setRewriteDoc(doc)}
-                          disabled={deletingId === doc.id || duplicatingId === doc.id}
-                        >
-                          ✦
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="action-btn"
-                        aria-label="Delete document"
-                        onClick={() => handleDeleteDocument(doc.id, doc.name)}
-                        disabled={deletingId === doc.id || duplicatingId === doc.id}
-                      >
-                        {deletingId === doc.id ? '…' : '🗑'}
-                      </button>
+                      {(() => {
+                        const rowBusy =
+                          deletingId === doc.id ||
+                          renamingId === doc.id ||
+                          duplicatingId === doc.id;
+                        return (
+                          <>
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label="View document"
+                              onClick={() => openDocumentModal(doc)}
+                              disabled={rowBusy}
+                            >
+                              👁
+                            </button>
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label="Rename document"
+                              title="Rename"
+                              onClick={() => startRename(doc)}
+                              disabled={rowBusy}
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label="Duplicate document"
+                              title="Duplicate"
+                              onClick={() => duplicateDocument(doc.id)}
+                              disabled={rowBusy}
+                            >
+                              {duplicatingId === doc.id ? '…' : '📋'}
+                            </button>
+                            {doc.content && (
+                              <button
+                                type="button"
+                                className="action-btn"
+                                aria-label="Rewrite with AI"
+                                title="Rewrite with AI"
+                                onClick={() => setRewriteDoc(doc)}
+                                disabled={rowBusy}
+                              >
+                                ✦
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label="Delete document"
+                              onClick={() => handleDeleteDocument(doc.id, doc.name)}
+                              disabled={rowBusy}
+                            >
+                              {deletingId === doc.id ? '…' : '🗑'}
+                            </button>
+                          </>
+                        );
+                      })()}
                     </div>
                   </td>
                 </tr>

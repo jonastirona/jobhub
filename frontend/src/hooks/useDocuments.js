@@ -19,6 +19,21 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
 
   const { docType, sortBy } = filters;
 
+  const sortDocuments = useCallback(
+    (docs) => {
+      if (!sortBy) return docs;
+      return [...docs].sort((a, b) => {
+        if (sortBy === 'name') {
+          return (a.name || '').localeCompare(b.name || '');
+        }
+        const aVal = a[sortBy] || '';
+        const bVal = b[sortBy] || '';
+        return bVal.localeCompare(aVal);
+      });
+    },
+    [sortBy]
+  );
+
   const fetchDocuments = useCallback(
     async (signal) => {
       const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
@@ -154,7 +169,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
 
         const created = await res.json();
         if (controller.signal.aborted) return null;
-        setDocuments((prev) => [created, ...prev]);
+        setDocuments((prev) => sortDocuments([created, ...prev]));
         return created;
       } catch (err) {
         if (controller.signal.aborted) return null;
@@ -279,7 +294,9 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
           );
         }
         const updated = await res.json();
-        setDocuments((prev) => prev.map((d) => (d.id === documentId ? { ...d, ...updated } : d)));
+        setDocuments((prev) =>
+          sortDocuments(prev.map((d) => (d.id === documentId ? { ...d, ...updated } : d)))
+        );
         return updated;
       } catch (err) {
         Sentry.captureException(err);
