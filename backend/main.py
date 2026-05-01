@@ -268,6 +268,10 @@ class DocumentUpdate(BaseModel):
     job_id: Optional[str] = None
 
 
+class DocumentRename(BaseModel):
+    name: str
+
+
 VALID_WORK_MODES = {"remote", "hybrid", "onsite", "any"}
 
 
@@ -1301,6 +1305,80 @@ def update_document(
         status_code=405,
         detail="Updating documents is not supported. Upload a new file or delete this one.",
     )
+
+
+@app.patch("/documents/{document_id}")
+def rename_document(
+    document_id: str,
+    body: DocumentRename,
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = get_user_id(authorization)
+    trimmed = (body.name or "").strip()
+    if not trimmed:
+        raise HTTPException(status_code=422, detail="name must not be blank")
+    sb = get_supabase()
+    existing = (
+        sb.table("documents").select("id").eq("id", document_id).eq("user_id", user_id).execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Document not found")
+    response = (
+        sb.table("documents")
+        .update({"name": trimmed})
+        .eq("id", document_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=500, detail="Failed to rename document")
+    return response.data[0]
+
+
+@app.post("/documents/{document_id}/duplicate", status_code=201)
+def duplicate_document(
+    document_id: str,
+    authorization: Optional[str] = Header(default=None),
+):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    existing = (
+        sb.table("documents").select("*").eq("id", document_id).eq("user_id", user_id).execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Document not found")
+    source = existing.data[0]
+
+    source_path = source.get("storage_path")
+    bucket = source.get("storage_bucket") or DOCUMENTS_BUCKET
+    new_storage_path = None
+    if source_path:
+        new_storage_path = _build_storage_document_path(user_id, PDF_EXTENSION)
+        try:
+            sb.storage.from_(bucket).copy(source_path, new_storage_path)
+        except Exception:
+            raise HTTPException(status_code=500, detail="Failed to copy document file")
+
+    payload = {
+        "user_id": user_id,
+        "job_id": source.get("job_id"),
+        "name": f"Copy of {source.get('name', 'Document')}",
+        "doc_type": source.get("doc_type"),
+        "status": source.get("status"),
+        "tags": source.get("tags"),
+        "storage_bucket": bucket,
+        "storage_path": new_storage_path,
+        "mime_type": source.get("mime_type"),
+        "file_size": source.get("file_size"),
+        "original_filename": source.get("original_filename"),
+        "content": source.get("content"),
+    }
+    response = sb.table("documents").insert(payload).execute()
+    if not response.data:
+        if new_storage_path:
+            _delete_document_from_storage(sb, bucket, new_storage_path)
+        raise HTTPException(status_code=500, detail="Failed to duplicate document")
+    return response.data[0]
 
 
 @app.delete("/documents/{document_id}")

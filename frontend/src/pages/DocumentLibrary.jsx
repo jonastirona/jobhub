@@ -58,14 +58,24 @@ export default function DocumentLibrary() {
     error,
     deletingId,
     deleteError,
+    renamingId,
+    renameError,
+    duplicatingId,
+    duplicateError,
     viewDocument,
     deleteDocument,
     clearDeleteError,
+    clearRenameError,
+    clearDuplicateError,
+    renameDocument,
+    duplicateDocument,
     refetch,
   } = useDocuments(session?.access_token, true, filters);
 
   const [rewriteDoc, setRewriteDoc] = useState(null);
   const [selectedDoc, setSelectedDoc] = useState(null);
+  const [renamingDocId, setRenamingDocId] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
   const overlayRef = useRef(null);
   const modalRef = useRef(null);
 
@@ -110,6 +120,26 @@ export default function DocumentLibrary() {
   async function handleDeleteDocument(documentId, docName) {
     if (!window.confirm(`Delete "${docName}"? This cannot be undone.`)) return;
     await deleteDocument(documentId);
+  }
+
+  function startRename(doc) {
+    clearRenameError();
+    setRenamingDocId(doc.id);
+    setRenameValue(doc.name);
+  }
+
+  async function commitRename(documentId) {
+    if (!renameValue.trim()) {
+      setRenamingDocId(null);
+      return;
+    }
+    await renameDocument(documentId, renameValue);
+    setRenamingDocId(null);
+  }
+
+  function cancelRename() {
+    setRenamingDocId(null);
+    setRenameValue('');
   }
 
   return (
@@ -170,6 +200,18 @@ export default function DocumentLibrary() {
           </p>
         )}
 
+        {renameError && (
+          <p className="table-empty table-state--error" role="alert">
+            {renameError}
+          </p>
+        )}
+
+        {duplicateError && (
+          <p className="table-empty table-state--error" role="alert">
+            {duplicateError}
+          </p>
+        )}
+
         <table className="shell-table">
           <caption className="visually-hidden">
             Saved documents with name, type, linked job, created date, last updated date, and
@@ -218,7 +260,28 @@ export default function DocumentLibrary() {
               documents.map((doc, index) => (
                 <tr key={doc.id}>
                   <td className="row-number">{index + 1}</td>
-                  <td className="shell-cell-strong">{doc.name}</td>
+                  <td className="shell-cell-strong">
+                    {renamingDocId === doc.id ? (
+                      <input
+                        className="inline-rename-input"
+                        aria-label="New document name"
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={() => commitRename(doc.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            commitRename(doc.id);
+                          } else if (e.key === 'Escape') {
+                            cancelRename();
+                          }
+                        }}
+                        autoFocus
+                      />
+                    ) : (
+                      doc.name
+                    )}
+                  </td>
                   <td>{doc.doc_type || 'Draft'}</td>
                   <td>{getLinkedJobLabel(doc)}</td>
                   <td>
@@ -236,9 +299,31 @@ export default function DocumentLibrary() {
                         className="action-btn"
                         aria-label="View document"
                         onClick={() => openDocumentModal(doc)}
-                        disabled={deletingId === doc.id}
+                        disabled={deletingId === doc.id || duplicatingId === doc.id}
                       >
                         👁
+                      </button>
+                      <button
+                        type="button"
+                        className="action-btn"
+                        aria-label="Rename document"
+                        title="Rename"
+                        onClick={() => startRename(doc)}
+                        disabled={
+                          deletingId === doc.id || renamingId === doc.id || duplicatingId === doc.id
+                        }
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        type="button"
+                        className="action-btn"
+                        aria-label="Duplicate document"
+                        title="Duplicate"
+                        onClick={() => duplicateDocument(doc.id)}
+                        disabled={deletingId === doc.id || duplicatingId === doc.id}
+                      >
+                        {duplicatingId === doc.id ? '…' : '📋'}
                       </button>
                       {doc.content && (
                         <button
@@ -247,7 +332,7 @@ export default function DocumentLibrary() {
                           aria-label="Rewrite with AI"
                           title="Rewrite with AI"
                           onClick={() => setRewriteDoc(doc)}
-                          disabled={deletingId === doc.id}
+                          disabled={deletingId === doc.id || duplicatingId === doc.id}
                         >
                           ✦
                         </button>
@@ -257,7 +342,7 @@ export default function DocumentLibrary() {
                         className="action-btn"
                         aria-label="Delete document"
                         onClick={() => handleDeleteDocument(doc.id, doc.name)}
-                        disabled={deletingId === doc.id}
+                        disabled={deletingId === doc.id || duplicatingId === doc.id}
                       >
                         {deletingId === doc.id ? '…' : '🗑'}
                       </button>

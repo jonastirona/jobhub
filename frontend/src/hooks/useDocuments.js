@@ -10,6 +10,10 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
   const [saveError, setSaveError] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameError, setRenameError] = useState(null);
+  const [duplicatingId, setDuplicatingId] = useState(null);
+  const [duplicateError, setDuplicateError] = useState(null);
   const pendingFetchRef = useRef(null);
   const pendingSaveRef = useRef(null);
 
@@ -200,6 +204,14 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     setDeleteError(null);
   }, []);
 
+  const clearRenameError = useCallback(() => {
+    setRenameError(null);
+  }, []);
+
+  const clearDuplicateError = useCallback(() => {
+    setDuplicateError(null);
+  }, []);
+
   const deleteDocument = useCallback(
     async (documentId) => {
       const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
@@ -241,6 +253,71 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     [accessToken]
   );
 
+  const renameDocument = useCallback(
+    async (documentId, newName) => {
+      const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
+      if (!backendBase || !accessToken || !documentId) return null;
+      const trimmed = (newName || '').trim();
+      if (!trimmed) {
+        setRenameError('Name must not be blank.');
+        return null;
+      }
+      setRenamingId(documentId);
+      setRenameError(null);
+      try {
+        const res = await fetch(`${backendBase}/documents/${documentId}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: trimmed }),
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(text || `Failed to rename document (${res.status})`);
+        }
+        const updated = await res.json();
+        setDocuments((prev) => prev.map((d) => (d.id === documentId ? { ...d, ...updated } : d)));
+        return updated;
+      } catch (err) {
+        setRenameError(err instanceof Error ? err.message : String(err));
+        return null;
+      } finally {
+        setRenamingId(null);
+      }
+    },
+    [accessToken]
+  );
+
+  const duplicateDocument = useCallback(
+    async (documentId) => {
+      const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
+      if (!backendBase || !accessToken || !documentId) return null;
+      setDuplicatingId(documentId);
+      setDuplicateError(null);
+      try {
+        const res = await fetch(`${backendBase}/documents/${documentId}/duplicate`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(text || `Failed to duplicate document (${res.status})`);
+        }
+        const created = await res.json();
+        setDocuments((prev) => [created, ...prev]);
+        return created;
+      } catch (err) {
+        setDuplicateError(err instanceof Error ? err.message : String(err));
+        return null;
+      } finally {
+        setDuplicatingId(null);
+      }
+    },
+    [accessToken]
+  );
+
   return {
     documents,
     loading,
@@ -249,11 +326,19 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     saveError,
     deletingId,
     deleteError,
+    renamingId,
+    renameError,
+    duplicatingId,
+    duplicateError,
     clearSaveError,
     clearDeleteError,
+    clearRenameError,
+    clearDuplicateError,
     refetch,
     createDocument,
     deleteDocument,
     viewDocument,
+    renameDocument,
+    duplicateDocument,
   };
 }

@@ -2257,6 +2257,118 @@ def test_delete_document_scoped_to_user():
 
 
 # ---------------------------------------------------------------------------
+# Document rename (PATCH /documents/{id})
+# ---------------------------------------------------------------------------
+
+
+def test_rename_document_success():
+    renamed = {**SAMPLE_DOCUMENT, "name": "New Resume Name"}
+    mock_sb, _ = _make_mock_sb_with_side_effects(
+        [SAMPLE_DOCUMENT],
+        [renamed],
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.patch(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"name": "New Resume Name"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["name"] == "New Resume Name"
+
+
+def test_rename_document_not_found():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.patch(
+            "/documents/nonexistent-id",
+            json={"name": "Whatever"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_rename_document_blank_name_rejected():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.patch(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"name": "   "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_rename_document_requires_auth():
+    response = client.patch(f"/documents/{SAMPLE_DOCUMENT['id']}", json={"name": "X"})
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Document duplicate (POST /documents/{id}/duplicate)
+# ---------------------------------------------------------------------------
+
+
+def test_duplicate_document_success():
+    duplicate = {
+        **SAMPLE_DOCUMENT,
+        "id": "doc-copy-uuid",
+        "name": f"Copy of {SAMPLE_DOCUMENT['name']}",
+        "storage_path": f"{MOCK_USER_ID}/doc-copy-uuid.pdf",
+    }
+    mock_sb, _ = _make_mock_sb_with_side_effects(
+        [SAMPLE_DOCUMENT],
+        [duplicate],
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            f"/documents/{SAMPLE_DOCUMENT['id']}/duplicate",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == f"Copy of {SAMPLE_DOCUMENT['name']}"
+    assert body["id"] == "doc-copy-uuid"
+
+
+def test_duplicate_document_not_found():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents/nonexistent-id/duplicate",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
+def test_duplicate_document_requires_auth():
+    response = client.post(f"/documents/{SAMPLE_DOCUMENT['id']}/duplicate")
+    assert response.status_code == 401
+
+
+def test_duplicate_document_copies_storage_file():
+    duplicate = {
+        **SAMPLE_DOCUMENT,
+        "id": "doc-copy-uuid",
+        "name": f"Copy of {SAMPLE_DOCUMENT['name']}",
+        "storage_path": f"{MOCK_USER_ID}/doc-copy-uuid.pdf",
+    }
+    mock_sb, _ = _make_mock_sb_with_side_effects(
+        [SAMPLE_DOCUMENT],
+        [duplicate],
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            f"/documents/{SAMPLE_DOCUMENT['id']}/duplicate",
+            headers={"authorization": AUTH_HEADER},
+        )
+    mock_sb.storage.from_.assert_called_with(SAMPLE_DOCUMENT["storage_bucket"])
+    mock_sb.storage.from_().copy.assert_called_once()
+    call_args = mock_sb.storage.from_().copy.call_args[0]
+    assert call_args[0] == SAMPLE_DOCUMENT["storage_path"]
+
+
+# ---------------------------------------------------------------------------
 # Pydantic schema validation
 # ---------------------------------------------------------------------------
 
