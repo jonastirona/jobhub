@@ -2,7 +2,6 @@ import * as Sentry from '@sentry/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { extractErrorMessage } from '../utils/apiError';
 
-
 export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(loadOnMount);
