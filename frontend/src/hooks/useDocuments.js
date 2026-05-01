@@ -169,7 +169,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
 
         const created = await res.json();
         if (controller.signal.aborted) return null;
-        setDocuments((prev) => sortDocuments([created, ...prev]));
+        setDocuments((prev) => [created, ...prev]);
         return created;
       } catch (err) {
         if (controller.signal.aborted) return null;
@@ -306,7 +306,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         setRenamingId(null);
       }
     },
-    [accessToken]
+    [accessToken, sortDocuments]
   );
 
   const duplicateDocument = useCallback(
@@ -326,7 +326,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
           );
         }
         const created = await res.json();
-        setDocuments((prev) => [created, ...prev]);
+        setDocuments((prev) => sortDocuments([created, ...prev]));
         return created;
       } catch (err) {
         Sentry.captureException(err);
@@ -336,7 +336,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         setDuplicatingId(null);
       }
     },
-    [accessToken]
+    [accessToken, sortDocuments]
   );
 
   return {
