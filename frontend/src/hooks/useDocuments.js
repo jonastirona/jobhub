@@ -110,6 +110,16 @@ export function useDocuments(accessToken, loadOnMount = true) {
         if (values?.content) {
           formData.append('content', values.content);
         }
+        if (values?.status) {
+          formData.append('status', values.status);
+        }
+        if (values?.tags) {
+          if (Array.isArray(values.tags)) {
+            formData.append('tags', JSON.stringify(values.tags));
+          } else {
+            formData.append('tags', String(values.tags));
+          }
+        }
         if (values?.file) {
           formData.append('file', values.file);
         }

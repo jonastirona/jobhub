@@ -1,15 +1,22 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import AppShell from '../components/layout/AppShell';
 import AIRewriteModal from '../components/AIRewriteModal/AIRewriteModal';
 import { useAuth } from '../context/AuthContext';
 import { useDocuments } from '../hooks/useDocuments';
 import './ShellPages.css';
 
-function formatDocumentDate(dateStr) {
+function formatDocumentDate(dateStr, includeTime = false) {
   if (!dateStr) return '—';
   const parsed = new Date(dateStr);
   if (isNaN(parsed.getTime())) return '—';
-  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const dateOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+  if (includeTime) {
+    const timeOptions = { hour: 'numeric', minute: '2-digit', hour12: true };
+    const date = parsed.toLocaleDateString('en-US', dateOptions);
+    const time = parsed.toLocaleTimeString('en-US', timeOptions);
+    return `${date} ${time}`;
+  }
+  return parsed.toLocaleDateString('en-US', dateOptions);
 }
 
 function getLinkedJobLabel(doc) {
@@ -23,6 +30,9 @@ function getLinkedJobLabel(doc) {
   const company = doc.jobs.company || 'Unknown company';
   return `${title} - ${company}`;
 }
+
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export default function DocumentLibrary() {
   const { session } = useAuth();
@@ -39,14 +49,47 @@ export default function DocumentLibrary() {
   } = useDocuments(session?.access_token);
 
   const [rewriteDoc, setRewriteDoc] = useState(null);
+  const [selectedDoc, setSelectedDoc] = useState(null);
+  const overlayRef = useRef(null);
+  const modalRef = useRef(null);
 
-  async function handleViewDocument(documentId) {
+  function openDocumentModal(doc) {
     clearDeleteError();
-    const url = await viewDocument(documentId);
-    if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
+    setSelectedDoc(doc);
   }
+
+  function closeDocumentModal() {
+    setSelectedDoc(null);
+  }
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') closeDocumentModal();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const handleOverlayClick = useCallback((e) => {
+    if (e.target === overlayRef.current) closeDocumentModal();
+  }, []);
+
+  const handleModalKeyDown = useCallback((e) => {
+    if (e.key !== 'Tab' || !modalRef.current) return;
+    const focusable = Array.from(modalRef.current.querySelectorAll(FOCUSABLE_SELECTOR));
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (window.document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else if (window.document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }, []);
 
   async function handleDeleteDocument(documentId) {
     await deleteDocument(documentId);
@@ -74,7 +117,8 @@ export default function DocumentLibrary() {
 
         <table className="shell-table">
           <caption className="visually-hidden">
-            Saved documents with name, type, linked job, last updated, and actions.
+            Saved documents with name, type, linked job, created date, last updated date, and
+            actions.
           </caption>
           <thead>
             <tr>
@@ -82,6 +126,7 @@ export default function DocumentLibrary() {
               <th>Name</th>
               <th>Type</th>
               <th>Linked To</th>
+              <th>Created</th>
               <th>Last Updated</th>
               <th>Actions</th>
             </tr>
@@ -89,7 +134,7 @@ export default function DocumentLibrary() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="table-empty">
+                <td colSpan={7} className="table-empty">
                   <span role="status" aria-live="polite" aria-busy="true">
                     Loading documents...
                   </span>
@@ -99,7 +144,7 @@ export default function DocumentLibrary() {
 
             {!loading && error && (
               <tr>
-                <td colSpan={6} className="table-empty table-state--error">
+                <td colSpan={7} className="table-empty table-state--error">
                   <div role="alert">{error}</div>
                 </td>
               </tr>
@@ -107,7 +152,7 @@ export default function DocumentLibrary() {
 
             {!loading && !error && documents.length === 0 && (
               <tr>
-                <td colSpan={6} className="table-empty">
+                <td colSpan={7} className="table-empty">
                   No saved documents yet. Create a draft from any job in your dashboard.
                 </td>
               </tr>
@@ -122,8 +167,11 @@ export default function DocumentLibrary() {
                   <td>{doc.doc_type || 'Draft'}</td>
                   <td>{getLinkedJobLabel(doc)}</td>
                   <td>
+                    <span className="date-text">{formatDocumentDate(doc.created_at, true)}</span>
+                  </td>
+                  <td>
                     <span className="date-text">
-                      {formatDocumentDate(doc.updated_at || doc.created_at)}
+                      {formatDocumentDate(doc.updated_at || doc.created_at, true)}
                     </span>
                   </td>
                   <td>
@@ -132,7 +180,7 @@ export default function DocumentLibrary() {
                         type="button"
                         className="action-btn"
                         aria-label="View document"
-                        onClick={() => handleViewDocument(doc.id)}
+                        onClick={() => openDocumentModal(doc)}
                         disabled={deletingId === doc.id}
                       >
                         👁
@@ -176,6 +224,92 @@ export default function DocumentLibrary() {
             refetch();
           }}
         />
+      )}
+
+      {selectedDoc && (
+        <div
+          className="document-view-modal-overlay"
+          role="presentation"
+          onClick={handleOverlayClick}
+          ref={overlayRef}
+        >
+          <div
+            className="draft-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="document-view-title"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={handleModalKeyDown}
+            tabIndex={-1}
+            ref={modalRef}
+          >
+            <h2 className="document-view-modal-title" id="document-view-title">
+              {selectedDoc.name || 'Document'}
+            </h2>
+            <p className="document-view-modal-text">
+              <strong>Type:</strong> {selectedDoc.doc_type || 'Draft'}
+            </p>
+            <p className="document-view-modal-text">
+              <strong>Status:</strong> {selectedDoc.status || '—'}
+            </p>
+            <p className="document-view-modal-text">
+              <strong>Tags:</strong>{' '}
+              {Array.isArray(selectedDoc.tags) && selectedDoc.tags.length > 0
+                ? selectedDoc.tags.map((t, index) => (
+                    <span
+                      key={`${t}-${index}`}
+                      className="draft-field-label"
+                      style={{ display: 'inline-block', marginRight: 8 }}
+                    >
+                      {t}
+                    </span>
+                  ))
+                : '—'}
+            </p>
+            <p className="document-view-modal-text">
+              <strong>Linked:</strong> {getLinkedJobLabel(selectedDoc)}
+            </p>
+            <hr
+              style={{ margin: '12px 0', border: 'none', borderTop: '1px solid var(--border)' }}
+            />
+            <p
+              style={{
+                fontSize: '12px',
+                fontWeight: '600',
+                color: 'var(--text-secondary)',
+                marginBottom: 8,
+              }}
+            >
+              Timestamps
+            </p>
+            <p className="document-view-modal-text">
+              <strong>Uploaded:</strong> {formatDocumentDate(selectedDoc.created_at, true)}
+            </p>
+            <p className="document-view-modal-text">
+              <strong>Last Updated:</strong>{' '}
+              {formatDocumentDate(selectedDoc.updated_at || selectedDoc.created_at, true)}
+            </p>
+            <div style={{ marginTop: 18, display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="document-view-modal-btn"
+                onClick={async () => {
+                  const url = await viewDocument(selectedDoc.id);
+                  if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                }}
+              >
+                Open file
+              </button>
+              <button
+                type="button"
+                className="document-view-modal-btn document-view-modal-btn--cancel"
+                onClick={closeDocumentModal}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </AppShell>
   );

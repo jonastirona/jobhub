@@ -58,7 +58,16 @@ describe('DocumentLibrary', () => {
     const clearDeleteError = jest.fn();
     renderPage({ viewDocument, clearDeleteError });
 
+    // clicking View opens the details modal
     fireEvent.click(screen.getByRole('button', { name: /view document/i }));
+
+    // modal should show Open file button
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /open file/i })).toBeInTheDocument();
+    });
+
+    // clicking Open file should call viewDocument and open a new tab
+    fireEvent.click(screen.getByRole('button', { name: /open file/i }));
 
     await waitFor(() => {
       expect(clearDeleteError).toHaveBeenCalledTimes(1);
@@ -77,9 +86,31 @@ describe('DocumentLibrary', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /view document/i }));
 
+    // click Open file in modal
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /open file/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /open file/i }));
+
     await waitFor(() => {
       expect(viewDocument).toHaveBeenCalledWith('doc-1');
       expect(window.open).not.toHaveBeenCalled();
+    });
+  });
+
+  test('shows status and tags in details modal', async () => {
+    const docWithMeta = { ...baseDoc, status: 'final', tags: ['alpha', 'beta'] };
+    renderPage({ documents: [docWithMeta], viewDocument: jest.fn(), clearDeleteError: jest.fn() });
+
+    fireEvent.click(screen.getByRole('button', { name: /view document/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/status:/i)).toBeInTheDocument();
+      expect(screen.getByText(/final/i)).toBeInTheDocument();
+      expect(screen.getByText(/tags:/i)).toBeInTheDocument();
+      expect(screen.getByText(/alpha/)).toBeInTheDocument();
+      expect(screen.getByText(/beta/)).toBeInTheDocument();
     });
   });
 
