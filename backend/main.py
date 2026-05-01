@@ -1144,7 +1144,7 @@ def delete_job(job_id: str, authorization: Optional[str] = Header(default=None))
 
 
 DOCUMENT_SORT_OPTIONS = {"updated_at", "created_at", "name"}
-DOCUMENT_TYPE_OPTIONS = {"Resume", "Cover Letter", "Draft"}
+DOCUMENT_TYPE_OPTIONS = {"Resume", "Cover Letter", "Draft", "Other"}
 
 
 @app.get("/documents")

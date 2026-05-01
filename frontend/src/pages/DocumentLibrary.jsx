@@ -6,7 +6,7 @@ import { useDocuments } from '../hooks/useDocuments';
 import './ShellPages.css';
 import '../styles/Dashboard.css';
 
-const DOC_TYPES = ['Resume', 'Cover Letter', 'Draft'];
+const DOC_TYPES = ['Resume', 'Cover Letter', 'Draft', 'Other'];
 const SORT_OPTIONS = [
   { value: 'updated_at', label: 'Last Updated' },
   { value: 'created_at', label: 'Date Added' },
