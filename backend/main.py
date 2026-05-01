@@ -1,4 +1,5 @@
 import calendar
+import json
 import logging
 import os
 import uuid
@@ -67,6 +68,9 @@ JOB_STATUSES = {
     "withdrawn",
     "archived",
 }
+# Must stay in sync with the DB CHECK constraint added in migration 016
+# (`documents_status_allowed_values`).
+DOCUMENT_STATUSES = {"draft", "final", "archived"}
 JOB_STATUS_ALIAS = {"interview": "interviewing", "offer": "offered"}
 PDF_EXTENSION = ".pdf"
 PDF_MIME_TYPE = "application/pdf"
@@ -342,6 +346,17 @@ def _build_storage_document_path(user_id: str, extension: str) -> str:
     return f"{user_id}/{uuid.uuid4().hex}{extension}"
 
 
+def _assert_document_status(status: Optional[str]) -> Optional[str]:
+    if status is None:
+        return None
+    s = str(status).strip().lower()
+    if not s:
+        return None
+    if s not in DOCUMENT_STATUSES:
+        raise HTTPException(status_code=422, detail="status must be one of: draft, final, archived")
+    return s
+
+
 async def _upload_document_to_storage(sb, user_id: str, upload: UploadFile) -> tuple[str, str, int]:
     extension = _assert_allowed_document_extension(upload.filename)
     content = await upload.read()
@@ -382,7 +397,9 @@ def _create_document_signed_url(
         return signed_url
     if not SUPABASE_URL:
         raise HTTPException(status_code=500, detail="Storage URL is not configured")
-    return f"{SUPABASE_URL}/storage/v1{signed_url}"
+    base = SUPABASE_URL.rstrip("/")
+    path = signed_url.lstrip("/")
+    return f"{base}/storage/v1/{path}"
 
 
 def _delete_document_from_storage(sb, bucket: str, storage_path: Optional[str]) -> None:
@@ -1146,17 +1163,34 @@ def delete_job(job_id: str, authorization: Optional[str] = Header(default=None))
 # --- Document routes ---
 
 
+DOCUMENT_SORT_OPTIONS = {"updated_at", "created_at", "name"}
+DOCUMENT_TYPE_OPTIONS = {"Resume", "Cover Letter", "Draft", "Other"}
+
+
 @app.get("/documents")
-def list_documents(authorization: Optional[str] = Header(default=None)):
+def list_documents(
+    authorization: Optional[str] = Header(default=None),
+    doc_type: Optional[str] = Query(default=None),
+    sort_by: str = Query(default="updated_at"),
+):
     user_id = get_user_id(authorization)
+    if sort_by not in DOCUMENT_SORT_OPTIONS:
+        allowed = ", ".join(sorted(DOCUMENT_SORT_OPTIONS))
+        raise HTTPException(
+            status_code=422, detail=f"unsupported sort_by value; allowed: {allowed}"
+        )
+    normalized_doc_type = doc_type.strip() if isinstance(doc_type, str) else None
+    if normalized_doc_type and normalized_doc_type not in DOCUMENT_TYPE_OPTIONS:
+        raise HTTPException(status_code=422, detail="doc_type contains unsupported values")
     sb = get_supabase()
-    response = (
-        sb.table("documents")
-        .select("*, jobs(title, company)")
-        .eq("user_id", user_id)
-        .order("updated_at", desc=True)
-        .execute()
-    )
+    query = sb.table("documents").select("*, jobs(title, company)").eq("user_id", user_id)
+    if normalized_doc_type:
+        if normalized_doc_type == "Draft":
+            query = query.or_("doc_type.eq.Draft,doc_type.is.null")
+        else:
+            query = query.eq("doc_type", normalized_doc_type)
+    query = query.order(sort_by, desc=(sort_by != "name"))
+    response = query.execute()
     if response.data is None:
         raise HTTPException(status_code=500, detail="Failed to fetch documents")
     return response.data or []
@@ -1168,6 +1202,8 @@ async def create_document(
     doc_type: str = Form("Draft"),
     job_id: Optional[str] = Form(default=None),
     content: Optional[str] = Form(default=None),
+    status: Optional[str] = Form(default=None),
+    tags: Optional[str] = Form(default=None),
     file: UploadFile = File(...),
     authorization: Optional[str] = Header(default=None),
 ):
@@ -1178,12 +1214,31 @@ async def create_document(
         raise HTTPException(status_code=422, detail="name must not be blank")
     trimmed_doc_type = (doc_type or "").strip() or "Draft"
     _assert_linked_job_exists_for_user(sb, user_id, job_id)
+    normalized_status = _assert_document_status(status)
     storage_path, mime_type, file_size = await _upload_document_to_storage(sb, user_id, file)
+    parsed_tags = None
+    if tags:
+        # Accept either JSON array or comma-separated list
+        t = tags.strip()
+        try:
+            parsed = json.loads(t)
+        except json.JSONDecodeError:
+            # fallback to comma-separated
+            parsed_tags = [p.strip() for p in t.split(",") if p.strip()]
+        else:
+            if not isinstance(parsed, list):
+                raise HTTPException(
+                    status_code=422,
+                    detail="tags must be a JSON array or comma-separated list",
+                )
+            parsed_tags = [str(x).strip() for x in parsed if str(x).strip()]
     payload = {
         "user_id": user_id,
         "job_id": job_id,
         "name": trimmed_name,
         "doc_type": trimmed_doc_type,
+        "status": normalized_status,
+        "tags": parsed_tags,
         "storage_bucket": DOCUMENTS_BUCKET,
         "storage_path": storage_path,
         "mime_type": mime_type,
