@@ -66,7 +66,6 @@ export default function DocumentLibrary() {
     deleteDocument,
     clearDeleteError,
     clearRenameError,
-    clearDuplicateError,
     renameDocument,
     duplicateDocument,
     refetch,

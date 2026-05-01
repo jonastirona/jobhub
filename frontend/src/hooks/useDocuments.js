@@ -274,13 +274,15 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
           body: JSON.stringify({ name: trimmed }),
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Failed to rename document (${res.status})`);
+          throw new Error(
+            (await extractErrorMessage(res)) || `Failed to rename document (${res.status})`
+          );
         }
         const updated = await res.json();
         setDocuments((prev) => prev.map((d) => (d.id === documentId ? { ...d, ...updated } : d)));
         return updated;
       } catch (err) {
+        Sentry.captureException(err);
         setRenameError(err instanceof Error ? err.message : String(err));
         return null;
       } finally {
@@ -302,13 +304,15 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `Failed to duplicate document (${res.status})`);
+          throw new Error(
+            (await extractErrorMessage(res)) || `Failed to duplicate document (${res.status})`
+          );
         }
         const created = await res.json();
         setDocuments((prev) => [created, ...prev]);
         return created;
       } catch (err) {
+        Sentry.captureException(err);
         setDuplicateError(err instanceof Error ? err.message : String(err));
         return null;
       } finally {
