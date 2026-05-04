@@ -401,7 +401,9 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
           );
         }
         const updated = await res.json();
-        setDocuments((prev) => sortDocuments([updated, ...prev.filter((d) => d.id !== documentId)]));
+        setDocuments((prev) =>
+          sortDocuments([updated, ...prev.filter((d) => d.id !== documentId)])
+        );
         return updated;
       } catch (err) {
         Sentry.captureException(err);

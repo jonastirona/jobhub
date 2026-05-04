@@ -1339,11 +1339,7 @@ def patch_document(
     if not existing.data:
         raise HTTPException(status_code=404, detail="Document not found")
     response = (
-        sb.table("documents")
-        .update(updates)
-        .eq("id", document_id)
-        .eq("user_id", user_id)
-        .execute()
+        sb.table("documents").update(updates).eq("id", document_id).eq("user_id", user_id).execute()
     )
     if not response.data:
         raise HTTPException(status_code=404, detail="Document not found")

@@ -49,7 +49,11 @@ export default function DocumentLibrary() {
   const [showArchived, setShowArchived] = useState(false);
 
   const filters = useMemo(
-    () => ({ docType: selectedDocType || undefined, sortBy: selectedSortBy, includeArchived: showArchived }),
+    () => ({
+      docType: selectedDocType || undefined,
+      sortBy: selectedSortBy,
+      includeArchived: showArchived,
+    }),
     [selectedDocType, selectedSortBy, showArchived]
   );
 
