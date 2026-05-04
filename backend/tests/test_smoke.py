@@ -4691,3 +4691,207 @@ def test_unhandled_exception_returns_500_json():
         response = no_raise_client.get("/jobs", headers={"authorization": AUTH_HEADER})
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error"}
+
+
+# ---------------------------------------------------------------------------
+# Security & Ownership — document endpoints
+# ---------------------------------------------------------------------------
+
+
+def test_list_documents_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get("/documents", headers={"authorization": AUTH_HEADER})
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+def test_get_document_view_url_scoped_to_user():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get(
+            f"/documents/{SAMPLE_DOCUMENT['id']}/view-url",
+            headers={"authorization": AUTH_HEADER},
+        )
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+def test_duplicate_document_scoped_to_user():
+    duplicate = {
+        **SAMPLE_DOCUMENT,
+        "id": "doc-copy-uuid",
+        "name": f"Copy of {SAMPLE_DOCUMENT['name']}",
+        "storage_path": f"{MOCK_USER_ID}/doc-copy-uuid.pdf",
+    }
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT], [duplicate])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            f"/documents/{SAMPLE_DOCUMENT['id']}/duplicate",
+            headers={"authorization": AUTH_HEADER},
+        )
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+def test_create_document_job_link_enforces_ownership():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([SAMPLE_JOB], [SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/documents",
+            data={
+                "name": "Linked Doc",
+                "doc_type": "Resume",
+                "job_id": SAMPLE_JOB["id"],
+            },
+            files={"file": ("resume.pdf", b"%PDF-1.7\nContent", "application/pdf")},
+            headers={"authorization": AUTH_HEADER},
+        )
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("id", SAMPLE_JOB["id"]) in eq_calls
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+# ---------------------------------------------------------------------------
+# Document Logic — list filtering and sorting
+# ---------------------------------------------------------------------------
+
+
+def test_list_documents_rejects_invalid_sort_by():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/documents?sort_by=invalid_field",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "sort_by" in response.json()["detail"]
+
+
+def test_list_documents_rejects_invalid_doc_type():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/documents?doc_type=Brochure",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "doc_type" in response.json()["detail"]
+
+
+def test_list_documents_filters_by_doc_type():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get("/documents?doc_type=Resume", headers={"authorization": AUTH_HEADER})
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("doc_type", "Resume") in eq_calls
+
+
+def test_list_documents_draft_doc_type_uses_or_query():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get("/documents?doc_type=Draft", headers={"authorization": AUTH_HEADER})
+    mock_query.or_.assert_called_once_with("doc_type.eq.Draft,doc_type.is.null")
+
+
+# ---------------------------------------------------------------------------
+# Document Logic — upload validation
+# ---------------------------------------------------------------------------
+
+
+def test_create_document_rejects_empty_file():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            data={"name": "Empty"},
+            files={"file": ("empty.pdf", b"", "application/pdf")},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "Document file is required" in response.json()["detail"]
+
+
+def test_create_document_rejects_oversized_file():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    oversized_content = b"x" * (10 * 1024 * 1024 + 1)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            data={"name": "Huge"},
+            files={"file": ("huge.pdf", oversized_content, "application/pdf")},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 413
+    assert "10MB" in response.json()["detail"]
+
+
+def test_create_document_storage_path_scoped_to_user():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/documents",
+            data={"name": "My Resume"},
+            files={"file": ("resume.pdf", b"%PDF-1.7\nContent", "application/pdf")},
+            headers={"authorization": AUTH_HEADER},
+        )
+    upload_call_args = mock_sb.storage.from_.return_value.upload.call_args
+    uploaded_path = upload_call_args[0][0]
+    assert uploaded_path.startswith(MOCK_USER_ID + "/")
+
+
+def test_create_document_persists_content_field():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/documents",
+            data={"name": "Draft", "content": "  Some notes  "},
+            files={"file": ("draft.pdf", b"%PDF-1.7\nContent", "application/pdf")},
+            headers={"authorization": AUTH_HEADER},
+        )
+    inserted_payload = mock_query.insert.call_args[0][0]
+    assert inserted_payload["content"] == "Some notes"
+
+
+# ---------------------------------------------------------------------------
+# Document Logic — duplicate and delete behaviour
+# ---------------------------------------------------------------------------
+
+
+def test_duplicate_document_inherits_source_metadata():
+    source = {
+        **SAMPLE_DOCUMENT,
+        "status": "final",
+        "tags": ["backend", "python"],
+        "doc_type": "Resume",
+    }
+    duplicate = {
+        **source,
+        "id": "doc-dup-uuid",
+        "name": f"Copy of {source['name']}",
+        "storage_path": f"{MOCK_USER_ID}/doc-dup-uuid.pdf",
+    }
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([source], [duplicate])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            f"/documents/{SAMPLE_DOCUMENT['id']}/duplicate",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    insert_payload = mock_query.insert.call_args[0][0]
+    assert insert_payload["status"] == "final"
+    assert insert_payload["tags"] == ["backend", "python"]
+    assert insert_payload["doc_type"] == "Resume"
+
+
+def test_delete_document_removes_storage_file():
+    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT], [SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 204
+    mock_sb.storage.from_.return_value.remove.assert_called_once_with(
+        [SAMPLE_DOCUMENT["storage_path"]]
+    )
