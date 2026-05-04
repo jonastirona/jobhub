@@ -2481,12 +2481,8 @@ def test_list_documents_include_archived_skips_archived_filter():
             "/documents?include_archived=true", headers={"authorization": AUTH_HEADER}
         )
     assert response.status_code == 200
-    archive_filter_calls = [
-        c for c in mock_query.or_.call_args_list if "archived" in str(c)
-    ]
-    assert len(archive_filter_calls) == len(
-        [c for c in or_calls_before if "archived" in str(c)]
-    )
+    archive_filter_calls = [c for c in mock_query.or_.call_args_list if "archived" in str(c)]
+    assert len(archive_filter_calls) == len([c for c in or_calls_before if "archived" in str(c)])
 
 
 # ---------------------------------------------------------------------------
