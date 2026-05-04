@@ -268,10 +268,6 @@ class DocumentUpdate(BaseModel):
     job_id: Optional[str] = None
 
 
-class DocumentRename(BaseModel):
-    name: str
-
-
 class DocumentPatch(BaseModel):
     name: Optional[str] = None
     status: Optional[str] = None

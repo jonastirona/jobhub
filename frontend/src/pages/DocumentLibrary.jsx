@@ -338,7 +338,7 @@ export default function DocumentLibrary() {
                           deletingId === doc.id ||
                           renamingId === doc.id ||
                           duplicatingId === doc.id ||
-                          Boolean(archivingId);
+                          archivingId === doc.id;
                         return (
                           <>
                             <button
