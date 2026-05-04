@@ -10,6 +10,7 @@ import JobAnalyticsCard from '../components/JobAnalyticsCard/JobAnalyticsCard';
 import JobForm from '../components/JobForm/JobForm';
 import JobHistory from '../components/JobHistory/JobHistory';
 import JobOverviewModal from '../components/JobOverviewModal/JobOverviewModal';
+import SavedResearchModal from '../components/JobOverviewModal/SavedResearchModal';
 import { jobMatchesSearchQuery } from '../utils/jobSearch';
 import '../styles/Dashboard.css';
 
@@ -169,6 +170,8 @@ export default function Dashboard() {
   const filterControlsRef = useRef(null);
   const [viewJob, setViewJob] = useState(null);
   const viewedJobId = viewJob?.id;
+  const [researchJob, setResearchJob] = useState(null);
+  const [jobWithResearch, setJobWithResearch] = useState(null);
   // Memoized so client-side filtering is not recomputed when unrelated state changes (search still refilters when searchTerm or jobs change).
   const filteredJobs = useMemo(
     () => jobs.filter((job) => jobMatchesSearchQuery(job, searchTerm)),
@@ -275,6 +278,11 @@ export default function Dashboard() {
     setFormState(null);
     setViewJob(null);
     setHistoryJob(job);
+  }
+
+  function openResearch(job) {
+    setResearchJob(job);
+    setJobWithResearch(null);
   }
 
   function closeForm() {
@@ -863,6 +871,19 @@ export default function Dashboard() {
                           >
                             {deletingJobId === job.id ? '…' : '🗑'}
                           </button>
+                          <button
+                            type="button"
+                            className={`action-btn ${
+                              job.research?.trim() ? 'action-btn--active' : ''
+                            }`}
+                            aria-label={
+                              job.research?.trim() ? 'View saved research' : 'No research saved'
+                            }
+                            onClick={() => openResearch(job)}
+                            disabled={deletingJobId === job.id}
+                          >
+                            📚
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -937,6 +958,7 @@ export default function Dashboard() {
           onOpenDocument={handleOpenDocument}
           onDownloadDocument={handleDownloadDocument}
           onDocumentSaved={refetchDocuments}
+          onJobUpdated={refetch}
         />
       )}
 
@@ -1106,6 +1128,23 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {researchJob && (
+        <SavedResearchModal
+          job={jobWithResearch || researchJob}
+          accessToken={session?.access_token}
+          onClose={() => {
+            setResearchJob(null);
+            setJobWithResearch(null);
+          }}
+          onResearchUpdated={(updatedJob) => {
+            if (updatedJob) {
+              setJobWithResearch(updatedJob);
+            }
+            refetch();
+          }}
+        />
       )}
     </AppShell>
   );
