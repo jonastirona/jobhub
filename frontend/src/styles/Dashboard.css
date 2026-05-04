@@ -677,3 +677,19 @@
   border-color: var(--orange-400);
   box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
 }
+
+.inline-rename-input {
+  background: var(--surface);
+  border: 1px solid var(--orange-400);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 2px 6px;
+  width: 100%;
+  max-width: 220px;
+}
+
+.inline-rename-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15);
+}

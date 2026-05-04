@@ -39,9 +39,19 @@ function renderPage(overrides = {}) {
     error: null,
     deletingId: null,
     deleteError: null,
+    renamingId: null,
+    renameError: null,
+    duplicatingId: null,
+    duplicateError: null,
     viewDocument: jest.fn().mockResolvedValue('https://signed.example/doc.pdf'),
     deleteDocument: jest.fn().mockResolvedValue(true),
+    renameDocument: jest.fn().mockResolvedValue({ ...baseDoc, name: 'Renamed' }),
+    duplicateDocument: jest
+      .fn()
+      .mockResolvedValue({ ...baseDoc, id: 'doc-2', name: 'Copy of Resume_2026' }),
     clearDeleteError: jest.fn(),
+    clearRenameError: jest.fn(),
+    clearDuplicateError: jest.fn(),
     ...overrides,
   });
   return render(<DocumentLibrary />);
@@ -174,5 +184,112 @@ describe('DocumentLibrary', () => {
       clearDeleteError: jest.fn(),
     });
     expect(screen.getByText(/no saved documents yet/i)).toBeInTheDocument();
+  });
+
+  test('shows inline rename input when rename button is clicked', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /rename document/i }));
+    expect(screen.getByRole('textbox', { name: /new document name/i })).toBeInTheDocument();
+  });
+
+  test('calls renameDocument when Enter is pressed in rename input', async () => {
+    const renameDocument = jest.fn().mockResolvedValue({ ...baseDoc, name: 'New Name' });
+    renderPage({ renameDocument });
+
+    fireEvent.click(screen.getByRole('button', { name: /rename document/i }));
+    const input = screen.getByRole('textbox', { name: /new document name/i });
+    fireEvent.change(input, { target: { value: 'New Name' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(renameDocument).toHaveBeenCalledWith('doc-1', 'New Name');
+    });
+  });
+
+  test('cancels rename and hides input when Escape is pressed', async () => {
+    const renameDocument = jest.fn();
+    renderPage({ renameDocument });
+
+    fireEvent.click(screen.getByRole('button', { name: /rename document/i }));
+    const input = screen.getByRole('textbox', { name: /new document name/i });
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(renameDocument).not.toHaveBeenCalled();
+      expect(screen.queryByRole('textbox', { name: /new document name/i })).not.toBeInTheDocument();
+    });
+  });
+
+  test('calls duplicateDocument when duplicate button is clicked', async () => {
+    const duplicateDocument = jest.fn().mockResolvedValue({
+      ...baseDoc,
+      id: 'doc-2',
+      name: 'Copy of Resume_2026',
+    });
+    renderPage({ duplicateDocument });
+
+    fireEvent.click(screen.getByRole('button', { name: /duplicate document/i }));
+
+    await waitFor(() => {
+      expect(duplicateDocument).toHaveBeenCalledWith('doc-1');
+    });
+  });
+
+  test('calls renameDocument when rename input is blurred', async () => {
+    const renameDocument = jest.fn().mockResolvedValue({ ...baseDoc, name: 'Blurred Name' });
+    renderPage({ renameDocument });
+
+    fireEvent.click(screen.getByRole('button', { name: /rename document/i }));
+    const input = screen.getByRole('textbox', { name: /new document name/i });
+    fireEvent.change(input, { target: { value: 'Blurred Name' } });
+    fireEvent.blur(input);
+
+    await waitFor(() => {
+      expect(renameDocument).toHaveBeenCalledWith('doc-1', 'Blurred Name');
+    });
+  });
+
+  test('all row action buttons are disabled when duplicatingId matches the row', () => {
+    renderPage({ duplicatingId: 'doc-1' });
+
+    expect(screen.getByRole('button', { name: /view document/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /rename document/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /duplicate document/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /delete document/i })).toBeDisabled();
+  });
+
+  test('all row action buttons are disabled when renamingId matches the row', () => {
+    renderPage({ renamingId: 'doc-1' });
+
+    expect(screen.getByRole('button', { name: /view document/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /rename document/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /duplicate document/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /delete document/i })).toBeDisabled();
+  });
+
+  test('keeps rename input open when renameDocument returns null', async () => {
+    const renameDocument = jest.fn().mockResolvedValue(null);
+    renderPage({ renameDocument });
+
+    fireEvent.click(screen.getByRole('button', { name: /rename document/i }));
+    const input = screen.getByRole('textbox', { name: /new document name/i });
+    fireEvent.change(input, { target: { value: 'Still Editing' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(renameDocument).toHaveBeenCalledWith('doc-1', 'Still Editing');
+    });
+    expect(screen.getByRole('textbox', { name: /new document name/i })).toBeInTheDocument();
+  });
+
+  test('renders rename error alert when renameError exists', () => {
+    renderPage({ renameError: 'Failed to rename document (500)' });
+    expect(screen.getByRole('alert')).toHaveTextContent(/failed to rename document/i);
+  });
+
+  test('renders duplicate error alert when duplicateError exists', () => {
+    renderPage({ duplicateError: 'Failed to duplicate document (500)', deleteError: null });
+    const alerts = screen.getAllByRole('alert');
+    expect(alerts.some((a) => /failed to duplicate document/i.test(a.textContent))).toBe(true);
   });
 });
