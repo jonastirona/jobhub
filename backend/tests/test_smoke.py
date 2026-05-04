@@ -84,7 +84,7 @@ def make_mock_sb(data=None):
     Return a fully mocked Supabase client.
 
     - auth.get_user() resolves to MOCK_USER_ID
-    - table() chains (select/insert/update/delete/upsert/eq/order) all return self
+    - table() chains (select/insert/update/delete/upsert/eq/neq/order/in_/or_) all return self
     - execute() returns a response whose .data equals the provided list
     """
     mock_sb = MagicMock()
@@ -2475,14 +2475,15 @@ def test_list_documents_excludes_archived_by_default():
 
 def test_list_documents_include_archived_skips_archived_filter():
     mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
-    or_calls_before = mock_query.or_.call_args_list[:]
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.get(
             "/documents?include_archived=true", headers={"authorization": AUTH_HEADER}
         )
     assert response.status_code == 200
-    archive_filter_calls = [c for c in mock_query.or_.call_args_list if "archived" in str(c)]
-    assert len(archive_filter_calls) == len([c for c in or_calls_before if "archived" in str(c)])
+    assert all(
+        call.args != ("status.neq.archived,status.is.null",)
+        for call in mock_query.or_.call_args_list
+    )
 
 
 # ---------------------------------------------------------------------------
