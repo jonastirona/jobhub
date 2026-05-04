@@ -14,10 +14,12 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
   const [renameError, setRenameError] = useState(null);
   const [duplicatingId, setDuplicatingId] = useState(null);
   const [duplicateError, setDuplicateError] = useState(null);
+  const [archivingId, setArchivingId] = useState(null);
+  const [archiveError, setArchiveError] = useState(null);
   const pendingFetchRef = useRef(null);
   const pendingSaveRef = useRef(null);
 
-  const { docType, sortBy } = filters;
+  const { docType, sortBy, includeArchived } = filters;
 
   const sortDocuments = useCallback(
     (docs) => {
@@ -53,6 +55,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         const params = new URLSearchParams();
         if (docType) params.set('doc_type', docType);
         if (sortBy) params.set('sort_by', sortBy);
+        if (includeArchived) params.set('include_archived', 'true');
         const qs = params.toString() ? `?${params.toString()}` : '';
         const res = await fetch(`${backendBase}/documents${qs}`, {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -74,7 +77,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         }
       }
     },
-    [accessToken, docType, sortBy]
+    [accessToken, docType, sortBy, includeArchived]
   );
 
   useEffect(() => {
@@ -227,6 +230,10 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     setDuplicateError(null);
   }, []);
 
+  const clearArchiveError = useCallback(() => {
+    setArchiveError(null);
+  }, []);
+
   const deleteDocument = useCallback(
     async (documentId) => {
       const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
@@ -339,6 +346,74 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     [accessToken, sortDocuments]
   );
 
+  const archiveDocument = useCallback(
+    async (documentId) => {
+      const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
+      if (!backendBase || !accessToken || !documentId) return null;
+      setArchivingId(documentId);
+      setArchiveError(null);
+      try {
+        const res = await fetch(`${backendBase}/documents/${documentId}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status: 'archived' }),
+        });
+        if (!res.ok) {
+          throw new Error(
+            (await extractErrorMessage(res)) || `Failed to archive document (${res.status})`
+          );
+        }
+        const updated = await res.json();
+        setDocuments((prev) => prev.filter((d) => d.id !== documentId));
+        return updated;
+      } catch (err) {
+        Sentry.captureException(err);
+        setArchiveError(err instanceof Error ? err.message : String(err));
+        return null;
+      } finally {
+        setArchivingId(null);
+      }
+    },
+    [accessToken]
+  );
+
+  const restoreDocument = useCallback(
+    async (documentId) => {
+      const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
+      if (!backendBase || !accessToken || !documentId) return null;
+      setArchivingId(documentId);
+      setArchiveError(null);
+      try {
+        const res = await fetch(`${backendBase}/documents/${documentId}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status: 'draft' }),
+        });
+        if (!res.ok) {
+          throw new Error(
+            (await extractErrorMessage(res)) || `Failed to restore document (${res.status})`
+          );
+        }
+        const updated = await res.json();
+        setDocuments((prev) => sortDocuments([updated, ...prev.filter((d) => d.id !== documentId)]));
+        return updated;
+      } catch (err) {
+        Sentry.captureException(err);
+        setArchiveError(err instanceof Error ? err.message : String(err));
+        return null;
+      } finally {
+        setArchivingId(null);
+      }
+    },
+    [accessToken, sortDocuments]
+  );
+
   return {
     documents,
     loading,
@@ -351,15 +426,20 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     renameError,
     duplicatingId,
     duplicateError,
+    archivingId,
+    archiveError,
     clearSaveError,
     clearDeleteError,
     clearRenameError,
     clearDuplicateError,
+    clearArchiveError,
     refetch,
     createDocument,
     deleteDocument,
     viewDocument,
     renameDocument,
     duplicateDocument,
+    archiveDocument,
+    restoreDocument,
   };
 }

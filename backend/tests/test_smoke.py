@@ -106,6 +106,7 @@ def make_mock_sb(data=None):
         "delete",
         "upsert",
         "eq",
+        "neq",
         "order",
         "in_",
         "or_",
@@ -151,6 +152,7 @@ def _make_mock_sb_with_side_effects(*data_list):
         "delete",
         "upsert",
         "eq",
+        "neq",
         "order",
         "limit",
         "in_",
@@ -191,6 +193,7 @@ def make_mock_sb_by_table(table_rows: dict[str, list[dict]]):
             "delete",
             "upsert",
             "eq",
+            "neq",
             "order",
             "limit",
             "in_",
@@ -2370,6 +2373,105 @@ def test_duplicate_document_copies_storage_file():
     call_args = mock_sb.storage.from_().copy.call_args[0]
     assert call_args[0] == SAMPLE_DOCUMENT["storage_path"]
     assert call_args[1].startswith(MOCK_USER_ID + "/")
+
+
+# ---------------------------------------------------------------------------
+# Document archive / restore (PATCH /documents/{id} with status field)
+# ---------------------------------------------------------------------------
+
+
+def test_archive_document_success():
+    archived = {**SAMPLE_DOCUMENT, "status": "archived"}
+    mock_sb, mock_query = _make_mock_sb_with_side_effects(
+        [SAMPLE_DOCUMENT],
+        [archived],
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.patch(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"status": "archived"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["status"] == "archived"
+    mock_query.eq.assert_any_call("user_id", MOCK_USER_ID)
+
+
+def test_restore_document_success():
+    restored = {**SAMPLE_DOCUMENT, "status": "draft"}
+    mock_sb, mock_query = _make_mock_sb_with_side_effects(
+        [SAMPLE_DOCUMENT],
+        [restored],
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.patch(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"status": "draft"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["status"] == "draft"
+
+
+def test_patch_document_invalid_status_rejected():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.patch(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"status": "invalid-status"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_patch_document_empty_payload_rejected():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.patch(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+
+
+def test_patch_document_name_and_status_together():
+    updated = {**SAMPLE_DOCUMENT, "name": "New Name", "status": "final"}
+    mock_sb, mock_query = _make_mock_sb_with_side_effects(
+        [SAMPLE_DOCUMENT],
+        [updated],
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.patch(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"name": "New Name", "status": "final"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["name"] == "New Name"
+    assert body["status"] == "final"
+
+
+def test_list_documents_excludes_archived_by_default():
+    archived_doc = {**SAMPLE_DOCUMENT, "id": "doc-archived", "status": "archived"}
+    active_doc = {**SAMPLE_DOCUMENT, "id": "doc-active", "status": "draft"}
+    mock_sb, mock_query, _ = make_mock_sb(data=[active_doc])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/documents", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    mock_query.neq.assert_called_with("status", "archived")
+    _ = archived_doc
+
+
+def test_list_documents_include_archived_skips_neq_filter():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/documents?include_archived=true", headers={"authorization": AUTH_HEADER}
+        )
+    assert response.status_code == 200
+    mock_query.neq.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
