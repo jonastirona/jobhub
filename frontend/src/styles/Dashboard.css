@@ -374,7 +374,7 @@
 .action-btn--active {
   position: relative;
   background: var(--orange-50);
-  border-color: var(--orange-200);
+  border: 1px solid var(--orange-200);
 }
 
 .action-btn--active::after {
@@ -392,6 +392,7 @@
 .action-btn--active:hover {
   background: var(--orange-100);
   border-color: var(--orange-300);
+  border-style: solid;
 }
 
 /* Table Footer */

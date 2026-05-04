@@ -42,7 +42,10 @@ export default function AIDraftModal({ type, job, accessToken, onClose, onSaved 
 
   useEffect(() => {
     function onKey(e) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.stopImmediatePropagation();
+        onClose();
+      }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);

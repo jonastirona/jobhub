@@ -64,17 +64,12 @@ export default function JobOverviewModal({
   const [jobWithResearch, setJobWithResearch] = useState(null);
 
   useEffect(() => {
+    const hasChildModal = showSavedResearch || showResearch || !!aiDraftType;
+    if (hasChildModal) return undefined;
     function onKey(e) {
       if (e.key === 'Escape') {
-        if (showSavedResearch) {
-          setShowSavedResearch(false);
-        } else if (aiDraftType) {
-          setAiDraftType(null);
-        } else if (showResearch) {
-          setShowResearch(false);
-        } else {
-          onClose();
-        }
+        e.stopImmediatePropagation();
+        onClose();
       }
     }
     document.addEventListener('keydown', onKey);

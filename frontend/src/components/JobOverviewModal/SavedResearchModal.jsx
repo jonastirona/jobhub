@@ -19,8 +19,12 @@ export default function SavedResearchModal({ job, accessToken, onClose, onResear
   }, [job.research]);
 
   useEffect(() => {
+    if (showNewResearch) return undefined;
     function onKey(e) {
-      if (e.key === 'Escape' && !showNewResearch) onClose();
+      if (e.key === 'Escape') {
+        e.stopImmediatePropagation();
+        onClose();
+      }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
