@@ -367,7 +367,13 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
           );
         }
         const updated = await res.json();
-        setDocuments((prev) => prev.filter((d) => d.id !== documentId));
+        if (includeArchived) {
+          setDocuments((prev) =>
+            sortDocuments(prev.map((d) => (d.id === documentId ? { ...d, ...updated } : d)))
+          );
+        } else {
+          setDocuments((prev) => prev.filter((d) => d.id !== documentId));
+        }
         return updated;
       } catch (err) {
         Sentry.captureException(err);
@@ -377,7 +383,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         setArchivingId(null);
       }
     },
-    [accessToken]
+    [accessToken, includeArchived, sortDocuments]
   );
 
   const restoreDocument = useCallback(

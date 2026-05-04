@@ -73,6 +73,7 @@ export default function DocumentLibrary() {
     deleteDocument,
     clearDeleteError,
     clearRenameError,
+    clearArchiveError,
     renameDocument,
     duplicateDocument,
     archiveDocument,
@@ -128,6 +129,16 @@ export default function DocumentLibrary() {
   async function handleDeleteDocument(documentId, docName) {
     if (!window.confirm(`Delete "${docName}"? This cannot be undone.`)) return;
     await deleteDocument(documentId);
+  }
+
+  async function handleArchiveDocument(documentId) {
+    clearArchiveError();
+    await archiveDocument(documentId);
+  }
+
+  async function handleRestoreDocument(documentId) {
+    clearArchiveError();
+    await restoreDocument(documentId);
   }
 
   function startRename(doc) {
@@ -381,7 +392,9 @@ export default function DocumentLibrary() {
                               aria-label={isArchived ? 'Restore document' : 'Archive document'}
                               title={isArchived ? 'Restore' : 'Archive'}
                               onClick={() =>
-                                isArchived ? restoreDocument(doc.id) : archiveDocument(doc.id)
+                                isArchived
+                                  ? handleRestoreDocument(doc.id)
+                                  : handleArchiveDocument(doc.id)
                               }
                               disabled={rowBusy}
                             >

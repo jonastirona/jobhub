@@ -1195,7 +1195,7 @@ def list_documents(
     sb = get_supabase()
     query = sb.table("documents").select("*, jobs(title, company)").eq("user_id", user_id)
     if not include_archived:
-        query = query.neq("status", "archived")
+        query = query.or_("status.neq.archived,status.is.null")
     if normalized_doc_type:
         if normalized_doc_type == "Draft":
             query = query.or_("doc_type.eq.Draft,doc_type.is.null")
@@ -1329,6 +1329,8 @@ def patch_document(
             raise HTTPException(status_code=422, detail="name must not be blank")
         updates["name"] = trimmed
     if body.status is not None:
+        if not body.status.strip():
+            raise HTTPException(status_code=422, detail="status must not be blank")
         updates["status"] = _assert_document_status(body.status)
     if not updates:
         raise HTTPException(status_code=422, detail="No fields provided to update")

@@ -321,13 +321,14 @@ describe('DocumentLibrary', () => {
     });
   });
 
-  test('hides rename, duplicate, and delete buttons for archived documents', () => {
-    const archivedDoc = { ...baseDoc, status: 'archived' };
+  test('hides rename, duplicate, delete, and AI rewrite buttons for archived documents', () => {
+    const archivedDoc = { ...baseDoc, status: 'archived', content: 'some content' };
     renderPage({ documents: [archivedDoc] });
 
     expect(screen.queryByRole('button', { name: /rename document/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /duplicate document/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /delete document/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /rewrite with ai/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /restore document/i })).toBeInTheDocument();
   });
 
@@ -347,8 +348,19 @@ describe('DocumentLibrary', () => {
     expect(alerts.some((a) => /failed to archive document/i.test(a.textContent))).toBe(true);
   });
 
-  test('show archived checkbox is rendered', () => {
+  test('show archived checkbox toggles includeArchived in hook filters', () => {
     renderPage();
-    expect(screen.getByRole('checkbox', { name: /show archived/i })).toBeInTheDocument();
+    const checkbox = screen.getByRole('checkbox', { name: /show archived/i });
+
+    expect(checkbox).toBeInTheDocument();
+    expect(mockUseDocuments.mock.calls[mockUseDocuments.mock.calls.length - 1][2]).toMatchObject({
+      includeArchived: false,
+    });
+
+    fireEvent.click(checkbox);
+
+    expect(mockUseDocuments.mock.calls[mockUseDocuments.mock.calls.length - 1][2]).toMatchObject({
+      includeArchived: true,
+    });
   });
 });
