@@ -380,7 +380,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         setArchiveError(err instanceof Error ? err.message : String(err));
         return null;
       } finally {
-        setArchivingId(null);
+        setArchivingId((prev) => (prev === documentId ? null : prev));
       }
     },
     [accessToken, includeArchived, sortDocuments]
@@ -416,7 +416,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         setArchiveError(err instanceof Error ? err.message : String(err));
         return null;
       } finally {
-        setArchivingId(null);
+        setArchivingId((prev) => (prev === documentId ? null : prev));
       }
     },
     [accessToken, sortDocuments]
