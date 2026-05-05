@@ -1303,14 +1303,15 @@ async def create_document(
         raise HTTPException(status_code=422, detail="name must not be blank")
     trimmed_doc_type = (doc_type or "").strip() or "Draft"
     source_document = _get_document_for_user(sb, user_id, source_document_id)
-    _assert_linked_job_exists_for_user(sb, user_id, job_id)
+    resolved_job_id = job_id or (source_document.get("job_id") if source_document else None)
+    _assert_linked_job_exists_for_user(sb, user_id, resolved_job_id)
     normalized_status = _assert_document_status(status)
     _assert_document_name_available_for_user(
         sb,
         user_id,
         trimmed_name,
         trimmed_doc_type,
-        job_id,
+        resolved_job_id,
         allow_version_group_id=source_document.get("version_group_id") if source_document else None,
     )
     parsed_tags = None
@@ -1341,8 +1342,6 @@ async def create_document(
         version_group_id = source_document.get("version_group_id") or source_document.get("id")
         version_number = _get_next_document_version_number(sb, user_id, version_group_id)
         previous_version_id = source_document.get("id")
-
-    resolved_job_id = job_id or (source_document.get("job_id") if source_document else None)
 
     if file is not None:
         storage_path, mime_type, file_size = await _upload_document_to_storage(sb, user_id, file)
