@@ -65,13 +65,17 @@ def test_root():
 
 
 # Verifies listing jobs without auth token returns unauthorized.
-@pytest.mark.parametrize("method,url,kwargs", [
-    ("get", "/jobs", {}),
-    ("post", "/jobs", {"json": {"title": "Engineer", "company": "Acme"}}),
-    ("get", "/jobs/some-uuid", {}),
-    ("put", "/jobs/some-uuid", {"json": {"title": "Senior Engineer"}}),
-    ("delete", "/jobs/some-uuid", {}),
-], ids=["list", "create", "get", "update", "delete"])
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/jobs", {}),
+        ("post", "/jobs", {"json": {"title": "Engineer", "company": "Acme"}}),
+        ("get", "/jobs/some-uuid", {}),
+        ("put", "/jobs/some-uuid", {"json": {"title": "Senior Engineer"}}),
+        ("delete", "/jobs/some-uuid", {}),
+    ],
+    ids=["list", "create", "get", "update", "delete"],
+)
 def test_job_endpoints_require_auth(method, url, kwargs):
     response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
@@ -1073,10 +1077,14 @@ SAMPLE_INTERVIEW_EVENT = {
 }
 
 
-@pytest.mark.parametrize("url", [
-    f"/jobs/{SAMPLE_JOB['id']}/history",
-    f"/jobs/{SAMPLE_JOB['id']}/analytics",
-], ids=["history", "analytics"])
+@pytest.mark.parametrize(
+    "url",
+    [
+        f"/jobs/{SAMPLE_JOB['id']}/history",
+        f"/jobs/{SAMPLE_JOB['id']}/analytics",
+    ],
+    ids=["history", "analytics"],
+)
 def test_job_detail_endpoints_require_auth(url):
     response = client.get(url)
     assert response.status_code == 401
@@ -1133,7 +1141,6 @@ def test_get_job_history_scoped_to_job():
 # ---------------------------------------------------------------------------
 # GET /jobs/{job_id}/analytics
 # ---------------------------------------------------------------------------
-
 
 
 def test_get_job_analytics_not_found():
@@ -1273,14 +1280,22 @@ def _make_mock_sb_for_interview_create(event_data=None, job_exists=True):
     return mock_sb, mock_query
 
 
-@pytest.mark.parametrize("method,url,kwargs", [
-    ("get", f"/jobs/{SAMPLE_JOB['id']}/interviews", {}),
-    ("post", f"/jobs/{SAMPLE_JOB['id']}/interviews", {
-        "json": {"round_type": "Phone Screen", "scheduled_at": "2026-05-10T15:00:00+00:00"},
-    }),
-    ("put", f"/jobs/{SAMPLE_JOB['id']}/interviews/ie-1", {"json": {"notes": "Updated"}}),
-    ("delete", f"/jobs/{SAMPLE_JOB['id']}/interviews/ie-1", {}),
-], ids=["list", "create", "update", "delete"])
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", f"/jobs/{SAMPLE_JOB['id']}/interviews", {}),
+        (
+            "post",
+            f"/jobs/{SAMPLE_JOB['id']}/interviews",
+            {
+                "json": {"round_type": "Phone Screen", "scheduled_at": "2026-05-10T15:00:00+00:00"},
+            },
+        ),
+        ("put", f"/jobs/{SAMPLE_JOB['id']}/interviews/ie-1", {"json": {"notes": "Updated"}}),
+        ("delete", f"/jobs/{SAMPLE_JOB['id']}/interviews/ie-1", {}),
+    ],
+    ids=["list", "create", "update", "delete"],
+)
 def test_interview_endpoints_require_auth(method, url, kwargs):
     response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
@@ -1657,14 +1672,18 @@ def test_delete_job_scoped_to_user():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("method,url,kwargs", [
-    ("get", "/documents", {}),
-    ("get", f"/documents/{SAMPLE_DOCUMENT['id']}", {}),
-    ("put", f"/documents/{SAMPLE_DOCUMENT['id']}", {"json": {"name": "Updated Draft"}}),
-    ("delete", f"/documents/{SAMPLE_DOCUMENT['id']}", {}),
-    ("patch", f"/documents/{SAMPLE_DOCUMENT['id']}", {"json": {"name": "X"}}),
-    ("post", f"/documents/{SAMPLE_DOCUMENT['id']}/duplicate", {}),
-], ids=["list", "get", "update", "delete", "rename", "duplicate"])
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/documents", {}),
+        ("get", f"/documents/{SAMPLE_DOCUMENT['id']}", {}),
+        ("put", f"/documents/{SAMPLE_DOCUMENT['id']}", {"json": {"name": "Updated Draft"}}),
+        ("delete", f"/documents/{SAMPLE_DOCUMENT['id']}", {}),
+        ("patch", f"/documents/{SAMPLE_DOCUMENT['id']}", {"json": {"name": "X"}}),
+        ("post", f"/documents/{SAMPLE_DOCUMENT['id']}/duplicate", {}),
+    ],
+    ids=["list", "get", "update", "delete", "rename", "duplicate"],
+)
 def test_document_endpoints_require_auth(method, url, kwargs):
     response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
@@ -2155,7 +2174,6 @@ def test_duplicate_document_not_found():
     assert response.status_code == 404
 
 
-
 def test_duplicate_document_copies_storage_file():
     duplicate = {
         **SAMPLE_DOCUMENT,
@@ -2275,10 +2293,14 @@ SAMPLE_PROFILE = {
 
 
 # Verifies profile read endpoint requires authentication.
-@pytest.mark.parametrize("method,url,kwargs", [
-    ("get", "/profile", {}),
-    ("put", "/profile", {"json": {"full_name": "Jane"}}),
-], ids=["get", "put"])
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/profile", {}),
+        ("put", "/profile", {"json": {"full_name": "Jane"}}),
+    ],
+    ids=["get", "put"],
+)
 def test_profile_endpoints_require_auth(method, url, kwargs):
     response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
@@ -2555,13 +2577,21 @@ SAMPLE_EXPERIENCE = {
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("method,url,kwargs", [
-    ("get", "/experience", {}),
-    ("post", "/experience", {"json": {"title": "Engineer", "company": "Acme", "start_year": 2020}}),
-    ("put", "/experience/reorder", {"json": {"ids": []}}),
-    ("put", "/experience/some-uuid", {"json": {"title": "Senior Engineer"}}),
-    ("delete", "/experience/some-uuid", {}),
-], ids=["list", "create", "reorder", "update", "delete"])
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/experience", {}),
+        (
+            "post",
+            "/experience",
+            {"json": {"title": "Engineer", "company": "Acme", "start_year": 2020}},
+        ),
+        ("put", "/experience/reorder", {"json": {"ids": []}}),
+        ("put", "/experience/some-uuid", {"json": {"title": "Senior Engineer"}}),
+        ("delete", "/experience/some-uuid", {}),
+    ],
+    ids=["list", "create", "reorder", "update", "delete"],
+)
 def test_experience_endpoints_require_auth(method, url, kwargs):
     response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
@@ -3010,18 +3040,29 @@ SAMPLE_REMINDER = {
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("method,url,kwargs", [
-    ("get", "/reminders", {}),
-    ("post", "/reminders", {
-        "json": {"job_id": SAMPLE_JOB["id"], "title": "Follow up", "due_date": FUTURE_DUE_DATE},
-    }),
-    ("put", "/reminders/some-uuid", {"json": {"title": "Updated"}}),
-    ("delete", "/reminders/some-uuid", {}),
-], ids=["list", "create", "update", "delete"])
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/reminders", {}),
+        (
+            "post",
+            "/reminders",
+            {
+                "json": {
+                    "job_id": SAMPLE_JOB["id"],
+                    "title": "Follow up",
+                    "due_date": FUTURE_DUE_DATE,
+                },
+            },
+        ),
+        ("put", "/reminders/some-uuid", {"json": {"title": "Updated"}}),
+        ("delete", "/reminders/some-uuid", {}),
+    ],
+    ids=["list", "create", "update", "delete"],
+)
 def test_reminder_endpoints_require_auth(method, url, kwargs):
     response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
-
 
 
 # ---------------------------------------------------------------------------
@@ -3337,10 +3378,14 @@ SAMPLE_PREFS = {
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("method,url,kwargs", [
-    ("get", "/career-preferences", {}),
-    ("put", "/career-preferences", {"json": {"target_roles": "Engineer"}}),
-], ids=["get", "put"])
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/career-preferences", {}),
+        ("put", "/career-preferences", {"json": {"target_roles": "Engineer"}}),
+    ],
+    ids=["get", "put"],
+)
 def test_career_preferences_endpoints_require_auth(method, url, kwargs):
     response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
@@ -3570,13 +3615,17 @@ SAMPLE_SKILL = {
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("method,url,kwargs", [
-    ("get", "/skills", {}),
-    ("post", "/skills", {"json": {"name": "React"}}),
-    ("put", "/skills/reorder", {"json": {"ids": []}}),
-    ("put", "/skills/some-uuid", {"json": {"name": "Vue"}}),
-    ("delete", "/skills/some-uuid", {}),
-], ids=["list", "create", "reorder", "update", "delete"])
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/skills", {}),
+        ("post", "/skills", {"json": {"name": "React"}}),
+        ("put", "/skills/reorder", {"json": {"ids": []}}),
+        ("put", "/skills/some-uuid", {"json": {"name": "Vue"}}),
+        ("delete", "/skills/some-uuid", {}),
+    ],
+    ids=["list", "create", "reorder", "update", "delete"],
+)
 def test_skill_endpoints_require_auth(method, url, kwargs):
     response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
@@ -3956,14 +4005,27 @@ SAMPLE_EDUCATION = {
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("method,url,kwargs", [
-    ("get", "/education", {}),
-    ("post", "/education", {
-        "json": {"institution": "NJIT", "degree": "BS", "field_of_study": "CS", "start_year": 2022},
-    }),
-    ("put", "/education/some-uuid", {"json": {"institution": "MIT"}}),
-    ("delete", "/education/some-uuid", {}),
-], ids=["list", "create", "update", "delete"])
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/education", {}),
+        (
+            "post",
+            "/education",
+            {
+                "json": {
+                    "institution": "NJIT",
+                    "degree": "BS",
+                    "field_of_study": "CS",
+                    "start_year": 2022,
+                },
+            },
+        ),
+        ("put", "/education/some-uuid", {"json": {"institution": "MIT"}}),
+        ("delete", "/education/some-uuid", {}),
+    ],
+    ids=["list", "create", "update", "delete"],
+)
 def test_education_endpoints_require_auth(method, url, kwargs):
     response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
