@@ -32,6 +32,14 @@ function formatDocumentVersion(versionIndexFromLatest, totalVersions) {
   return `v${versionNumber}`;
 }
 
+function formatDocumentVersionLabel(documentRecord, versionIndexFromLatest, totalVersions) {
+  const persistedVersion = Number(documentRecord?.version_number);
+  if (Number.isFinite(persistedVersion) && persistedVersion > 0) {
+    return versionIndexFromLatest === 1 ? `Latest (v${persistedVersion})` : `v${persistedVersion}`;
+  }
+  return formatDocumentVersion(versionIndexFromLatest, totalVersions);
+}
+
 function Field({ label, children, muted }) {
   return (
     <div className="job-overview-section">
@@ -155,7 +163,11 @@ export default function JobOverviewModal({
 
     const grouped = new Map();
     records.forEach((documentRecord) => {
-      const key = `${documentRecord.doc_type || 'Draft'}::${documentRecord.name || ''}`;
+      const persistedGroupKey = documentRecord.version_group_id;
+      // Only group documents when they are part of a version group. Otherwise treat
+      // them as distinct documents to avoid collapsing unrelated items that happen
+      // to share the same name/doc_type.
+      const key = persistedGroupKey ? persistedGroupKey : documentRecord.id;
       const existing = grouped.get(key) || [];
       existing.push(documentRecord);
       grouped.set(key, existing);
@@ -173,9 +185,19 @@ export default function JobOverviewModal({
         return rightLatest - leftLatest;
       })
       .forEach((group) => {
-        const sortedGroup = [...group].sort(
-          (left, right) => getDocumentTimestamp(right) - getDocumentTimestamp(left)
-        );
+        const sortedGroup = [...group].sort((left, right) => {
+          const leftVersion = Number(left?.version_number);
+          const rightVersion = Number(right?.version_number);
+          const bothVersioned =
+            Number.isFinite(leftVersion) &&
+            leftVersion > 0 &&
+            Number.isFinite(rightVersion) &&
+            rightVersion > 0;
+          if (bothVersioned && leftVersion !== rightVersion) {
+            return rightVersion - leftVersion;
+          }
+          return getDocumentTimestamp(right) - getDocumentTimestamp(left);
+        });
         const totalVersions = sortedGroup.length;
         sortedGroup.forEach((documentRecord, index) => {
           flattened.push({
@@ -290,7 +312,8 @@ export default function JobOverviewModal({
               {linkedDocuments.length > 0 && (
                 <ul className="job-overview-doc-list" aria-label="Documents linked to this job">
                   {linkedDocuments.map((documentRecord) => {
-                    const versionLabel = formatDocumentVersion(
+                    const versionLabel = formatDocumentVersionLabel(
+                      documentRecord,
                       documentRecord.versionIndexFromLatest,
                       documentRecord.totalVersions
                     );

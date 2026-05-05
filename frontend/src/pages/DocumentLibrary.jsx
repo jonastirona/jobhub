@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppShell from '../components/layout/AppShell';
 import AIRewriteModal from '../components/AIRewriteModal/AIRewriteModal';
 import { useAuth } from '../context/AuthContext';
@@ -39,6 +39,9 @@ function getLinkedJobLabel(doc) {
   return `${title} - ${company}`;
 }
 
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export default function DocumentLibrary() {
   const { session } = useAuth();
   const [selectedDocType, setSelectedDocType] = useState('');
@@ -58,6 +61,7 @@ export default function DocumentLibrary() {
     documents,
     loading,
     error,
+    saving,
     deletingId,
     deleteError,
     renamingId,
@@ -67,9 +71,11 @@ export default function DocumentLibrary() {
     archivingIds,
     archiveError,
     viewDocument,
+    createDocument,
     deleteDocument,
     clearDeleteError,
     clearRenameError,
+    clearDuplicateError,
     clearArchiveError,
     renameDocument,
     duplicateDocument,
@@ -78,73 +84,130 @@ export default function DocumentLibrary() {
     refetch,
   } = useDocuments(session?.access_token, true, filters);
 
+  // Only display the most recent version of each document version group.
+  const latestDocuments = useMemo(() => {
+    if (!Array.isArray(documents) || documents.length === 0) return [];
+    const latestByGroup = new Map();
+    for (const doc of documents) {
+      const group = doc.version_group_id ?? doc.id;
+      const version = typeof doc.version_number === 'number' ? doc.version_number : 1;
+      const cur = latestByGroup.get(group);
+      if (!cur) {
+        latestByGroup.set(group, doc);
+        continue;
+      }
+      const curVersion = typeof cur.version_number === 'number' ? cur.version_number : 1;
+      if (version > curVersion) {
+        latestByGroup.set(group, doc);
+      } else if (version === curVersion) {
+        const curUpdated = new Date(cur.updated_at || cur.created_at || 0).getTime();
+        const docUpdated = new Date(doc.updated_at || doc.created_at || 0).getTime();
+        if (docUpdated > curUpdated) latestByGroup.set(group, doc);
+      }
+    }
+
+    // Preserve relative order from the original list by iterating and collecting first-seen groups
+    const seen = new Set();
+    const result = [];
+    for (const doc of documents) {
+      const group = doc.version_group_id ?? doc.id;
+      if (seen.has(group)) continue;
+      const latest = latestByGroup.get(group);
+      if (latest) {
+        result.push(latest);
+        seen.add(group);
+      }
+    }
+    return result;
+  }, [documents]);
   const [rewriteDoc, setRewriteDoc] = useState(null);
-  const [expandedDocIds, setExpandedDocIds] = useState(() => new Set());
+  const [selectedDoc, setSelectedDoc] = useState(null);
   const [renamingDocId, setRenamingDocId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
-  const skipBlurRef = useRef(false);
+  const [versionHistory, setVersionHistory] = useState([]);
+  const [versionHistoryLoading, setVersionHistoryLoading] = useState(false);
+  const [versionHistoryError, setVersionHistoryError] = useState(null);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showDuplicateForm, setShowDuplicateForm] = useState(false);
+  const [duplicateName, setDuplicateName] = useState('');
+  const overlayRef = useRef(null);
+  const modalRef = useRef(null);
+  const versionUploadInputRef = useRef(null);
 
-  async function openDocument(documentId) {
-    const url = await viewDocument(documentId);
-    if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
+  function openDocumentModal(doc) {
+    clearDeleteError();
+    setShowVersionHistory(false);
+    setShowDuplicateForm(false);
+    setVersionHistory([]);
+    setVersionHistoryError(null);
+    setDuplicateName('');
+    clearDuplicateError();
+    setSelectedDoc(doc);
+  }
+
+  const closeDocumentModal = useCallback(() => {
+    setSelectedDoc(null);
+    setShowDuplicateForm(false);
+    setDuplicateName('');
+    clearDuplicateError();
+  }, [clearDuplicateError]);
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') closeDocumentModal();
     }
-  }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closeDocumentModal]);
 
-  async function handleDownloadDocument(documentRecord) {
-    if (!documentRecord?.id) return;
-    let objectUrl = null;
-    const link = document.createElement('a');
-    try {
-      const url = await viewDocument(documentRecord.id);
-      if (!url) return;
+  const handleOverlayClick = useCallback((e) => {
+    if (e.target === overlayRef.current) closeDocumentModal();
+  }, [closeDocumentModal]);
 
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Failed to download document: ${response.status}`);
+  const handleModalKeyDown = useCallback((e) => {
+    if (e.key !== 'Tab' || !modalRef.current) return;
+    const focusable = Array.from(modalRef.current.querySelectorAll(FOCUSABLE_SELECTOR));
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (window.document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
       }
-
-      const blob = await response.blob();
-      objectUrl = URL.createObjectURL(blob);
-      link.href = objectUrl;
-      link.rel = 'noopener noreferrer';
-      link.download = `${documentRecord.name || 'document'}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-    } catch (err) {
-      // Download failed silently - error handling could be enhanced with toast notifications
-    } finally {
-      link.remove();
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
+    } else if (window.document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
     }
-  }
-
-  function toggleDocumentDetails(documentId) {
-    setExpandedDocIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(documentId)) {
-        next.delete(documentId);
-      } else {
-        next.add(documentId);
-      }
-      return next;
-    });
-  }
-
-  function expandAllDetails() {
-    setExpandedDocIds(new Set(documents.map((doc) => doc.id)));
-  }
-
-  function collapseAllDetails() {
-    setExpandedDocIds(new Set());
-  }
+  }, []);
 
   async function handleDeleteDocument(documentId, docName) {
-    clearDeleteError();
     if (!window.confirm(`Delete "${docName}"? This cannot be undone.`)) return;
     await deleteDocument(documentId);
+  }
+
+  function startDuplicate(doc) {
+    openDocumentModal(doc);
+    setShowDuplicateForm(true);
+    setDuplicateName(`Copy of ${doc.name || 'Document'}`);
+  }
+
+  async function commitDuplicate() {
+    if (!selectedDoc) return;
+    const trimmed = duplicateName.trim();
+    if (!trimmed) return;
+    const created = await duplicateDocument(selectedDoc.id, trimmed);
+    if (created) {
+      setSelectedDoc(created);
+      setShowDuplicateForm(false);
+      setDuplicateName('');
+      await refetch();
+    }
+  }
+
+  function cancelDuplicate() {
+    setShowDuplicateForm(false);
+    setDuplicateName('');
   }
 
   async function handleArchiveDocument(documentId) {
@@ -166,20 +229,102 @@ export default function DocumentLibrary() {
   async function commitRename(documentId) {
     if (!renameValue.trim()) {
       setRenamingDocId(null);
-      skipBlurRef.current = false;
       return;
     }
     const result = await renameDocument(documentId, renameValue);
     if (result) {
       setRenamingDocId(null);
     }
-    skipBlurRef.current = false;
   }
 
   function cancelRename() {
     setRenamingDocId(null);
     setRenameValue('');
-    skipBlurRef.current = false;
+  }
+
+  async function loadVersionHistory(docId) {
+    if (!session?.access_token || !docId) return;
+    const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
+    if (!backendBase) {
+      setVersionHistoryError('Backend URL is not configured.');
+      return;
+    }
+    setVersionHistoryLoading(true);
+    setVersionHistoryError(null);
+    try {
+      const res = await fetch(`${backendBase}/documents/${docId}/versions`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to load version history (${res.status})`);
+      }
+      const data = await res.json();
+      setVersionHistory(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setVersionHistoryError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setVersionHistoryLoading(false);
+    }
+  }
+
+  async function openDocumentById(documentId) {
+    if (!documentId) return;
+    const url = await viewDocument(documentId);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  async function handleDownloadDocument(documentRecord) {
+    if (!documentRecord?.id) return;
+    let objectUrl = null;
+    const link = window.document.createElement('a');
+    try {
+      const url = await viewDocument(documentRecord.id);
+      if (!url) return;
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to download document: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      objectUrl = URL.createObjectURL(blob);
+      link.href = objectUrl;
+      link.rel = 'noopener noreferrer';
+      link.download = `${documentRecord.name || 'document'}.pdf`;
+      window.document.body.appendChild(link);
+      link.click();
+    } catch (err) {
+      // Keep failure silent to avoid blocking primary document actions.
+    } finally {
+      link.remove();
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    }
+  }
+
+  async function handleUploadNewVersion(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!selectedDoc || !file) return;
+
+    const created = await createDocument({
+      name: selectedDoc.name || file.name.replace(/\.[^.]+$/, '') || 'Document',
+      doc_type: selectedDoc.doc_type || 'Draft',
+      job_id: selectedDoc.job_id || undefined,
+      source_document_id: selectedDoc.id,
+      status: selectedDoc.status || undefined,
+      tags: Array.isArray(selectedDoc.tags) ? selectedDoc.tags : undefined,
+      file,
+    });
+
+    if (created) {
+      await refetch();
+      setSelectedDoc(created);
+      setShowVersionHistory(false);
+      setVersionHistory([]);
+      setVersionHistoryError(null);
+    }
   }
 
   return (
@@ -241,27 +386,6 @@ export default function DocumentLibrary() {
                 checked={showArchived}
                 onChange={(e) => setShowArchived(e.target.checked)}
               />
-            </div>
-            <div className="dashboard-sort-control">
-              <label className="dashboard-sort-label">Details</label>
-              <div className="document-details-controls">
-                <button
-                  type="button"
-                  className="view-toggle-btn"
-                  onClick={expandAllDetails}
-                  disabled={documents.length === 0}
-                >
-                  Expand all
-                </button>
-                <button
-                  type="button"
-                  className="view-toggle-btn"
-                  onClick={collapseAllDetails}
-                  disabled={documents.length === 0}
-                >
-                  Collapse all
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -325,7 +449,7 @@ export default function DocumentLibrary() {
               </tr>
             )}
 
-            {!loading && !error && documents.length === 0 && (
+            {!loading && !error && latestDocuments.length === 0 && (
               <tr>
                 <td colSpan={7} className="table-empty">
                   No saved documents yet. Create a draft from any job in your dashboard.
@@ -335,59 +459,82 @@ export default function DocumentLibrary() {
 
             {!loading &&
               !error &&
-              documents.map((doc, index) => {
-                const isArchived = doc.status === 'archived';
-                const rowBusy =
-                  deletingId === doc.id ||
-                  renamingId === doc.id ||
-                  duplicatingId === doc.id ||
-                  archivingIds.has(doc.id);
-                const isExpanded = expandedDocIds.has(doc.id);
-                return (
-                  <Fragment key={doc.id}>
-                    <tr key={doc.id}>
-                      <td className="row-number">{index + 1}</td>
-                      <td className="shell-cell-strong">
-                        <div className="document-name-cell">
-                          {renamingDocId === doc.id ? (
-                            <input
-                              className="inline-rename-input"
-                              aria-label="New document name"
-                              value={renameValue}
-                              onChange={(e) => setRenameValue(e.target.value)}
-                              onBlur={() => {
-                                if (skipBlurRef.current) {
-                                  skipBlurRef.current = false;
-                                  return;
-                                }
-                                commitRename(doc.id);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  skipBlurRef.current = true;
-                                  commitRename(doc.id);
-                                } else if (e.key === 'Escape') {
-                                  skipBlurRef.current = true;
-                                  cancelRename();
-                                }
-                              }}
-                              autoFocus
-                            />
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                className="document-title-link"
-                                onClick={() => openDocument(doc.id)}
-                                disabled={rowBusy}
-                              >
-                                {doc.name}
-                              </button>
-                              {!isArchived && (
+              latestDocuments.map((doc, index) => (
+                <tr key={doc.id}>
+                  <td className="row-number">{index + 1}</td>
+                  <td className="shell-cell-strong">
+                    {renamingDocId === doc.id ? (
+                      <input
+                        className="inline-rename-input"
+                        aria-label="New document name"
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={() => commitRename(doc.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            commitRename(doc.id);
+                          } else if (e.key === 'Escape') {
+                            cancelRename();
+                          }
+                        }}
+                        autoFocus
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="document-title-link"
+                        onClick={() => openDocumentById(doc.id)}
+                      >
+                        {doc.name}
+                      </button>
+                    )}
+                  </td>
+                  <td>{doc.doc_type || 'Draft'}</td>
+                  <td>{getLinkedJobLabel(doc)}</td>
+                  <td>
+                    <span className="date-text">{formatDocumentDate(doc.created_at, true)}</span>
+                  </td>
+                  <td>
+                    <span className="date-text">
+                      {formatDocumentDate(doc.updated_at || doc.created_at, true)}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="actions-cell">
+                      {(() => {
+                        const isArchived = doc.status === 'archived';
+                        const rowBusy =
+                          deletingId === doc.id ||
+                          renamingId === doc.id ||
+                          duplicatingId === doc.id ||
+                          archivingIds.has(doc.id);
+                        return (
+                          <>
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label="View details"
+                              onClick={() => openDocumentModal(doc)}
+                              disabled={rowBusy}
+                            >
+                              👁
+                            </button>
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label="Download document"
+                              title="Download"
+                              onClick={() => handleDownloadDocument(doc)}
+                              disabled={rowBusy}
+                            >
+                              ⬇
+                            </button>
+                            {!isArchived && (
+                              <>
                                 <button
                                   type="button"
-                                  className="action-btn document-rename-btn"
+                                  className="action-btn"
                                   aria-label="Rename document"
                                   title="Rename"
                                   onClick={() => startRename(doc)}
@@ -395,157 +542,62 @@ export default function DocumentLibrary() {
                                 >
                                   ✏️
                                 </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </td>
-                      <td>{doc.doc_type || 'Draft'}</td>
-                      <td>{getLinkedJobLabel(doc)}</td>
-                      <td>
-                        <span className="date-text">
-                          {formatDocumentDate(doc.created_at, true)}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="date-text">
-                          {formatDocumentDate(doc.updated_at || doc.created_at, true)}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="actions-cell">
-                          <button
-                            type="button"
-                            className="view-toggle-btn"
-                            aria-label={isExpanded ? 'Hide details' : 'View details'}
-                            onClick={() => toggleDocumentDetails(doc.id)}
-                            disabled={rowBusy}
-                          >
-                            {isExpanded ? 'Hide details' : 'View details'}
-                          </button>
-                          <button
-                            type="button"
-                            className="action-btn"
-                            aria-label="Download document"
-                            title="Download"
-                            onClick={() => handleDownloadDocument(doc)}
-                            disabled={rowBusy}
-                          >
-                            ⬇
-                          </button>
-                          {!isArchived && (
-                            <>
-                              <button
-                                type="button"
-                                className="action-btn"
-                                aria-label="Duplicate document"
-                                title="Duplicate"
-                                onClick={() => duplicateDocument(doc.id)}
-                                disabled={rowBusy}
-                              >
-                                {duplicatingId === doc.id ? '…' : '📋'}
-                              </button>
-                              {doc.content && (
                                 <button
                                   type="button"
                                   className="action-btn"
-                                  aria-label="Rewrite with AI"
-                                  title="Rewrite with AI"
-                                  onClick={() => setRewriteDoc(doc)}
+                                  aria-label="Duplicate document"
+                                  title="Duplicate"
+                                  onClick={() => startDuplicate(doc)}
                                   disabled={rowBusy}
                                 >
-                                  ✦
+                                  📋
                                 </button>
-                              )}
-                            </>
-                          )}
-                          <button
-                            type="button"
-                            className="action-btn"
-                            aria-label={isArchived ? 'Restore document' : 'Archive document'}
-                            title={isArchived ? 'Restore' : 'Archive'}
-                            onClick={() =>
-                              isArchived
-                                ? handleRestoreDocument(doc.id)
-                                : handleArchiveDocument(doc.id)
-                            }
-                            disabled={rowBusy}
-                          >
-                            {archivingIds.has(doc.id) ? '…' : isArchived ? '↩' : '📦'}
-                          </button>
-                          {!isArchived && (
+                                {doc.content && (
+                                  <button
+                                    type="button"
+                                    className="action-btn"
+                                    aria-label="Rewrite with AI"
+                                    title="Rewrite with AI"
+                                    onClick={() => setRewriteDoc(doc)}
+                                    disabled={rowBusy}
+                                  >
+                                    ✦
+                                  </button>
+                                )}
+                              </>
+                            )}
                             <button
                               type="button"
                               className="action-btn"
-                              aria-label="Delete document"
-                              onClick={() => handleDeleteDocument(doc.id, doc.name)}
+                              aria-label={isArchived ? 'Restore document' : 'Archive document'}
+                              title={isArchived ? 'Restore' : 'Archive'}
+                              onClick={() =>
+                                isArchived
+                                  ? handleRestoreDocument(doc.id)
+                                  : handleArchiveDocument(doc.id)
+                              }
                               disabled={rowBusy}
                             >
-                              {deletingId === doc.id ? '…' : '🗑'}
+                              {archivingIds.has(doc.id) ? '…' : isArchived ? '↩' : '📦'}
                             </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                    {isExpanded && (
-                      <tr key={`${doc.id}-details`} className="document-details-row">
-                        <td colSpan={7}>
-                          <div className="document-inline-details">
-                            <p className="document-view-modal-text">
-                              <strong>Type:</strong> {doc.doc_type || 'Draft'}
-                            </p>
-                            <p className="document-view-modal-text">
-                              <strong>Status:</strong> {doc.status || '—'}
-                            </p>
-                            <p className="document-view-modal-text">
-                              <strong>Tags:</strong>{' '}
-                              {Array.isArray(doc.tags) && doc.tags.length > 0
-                                ? doc.tags.map((t, tagIndex) => (
-                                    <span
-                                      key={`${t}-${tagIndex}`}
-                                      className="draft-field-label"
-                                      style={{ display: 'inline-block', marginRight: 8 }}
-                                    >
-                                      {t}
-                                    </span>
-                                  ))
-                                : '—'}
-                            </p>
-                            <p className="document-view-modal-text">
-                              <strong>Linked:</strong> {getLinkedJobLabel(doc)}
-                            </p>
-                            <p className="document-view-modal-text">
-                              <strong>Uploaded:</strong> {formatDocumentDate(doc.created_at, true)}
-                            </p>
-                            <p className="document-view-modal-text">
-                              <strong>Last Updated:</strong>{' '}
-                              {formatDocumentDate(doc.updated_at || doc.created_at, true)}
-                            </p>
-                            <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                            {!isArchived && (
                               <button
                                 type="button"
-                                className="document-view-modal-btn"
-                                onClick={() => openDocument(doc.id)}
+                                className="action-btn"
+                                aria-label="Delete document"
+                                onClick={() => handleDeleteDocument(doc.id, doc.name)}
                                 disabled={rowBusy}
                               >
-                                Open file
+                                {deletingId === doc.id ? '…' : '🗑'}
                               </button>
-                              <button
-                                type="button"
-                                className="document-view-modal-btn document-view-modal-btn--cancel"
-                                onClick={() => toggleDocumentDetails(doc.id)}
-                                disabled={rowBusy}
-                              >
-                                Close details
-                              </button>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </section>
@@ -560,6 +612,216 @@ export default function DocumentLibrary() {
             refetch();
           }}
         />
+      )}
+
+      {selectedDoc && (
+        <div
+          className="document-view-modal-overlay"
+          role="presentation"
+          onClick={handleOverlayClick}
+          ref={overlayRef}
+        >
+          <div
+            className="draft-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="document-view-title"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={handleModalKeyDown}
+            tabIndex={-1}
+            ref={modalRef}
+          >
+            <h2 className="document-view-modal-title" id="document-view-title">
+              {selectedDoc.name || 'Document'}
+            </h2>
+            <p className="document-view-modal-text">
+              <strong>Type:</strong> {selectedDoc.doc_type || 'Draft'}
+            </p>
+            <p className="document-view-modal-text">
+              <strong>Status:</strong> {selectedDoc.status || '—'}
+            </p>
+            <p className="document-view-modal-text">
+              <strong>Tags:</strong>{' '}
+              {Array.isArray(selectedDoc.tags) && selectedDoc.tags.length > 0
+                ? selectedDoc.tags.map((t, index) => (
+                    <span
+                      key={`${t}-${index}`}
+                      className="draft-field-label"
+                      style={{ display: 'inline-block', marginRight: 8 }}
+                    >
+                      {t}
+                    </span>
+                  ))
+                : '—'}
+            </p>
+            <p className="document-view-modal-text">
+              <strong>Version:</strong>{' '}
+              {selectedDoc.version_number ? `v${selectedDoc.version_number}` : 'v1'}
+            </p>
+            <p className="document-view-modal-text">
+              <strong>Linked:</strong> {getLinkedJobLabel(selectedDoc)}
+            </p>
+            <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <button
+                type="button"
+                className="document-view-modal-btn"
+                onClick={() => versionUploadInputRef.current?.click()}
+                disabled={versionHistoryLoading || saving}
+              >
+                Upload new version
+              </button>
+              <input
+                ref={versionUploadInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                style={{ display: 'none' }}
+                aria-label="Upload new version file"
+                onChange={handleUploadNewVersion}
+              />
+              <button
+                type="button"
+                className="document-view-modal-btn"
+                onClick={async () => {
+                  const nextShow = !showVersionHistory;
+                  setShowVersionHistory(nextShow);
+                  if (nextShow && versionHistory.length === 0 && !versionHistoryLoading) {
+                    await loadVersionHistory(selectedDoc.id);
+                  }
+                }}
+              >
+                {showVersionHistory ? 'Hide version history' : 'View version history'}
+              </button>
+              <button
+                type="button"
+                className="document-view-modal-btn"
+                onClick={() => startDuplicate(selectedDoc)}
+                disabled={duplicatingId === selectedDoc.id}
+              >
+                Duplicate with new name
+              </button>
+            </div>
+            {showDuplicateForm && (
+              <div style={{ marginTop: 14 }}>
+                <label className="draft-field-label" htmlFor="duplicate-name-input">
+                  Duplicate document name
+                </label>
+                <input
+                  id="duplicate-name-input"
+                  className="inline-rename-input"
+                  value={duplicateName}
+                  onChange={(e) => setDuplicateName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      commitDuplicate();
+                    } else if (e.key === 'Escape') {
+                      cancelDuplicate();
+                    }
+                  }}
+                  autoFocus
+                />
+                {duplicateError && (
+                  <p
+                    className="document-view-modal-text"
+                    role="alert"
+                    style={{ color: 'var(--error)', fontSize: '12px', marginTop: 6 }}
+                  >
+                    {duplicateError}
+                  </p>
+                )}
+                <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="document-view-modal-btn"
+                    onClick={commitDuplicate}
+                    disabled={duplicatingId === selectedDoc.id}
+                  >
+                    Save duplicate
+                  </button>
+                  <button
+                    type="button"
+                    className="document-view-modal-btn document-view-modal-btn--cancel"
+                    onClick={cancelDuplicate}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            {versionHistoryError && (
+              <p className="document-view-modal-text" role="alert" style={{ color: 'var(--error)' }}>
+                {versionHistoryError}
+              </p>
+            )}
+            {showVersionHistory && (
+              <div style={{ marginTop: 14 }}>
+                {versionHistoryLoading ? (
+                  <p className="document-view-modal-text" role="status" aria-live="polite">
+                    Loading version history...
+                  </p>
+                ) : versionHistory.length > 0 ? (
+                  <ul style={{ margin: 0, paddingLeft: 18 }} aria-label="Version history list">
+                    {versionHistory.map((version) => (
+                      <li key={version.id} className="document-view-modal-text">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span>
+                          {version.name} - v{version.version_number || 1} -{' '}
+                          {formatDocumentDate(version.updated_at || version.created_at, true)}
+                          </span>
+                          <button
+                            type="button"
+                            className="document-view-modal-btn"
+                            onClick={() => handleDownloadDocument(version)}
+                          >
+                            Download
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="document-view-modal-text">No version history available.</p>
+                )}
+              </div>
+            )}
+            <hr
+              style={{ margin: '12px 0', border: 'none', borderTop: '1px solid var(--border)' }}
+            />
+            <p
+              style={{
+                fontSize: '12px',
+                fontWeight: '600',
+                color: 'var(--text-secondary)',
+                marginBottom: 8,
+              }}
+            >
+              Timestamps
+            </p>
+            <p className="document-view-modal-text">
+              <strong>Uploaded:</strong> {formatDocumentDate(selectedDoc.created_at, true)}
+            </p>
+            <p className="document-view-modal-text">
+              <strong>Last Updated:</strong>{' '}
+              {formatDocumentDate(selectedDoc.updated_at || selectedDoc.created_at, true)}
+            </p>
+            <div style={{ marginTop: 18, display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="document-view-modal-btn"
+                onClick={() => openDocumentById(selectedDoc.id)}
+              >
+                Open file
+              </button>
+              <button
+                type="button"
+                className="document-view-modal-btn document-view-modal-btn--cancel"
+                onClick={closeDocumentModal}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </AppShell>
   );
