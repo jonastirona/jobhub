@@ -67,7 +67,7 @@ export default function DocumentLibrary() {
     renameError,
     duplicatingId,
     duplicateError,
-    archivingId,
+    archivingIds,
     archiveError,
     viewDocument,
     deleteDocument,
@@ -338,7 +338,7 @@ export default function DocumentLibrary() {
                           deletingId === doc.id ||
                           renamingId === doc.id ||
                           duplicatingId === doc.id ||
-                          archivingId === doc.id;
+                          archivingIds.has(doc.id);
                         return (
                           <>
                             <button
@@ -398,7 +398,7 @@ export default function DocumentLibrary() {
                               }
                               disabled={rowBusy}
                             >
-                              {archivingId === doc.id ? '…' : isArchived ? '↩' : '📦'}
+                              {archivingIds.has(doc.id) ? '…' : isArchived ? '↩' : '📦'}
                             </button>
                             {!isArchived && (
                               <button

@@ -14,7 +14,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
   const [renameError, setRenameError] = useState(null);
   const [duplicatingId, setDuplicatingId] = useState(null);
   const [duplicateError, setDuplicateError] = useState(null);
-  const [archivingId, setArchivingId] = useState(null);
+  const [archivingIds, setArchivingIds] = useState(new Set());
   const [archiveError, setArchiveError] = useState(null);
   const pendingFetchRef = useRef(null);
   const pendingSaveRef = useRef(null);
@@ -350,7 +350,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     async (documentId) => {
       const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
       if (!backendBase || !accessToken || !documentId) return null;
-      setArchivingId(documentId);
+      setArchivingIds((prev) => new Set([...prev, documentId]));
       setArchiveError(null);
       try {
         const res = await fetch(`${backendBase}/documents/${documentId}`, {
@@ -380,7 +380,11 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         setArchiveError(err instanceof Error ? err.message : String(err));
         return null;
       } finally {
-        setArchivingId((prev) => (prev === documentId ? null : prev));
+        setArchivingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(documentId);
+          return next;
+        });
       }
     },
     [accessToken, includeArchived, sortDocuments]
@@ -390,7 +394,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     async (documentId) => {
       const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
       if (!backendBase || !accessToken || !documentId) return null;
-      setArchivingId(documentId);
+      setArchivingIds((prev) => new Set([...prev, documentId]));
       setArchiveError(null);
       try {
         const res = await fetch(`${backendBase}/documents/${documentId}`, {
@@ -416,7 +420,11 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         setArchiveError(err instanceof Error ? err.message : String(err));
         return null;
       } finally {
-        setArchivingId((prev) => (prev === documentId ? null : prev));
+        setArchivingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(documentId);
+          return next;
+        });
       }
     },
     [accessToken, sortDocuments]
@@ -434,7 +442,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     renameError,
     duplicatingId,
     duplicateError,
-    archivingId,
+    archivingIds,
     archiveError,
     clearSaveError,
     clearDeleteError,

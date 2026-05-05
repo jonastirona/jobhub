@@ -2486,6 +2486,15 @@ def test_list_documents_include_archived_skips_archived_filter():
     )
 
 
+def test_list_documents_applies_both_archived_and_doc_type_filters():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get("/documents?doc_type=Draft", headers={"authorization": AUTH_HEADER})
+    assert response.status_code == 200
+    mock_query.or_.assert_any_call("status.neq.archived,status.is.null")
+    mock_query.or_.assert_any_call("doc_type.eq.Draft,doc_type.is.null")
+
+
 # ---------------------------------------------------------------------------
 # Pydantic schema validation
 # ---------------------------------------------------------------------------

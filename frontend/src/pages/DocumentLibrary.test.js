@@ -43,7 +43,7 @@ function renderPage(overrides = {}) {
     renameError: null,
     duplicatingId: null,
     duplicateError: null,
-    archivingId: null,
+    archivingIds: new Set(),
     archiveError: null,
     viewDocument: jest.fn().mockResolvedValue('https://signed.example/doc.pdf'),
     deleteDocument: jest.fn().mockResolvedValue(true),
@@ -332,8 +332,8 @@ describe('DocumentLibrary', () => {
     expect(screen.getByRole('button', { name: /restore document/i })).toBeInTheDocument();
   });
 
-  test('all row action buttons are disabled when archivingId matches the row', () => {
-    renderPage({ archivingId: 'doc-1' });
+  test('all row action buttons are disabled when archivingIds contains the row id', () => {
+    renderPage({ archivingIds: new Set(['doc-1']) });
 
     expect(screen.getByRole('button', { name: /view document/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /rename document/i })).toBeDisabled();
