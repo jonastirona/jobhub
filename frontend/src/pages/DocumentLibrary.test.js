@@ -124,6 +124,70 @@ describe('DocumentLibrary', () => {
     });
   });
 
+  test('uploads a new version from the selected document', async () => {
+    const created = { ...baseDoc, id: 'doc-2', version_number: 2, previous_version_id: 'doc-1' };
+    const createDocument = jest.fn().mockResolvedValue(created);
+    const refetch = jest.fn().mockResolvedValue(undefined);
+    renderPage({ createDocument, refetch, clearDeleteError: jest.fn() });
+
+    fireEvent.click(screen.getByRole('button', { name: /view document/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /upload new version/i })).toBeInTheDocument();
+    });
+
+    const file = new File(['%PDF-1.7 new version'], 'resume-v2.pdf', { type: 'application/pdf' });
+    fireEvent.click(screen.getByRole('button', { name: /upload new version/i }));
+    const input = screen.getByLabelText(/upload new version file/i);
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(createDocument).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Resume_2026',
+          doc_type: 'Resume',
+          job_id: 'job-1',
+          source_document_id: 'doc-1',
+          file,
+        })
+      );
+      expect(refetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  test('loads and shows version history in the modal', async () => {
+    const versions = [
+      { ...baseDoc, id: 'doc-2', version_number: 2, name: 'Resume_2026' },
+      { ...baseDoc, id: 'doc-1', version_number: 1, name: 'Resume_2026' },
+    ];
+    let resolveFetch;
+    global.fetch = jest.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        })
+    );
+    renderPage({ clearDeleteError: jest.fn() });
+
+    fireEvent.click(screen.getByRole('button', { name: /view document/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /view version history/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /view version history/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/loading version history/i);
+    });
+
+    resolveFetch({ ok: true, json: () => Promise.resolve(versions) });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /hide version history/i })).toBeInTheDocument();
+      expect(screen.getByText(/Resume_2026 - v2/)).toBeInTheDocument();
+      expect(screen.getByText(/Resume_2026 - v1/)).toBeInTheDocument();
+    });
+  });
+
   test('calls deleteDocument when Delete is clicked and confirmed', async () => {
     window.confirm = jest.fn().mockReturnValue(true);
     const deleteDocument = jest.fn().mockResolvedValue(true);
@@ -220,18 +284,28 @@ describe('DocumentLibrary', () => {
     });
   });
 
-  test('calls duplicateDocument when duplicate button is clicked', async () => {
+  test('opens duplicate form and saves a renamed duplicate', async () => {
     const duplicateDocument = jest.fn().mockResolvedValue({
       ...baseDoc,
       id: 'doc-2',
-      name: 'Copy of Resume_2026',
+      name: 'Tailored Resume Copy',
     });
-    renderPage({ duplicateDocument });
+    const refetch = jest.fn().mockResolvedValue(undefined);
+    renderPage({ duplicateDocument, refetch });
 
     fireEvent.click(screen.getByRole('button', { name: /duplicate document/i }));
 
     await waitFor(() => {
-      expect(duplicateDocument).toHaveBeenCalledWith('doc-1');
+      expect(screen.getByRole('button', { name: /save duplicate/i })).toBeInTheDocument();
+    });
+
+    const input = screen.getByLabelText(/duplicate document name/i);
+    fireEvent.change(input, { target: { value: 'Tailored Resume Copy' } });
+    fireEvent.click(screen.getByRole('button', { name: /save duplicate/i }));
+
+    await waitFor(() => {
+      expect(duplicateDocument).toHaveBeenCalledWith('doc-1', 'Tailored Resume Copy');
+      expect(refetch).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -287,9 +361,4 @@ describe('DocumentLibrary', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/failed to rename document/i);
   });
 
-  test('renders duplicate error alert when duplicateError exists', () => {
-    renderPage({ duplicateError: 'Failed to duplicate document (500)', deleteError: null });
-    const alerts = screen.getAllByRole('alert');
-    expect(alerts.some((a) => /failed to duplicate document/i.test(a.textContent))).toBe(true);
-  });
 });

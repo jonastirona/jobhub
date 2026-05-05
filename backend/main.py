@@ -273,6 +273,10 @@ class DocumentRename(BaseModel):
     name: str
 
 
+class DocumentDuplicate(BaseModel):
+    name: Optional[str] = None
+
+
 VALID_WORK_MODES = {"remote", "hybrid", "onsite", "any"}
 
 
@@ -360,6 +364,77 @@ def _assert_document_status(status: Optional[str]) -> Optional[str]:
     if s not in DOCUMENT_STATUSES:
         raise HTTPException(status_code=422, detail="status must be one of: draft, final, archived")
     return s
+
+
+def _normalize_document_name(name: Optional[str]) -> str:
+    return " ".join(str(name or "").strip().split()).lower()
+
+
+def _assert_document_name_available_for_user(
+    sb,
+    user_id: str,
+    name: str,
+    doc_type: Optional[str],
+    job_id: Optional[str],
+    exclude_document_id: Optional[str] = None,
+    allow_version_group_id: Optional[str] = None,
+) -> None:
+    normalized_name = _normalize_document_name(name)
+    if not normalized_name:
+        raise HTTPException(status_code=422, detail="name must not be blank")
+
+    response = (
+        sb.table("documents")
+        .select("id, name, doc_type, job_id, version_group_id")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to validate document name")
+
+    normalized_doc_type = (doc_type or "Draft").strip() or "Draft"
+    for row in response.data or []:
+        if exclude_document_id and row.get("id") == exclude_document_id:
+            continue
+        if allow_version_group_id and row.get("version_group_id") == allow_version_group_id:
+            continue
+        if _normalize_document_name(row.get("name")) != normalized_name:
+            continue
+        if (row.get("doc_type") or "Draft") != normalized_doc_type:
+            continue
+        if row.get("job_id") != job_id:
+            continue
+        raise HTTPException(
+            status_code=409,
+            detail="A document with the same name, type, and linked job already exists",
+        )
+
+
+def _get_document_for_user(sb, user_id: str, document_id: Optional[str]) -> Optional[dict]:
+    if not document_id:
+        return None
+    response = (
+        sb.table("documents").select("*").eq("id", document_id).eq("user_id", user_id).execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return response.data[0]
+
+
+def _get_next_document_version_number(sb, user_id: str, version_group_id: str) -> int:
+    response = (
+        sb.table("documents")
+        .select("version_number")
+        .eq("user_id", user_id)
+        .eq("version_group_id", version_group_id)
+        .order("version_number", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not response.data:
+        return 1
+    latest = response.data[0].get("version_number") or 0
+    return int(latest) + 1
 
 
 async def _upload_document_to_storage(sb, user_id: str, upload: UploadFile) -> tuple[str, str, int]:
@@ -1206,10 +1281,11 @@ async def create_document(
     name: str = Form(...),
     doc_type: str = Form("Draft"),
     job_id: Optional[str] = Form(default=None),
+    source_document_id: Optional[str] = Form(default=None),
     content: Optional[str] = Form(default=None),
     status: Optional[str] = Form(default=None),
     tags: Optional[str] = Form(default=None),
-    file: UploadFile = File(...),
+    file: Optional[UploadFile] = File(default=None),
     authorization: Optional[str] = Header(default=None),
 ):
     user_id = get_user_id(authorization)
@@ -1218,9 +1294,17 @@ async def create_document(
     if not trimmed_name:
         raise HTTPException(status_code=422, detail="name must not be blank")
     trimmed_doc_type = (doc_type or "").strip() or "Draft"
+    source_document = _get_document_for_user(sb, user_id, source_document_id)
     _assert_linked_job_exists_for_user(sb, user_id, job_id)
     normalized_status = _assert_document_status(status)
-    storage_path, mime_type, file_size = await _upload_document_to_storage(sb, user_id, file)
+    _assert_document_name_available_for_user(
+        sb,
+        user_id,
+        trimmed_name,
+        trimmed_doc_type,
+        job_id,
+        allow_version_group_id=source_document.get("version_group_id") if source_document else None,
+    )
     parsed_tags = None
     if tags:
         # Accept either JSON array or comma-separated list
@@ -1237,9 +1321,44 @@ async def create_document(
                     detail="tags must be a JSON array or comma-separated list",
                 )
             parsed_tags = [str(x).strip() for x in parsed if str(x).strip()]
+
+    version_group_id = str(uuid.uuid4())
+    version_number = 1
+    previous_version_id = None
+    storage_path = None
+    mime_type = PDF_MIME_TYPE
+    file_size = None
+    original_filename = None
+    if source_document:
+        version_group_id = source_document.get("version_group_id") or source_document.get("id")
+        version_number = _get_next_document_version_number(sb, user_id, version_group_id)
+        previous_version_id = source_document.get("id")
+
+    resolved_job_id = job_id or (source_document.get("job_id") if source_document else None)
+
+    if file is not None:
+        storage_path, mime_type, file_size = await _upload_document_to_storage(sb, user_id, file)
+        original_filename = file.filename
+    elif source_document:
+        source_path = source_document.get("storage_path")
+        source_bucket = source_document.get("storage_bucket") or DOCUMENTS_BUCKET
+        if not source_path:
+            raise HTTPException(status_code=404, detail="Document file not found")
+        source_extension = Path(source_path).suffix.lower().strip() or PDF_EXTENSION
+        storage_path = _build_storage_document_path(user_id, source_extension)
+        try:
+            sb.storage.from_(source_bucket).copy(source_path, storage_path)
+        except Exception:
+            raise HTTPException(status_code=500, detail="Failed to copy document file")
+        mime_type = source_document.get("mime_type") or PDF_MIME_TYPE
+        file_size = source_document.get("file_size")
+        original_filename = source_document.get("original_filename")
+    else:
+        raise HTTPException(status_code=422, detail="Document file is required")
+
     payload = {
         "user_id": user_id,
-        "job_id": job_id,
+        "job_id": resolved_job_id,
         "name": trimmed_name,
         "doc_type": trimmed_doc_type,
         "status": normalized_status,
@@ -1248,8 +1367,11 @@ async def create_document(
         "storage_path": storage_path,
         "mime_type": mime_type,
         "file_size": file_size,
-        "original_filename": file.filename,
+        "original_filename": original_filename,
         "content": content.strip() if content and content.strip() else None,
+        "version_group_id": version_group_id,
+        "version_number": version_number,
+        "previous_version_id": previous_version_id,
     }
     response = sb.table("documents").insert(payload).execute()
     if not response.data:
@@ -1272,6 +1394,26 @@ def get_document(document_id: str, authorization: Optional[str] = Header(default
     if not response.data:
         raise HTTPException(status_code=404, detail="Document not found")
     return response.data[0]
+
+
+@app.get("/documents/{document_id}/versions")
+def list_document_versions(document_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    source = _get_document_for_user(sb, user_id, document_id)
+    version_group_id = source.get("version_group_id") or source.get("id")
+
+    response = (
+        sb.table("documents")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("version_group_id", version_group_id)
+        .order("version_number", desc=True)
+        .execute()
+    )
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch document versions")
+    return response.data or []
 
 
 @app.get("/documents/{document_id}/view-url")
@@ -1320,10 +1462,20 @@ def rename_document(
         raise HTTPException(status_code=422, detail="name must not be blank")
     sb = get_supabase()
     existing = (
-        sb.table("documents").select("id").eq("id", document_id).eq("user_id", user_id).execute()
+        sb.table("documents").select("*").eq("id", document_id).eq("user_id", user_id).execute()
     )
     if not existing.data:
         raise HTTPException(status_code=404, detail="Document not found")
+    current = existing.data[0]
+    _assert_document_name_available_for_user(
+        sb,
+        user_id,
+        trimmed,
+        current.get("doc_type"),
+        current.get("job_id"),
+        exclude_document_id=document_id,
+        allow_version_group_id=current.get("version_group_id"),
+    )
     response = (
         sb.table("documents")
         .update({"name": trimmed})
@@ -1339,16 +1491,21 @@ def rename_document(
 @app.post("/documents/{document_id}/duplicate", status_code=201)
 def duplicate_document(
     document_id: str,
+    body: Optional[DocumentDuplicate] = None,
     authorization: Optional[str] = Header(default=None),
 ):
     user_id = get_user_id(authorization)
     sb = get_supabase()
-    existing = (
-        sb.table("documents").select("*").eq("id", document_id).eq("user_id", user_id).execute()
+    source = _get_document_for_user(sb, user_id, document_id)
+    requested_name = (body.name if body else None) or f"Copy of {source.get('name', 'Document')}"
+    trimmed_name = requested_name.strip()
+    _assert_document_name_available_for_user(
+        sb,
+        user_id,
+        trimmed_name,
+        source.get("doc_type"),
+        source.get("job_id"),
     )
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Document not found")
-    source = existing.data[0]
 
     source_path = source.get("storage_path")
     bucket = source.get("storage_bucket") or DOCUMENTS_BUCKET
@@ -1360,10 +1517,16 @@ def duplicate_document(
         except Exception:
             raise HTTPException(status_code=500, detail="Failed to copy document file")
 
+    # When duplicating a document we treat the duplicate as a separate document
+    # (not a new version in the same version group). Create a fresh version_group_id
+    # and start at version 1 so both original and duplicate appear as separate items.
+    version_group_id = str(uuid.uuid4())
+    next_version_number = 1
+
     payload = {
         "user_id": user_id,
         "job_id": source.get("job_id"),
-        "name": f"Copy of {source.get('name', 'Document')}",
+        "name": trimmed_name,
         "doc_type": source.get("doc_type"),
         "status": source.get("status"),
         "tags": source.get("tags"),
@@ -1373,6 +1536,9 @@ def duplicate_document(
         "file_size": source.get("file_size"),
         "original_filename": source.get("original_filename"),
         "content": source.get("content"),
+        "version_group_id": version_group_id,
+        "version_number": next_version_number,
+        "previous_version_id": None,
     }
     try:
         response = sb.table("documents").insert(payload).execute()

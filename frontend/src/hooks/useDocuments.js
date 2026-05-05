@@ -135,6 +135,9 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         if (values?.job_id) {
           formData.append('job_id', values.job_id);
         }
+        if (values?.source_document_id) {
+          formData.append('source_document_id', values.source_document_id);
+        }
         if (values?.content) {
           formData.append('content', values.content);
         }
@@ -310,15 +313,20 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
   );
 
   const duplicateDocument = useCallback(
-    async (documentId) => {
+    async (documentId, name) => {
       const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
       if (!backendBase || !accessToken || !documentId) return null;
+      const trimmed = (name || '').trim();
       setDuplicatingId(documentId);
       setDuplicateError(null);
       try {
         const res = await fetch(`${backendBase}/documents/${documentId}/duplicate`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${accessToken}` },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            ...(trimmed ? { 'Content-Type': 'application/json' } : {}),
+          },
+          body: trimmed ? JSON.stringify({ name: trimmed }) : undefined,
         });
         if (!res.ok) {
           throw new Error(
