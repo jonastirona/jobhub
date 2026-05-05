@@ -2514,7 +2514,8 @@ def test_duplicate_document_accepts_custom_name():
 
 
 def test_duplicate_document_rejects_duplicate_name_type_and_job():
-    existing = {**SAMPLE_DOCUMENT, "id": "doc-existing", "name": "Tailored Resume Copy", "version_group_id": "other-group"}
+    existing = {**SAMPLE_DOCUMENT, "id": "doc-existing", "name": "Tailored Resume Copy", 
+        "version_group_id": "other-group"}
     mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT], [existing])
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
