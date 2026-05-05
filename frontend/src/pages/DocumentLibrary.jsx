@@ -61,6 +61,7 @@ export default function DocumentLibrary() {
     documents,
     loading,
     error,
+    saving,
     deletingId,
     deleteError,
     renamingId,
@@ -70,9 +71,11 @@ export default function DocumentLibrary() {
     archivingIds,
     archiveError,
     viewDocument,
+    createDocument,
     deleteDocument,
     clearDeleteError,
     clearRenameError,
+    clearDuplicateError,
     clearArchiveError,
     renameDocument,
     duplicateDocument,
@@ -81,21 +84,73 @@ export default function DocumentLibrary() {
     refetch,
   } = useDocuments(session?.access_token, true, filters);
 
+  // Only display the most recent version of each document version group.
+  const latestDocuments = useMemo(() => {
+    if (!Array.isArray(documents) || documents.length === 0) return [];
+    const latestByGroup = new Map();
+    for (const doc of documents) {
+      const group = doc.version_group_id ?? doc.id;
+      const version = typeof doc.version_number === 'number' ? doc.version_number : 1;
+      const cur = latestByGroup.get(group);
+      if (!cur) {
+        latestByGroup.set(group, doc);
+        continue;
+      }
+      const curVersion = typeof cur.version_number === 'number' ? cur.version_number : 1;
+      if (version > curVersion) {
+        latestByGroup.set(group, doc);
+      } else if (version === curVersion) {
+        const curUpdated = new Date(cur.updated_at || cur.created_at || 0).getTime();
+        const docUpdated = new Date(doc.updated_at || doc.created_at || 0).getTime();
+        if (docUpdated > curUpdated) latestByGroup.set(group, doc);
+      }
+    }
+
+    // Preserve relative order from the original list by iterating and collecting first-seen groups
+    const seen = new Set();
+    const result = [];
+    for (const doc of documents) {
+      const group = doc.version_group_id ?? doc.id;
+      if (seen.has(group)) continue;
+      const latest = latestByGroup.get(group);
+      if (latest) {
+        result.push(latest);
+        seen.add(group);
+      }
+    }
+    return result;
+  }, [documents]);
   const [rewriteDoc, setRewriteDoc] = useState(null);
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [renamingDocId, setRenamingDocId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
+  const [versionHistory, setVersionHistory] = useState([]);
+  const [versionHistoryLoading, setVersionHistoryLoading] = useState(false);
+  const [versionHistoryError, setVersionHistoryError] = useState(null);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showDuplicateForm, setShowDuplicateForm] = useState(false);
+  const [duplicateName, setDuplicateName] = useState('');
   const overlayRef = useRef(null);
   const modalRef = useRef(null);
+  const versionUploadInputRef = useRef(null);
 
   function openDocumentModal(doc) {
     clearDeleteError();
+    setShowVersionHistory(false);
+    setShowDuplicateForm(false);
+    setVersionHistory([]);
+    setVersionHistoryError(null);
+    setDuplicateName('');
+    clearDuplicateError();
     setSelectedDoc(doc);
   }
 
-  function closeDocumentModal() {
+  const closeDocumentModal = useCallback(() => {
     setSelectedDoc(null);
-  }
+    setShowDuplicateForm(false);
+    setDuplicateName('');
+    clearDuplicateError();
+  }, [clearDuplicateError]);
 
   useEffect(() => {
     function onKey(e) {
@@ -103,11 +158,11 @@ export default function DocumentLibrary() {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [closeDocumentModal]);
 
   const handleOverlayClick = useCallback((e) => {
     if (e.target === overlayRef.current) closeDocumentModal();
-  }, []);
+  }, [closeDocumentModal]);
 
   const handleModalKeyDown = useCallback((e) => {
     if (e.key !== 'Tab' || !modalRef.current) return;
@@ -129,6 +184,30 @@ export default function DocumentLibrary() {
   async function handleDeleteDocument(documentId, docName) {
     if (!window.confirm(`Delete "${docName}"? This cannot be undone.`)) return;
     await deleteDocument(documentId);
+  }
+
+  function startDuplicate(doc) {
+    openDocumentModal(doc);
+    setShowDuplicateForm(true);
+    setDuplicateName(`Copy of ${doc.name || 'Document'}`);
+  }
+
+  async function commitDuplicate() {
+    if (!selectedDoc) return;
+    const trimmed = duplicateName.trim();
+    if (!trimmed) return;
+    const created = await duplicateDocument(selectedDoc.id, trimmed);
+    if (created) {
+      setSelectedDoc(created);
+      setShowDuplicateForm(false);
+      setDuplicateName('');
+      await refetch();
+    }
+  }
+
+  function cancelDuplicate() {
+    setShowDuplicateForm(false);
+    setDuplicateName('');
   }
 
   async function handleArchiveDocument(documentId) {
@@ -161,6 +240,61 @@ export default function DocumentLibrary() {
   function cancelRename() {
     setRenamingDocId(null);
     setRenameValue('');
+  }
+
+  async function loadVersionHistory(docId) {
+    if (!session?.access_token || !docId) return;
+    const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
+    if (!backendBase) {
+      setVersionHistoryError('Backend URL is not configured.');
+      return;
+    }
+    setVersionHistoryLoading(true);
+    setVersionHistoryError(null);
+    try {
+      const res = await fetch(`${backendBase}/documents/${docId}/versions`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to load version history (${res.status})`);
+      }
+      const data = await res.json();
+      setVersionHistory(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setVersionHistoryError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setVersionHistoryLoading(false);
+    }
+  }
+
+  async function openDocumentById(documentId) {
+    if (!documentId) return;
+    const url = await viewDocument(documentId);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  async function handleUploadNewVersion(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!selectedDoc || !file) return;
+
+    const created = await createDocument({
+      name: selectedDoc.name || file.name.replace(/\.[^.]+$/, '') || 'Document',
+      doc_type: selectedDoc.doc_type || 'Draft',
+      job_id: selectedDoc.job_id || undefined,
+      source_document_id: selectedDoc.id,
+      status: selectedDoc.status || undefined,
+      tags: Array.isArray(selectedDoc.tags) ? selectedDoc.tags : undefined,
+      file,
+    });
+
+    if (created) {
+      await refetch();
+      setSelectedDoc(created);
+      setShowVersionHistory(false);
+      setVersionHistory([]);
+      setVersionHistoryError(null);
+    }
   }
 
   return (
@@ -285,7 +419,7 @@ export default function DocumentLibrary() {
               </tr>
             )}
 
-            {!loading && !error && documents.length === 0 && (
+            {!loading && !error && latestDocuments.length === 0 && (
               <tr>
                 <td colSpan={7} className="table-empty">
                   No saved documents yet. Create a draft from any job in your dashboard.
@@ -295,7 +429,7 @@ export default function DocumentLibrary() {
 
             {!loading &&
               !error &&
-              documents.map((doc, index) => (
+              latestDocuments.map((doc, index) => (
                 <tr key={doc.id}>
                   <td className="row-number">{index + 1}</td>
                   <td className="shell-cell-strong">
@@ -367,10 +501,10 @@ export default function DocumentLibrary() {
                                   className="action-btn"
                                   aria-label="Duplicate document"
                                   title="Duplicate"
-                                  onClick={() => duplicateDocument(doc.id)}
+                                  onClick={() => startDuplicate(doc)}
                                   disabled={rowBusy}
                                 >
-                                  {duplicatingId === doc.id ? '…' : '📋'}
+                                  📋
                                 </button>
                                 {doc.content && (
                                   <button
@@ -475,8 +609,126 @@ export default function DocumentLibrary() {
                 : '—'}
             </p>
             <p className="document-view-modal-text">
+              <strong>Version:</strong>{' '}
+              {selectedDoc.version_number ? `v${selectedDoc.version_number}` : 'v1'}
+            </p>
+            <p className="document-view-modal-text">
               <strong>Linked:</strong> {getLinkedJobLabel(selectedDoc)}
             </p>
+            <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <button
+                type="button"
+                className="document-view-modal-btn"
+                onClick={() => versionUploadInputRef.current?.click()}
+                disabled={versionHistoryLoading || saving}
+              >
+                Upload new version
+              </button>
+              <input
+                ref={versionUploadInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                style={{ display: 'none' }}
+                aria-label="Upload new version file"
+                onChange={handleUploadNewVersion}
+              />
+              <button
+                type="button"
+                className="document-view-modal-btn"
+                onClick={async () => {
+                  const nextShow = !showVersionHistory;
+                  setShowVersionHistory(nextShow);
+                  if (nextShow && versionHistory.length === 0 && !versionHistoryLoading) {
+                    await loadVersionHistory(selectedDoc.id);
+                  }
+                }}
+              >
+                {showVersionHistory ? 'Hide version history' : 'View version history'}
+              </button>
+              <button
+                type="button"
+                className="document-view-modal-btn"
+                onClick={() => startDuplicate(selectedDoc)}
+                disabled={duplicatingId === selectedDoc.id}
+              >
+                Duplicate with new name
+              </button>
+            </div>
+            {showDuplicateForm && (
+              <div style={{ marginTop: 14 }}>
+                <label className="draft-field-label" htmlFor="duplicate-name-input">
+                  Duplicate document name
+                </label>
+                <input
+                  id="duplicate-name-input"
+                  className="inline-rename-input"
+                  value={duplicateName}
+                  onChange={(e) => setDuplicateName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      commitDuplicate();
+                    } else if (e.key === 'Escape') {
+                      cancelDuplicate();
+                    }
+                  }}
+                  autoFocus
+                />
+                {duplicateError && (
+                  <p
+                    className="document-view-modal-text"
+                    role="alert"
+                    style={{ color: 'var(--error)', fontSize: '12px', marginTop: 6 }}
+                  >
+                    {duplicateError}
+                  </p>
+                )}
+                <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="document-view-modal-btn"
+                    onClick={commitDuplicate}
+                    disabled={duplicatingId === selectedDoc.id}
+                  >
+                    Save duplicate
+                  </button>
+                  <button
+                    type="button"
+                    className="document-view-modal-btn document-view-modal-btn--cancel"
+                    onClick={cancelDuplicate}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            {versionHistoryError && (
+              <p className="document-view-modal-text" role="alert" style={{ color: 'var(--error)' }}>
+                {versionHistoryError}
+              </p>
+            )}
+            {showVersionHistory && (
+              <div style={{ marginTop: 14 }}>
+                {versionHistoryLoading ? (
+                  <p className="document-view-modal-text" role="status" aria-live="polite">
+                    Loading version history...
+                  </p>
+                ) : versionHistory.length > 0 ? (
+                  <ul style={{ margin: 0, paddingLeft: 18 }} aria-label="Version history list">
+                    {versionHistory.map((version) => (
+                      <li key={version.id} className="document-view-modal-text">
+                        <div>
+                          {version.name} - v{version.version_number || 1} -{' '}
+                          {formatDocumentDate(version.updated_at || version.created_at, true)}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="document-view-modal-text">No version history available.</p>
+                )}
+              </div>
+            )}
             <hr
               style={{ margin: '12px 0', border: 'none', borderTop: '1px solid var(--border)' }}
             />
@@ -501,10 +753,7 @@ export default function DocumentLibrary() {
               <button
                 type="button"
                 className="document-view-modal-btn"
-                onClick={async () => {
-                  const url = await viewDocument(selectedDoc.id);
-                  if (url) window.open(url, '_blank', 'noopener,noreferrer');
-                }}
+                onClick={() => openDocumentById(selectedDoc.id)}
               >
                 Open file
               </button>
