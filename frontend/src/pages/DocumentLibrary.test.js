@@ -365,7 +365,6 @@ describe('DocumentLibrary', () => {
     renderPage({ renameError: 'Failed to rename document (500)' });
     expect(screen.getByRole('alert')).toHaveTextContent(/failed to rename document/i);
   });
-
   test('renders duplicate error alert when duplicateError exists', () => {
     renderPage({ duplicateError: 'Failed to duplicate document (500)', deleteError: null });
     const alerts = screen.getAllByRole('alert');
