@@ -150,9 +150,12 @@ export default function DocumentLibrary() {
     return () => window.removeEventListener('keydown', onKey);
   }, [closeDocumentModal]);
 
-  const handleOverlayClick = useCallback((e) => {
-    if (e.target === overlayRef.current) closeDocumentModal();
-  }, [closeDocumentModal]);
+  const handleOverlayClick = useCallback(
+    (e) => {
+      if (e.target === overlayRef.current) closeDocumentModal();
+    },
+    [closeDocumentModal]
+  );
 
   const handleModalKeyDown = useCallback((e) => {
     if (e.key !== 'Tab' || !modalRef.current) return;
@@ -638,7 +641,11 @@ export default function DocumentLibrary() {
               </div>
             )}
             {versionHistoryError && (
-              <p className="document-view-modal-text" role="alert" style={{ color: 'var(--error)' }}>
+              <p
+                className="document-view-modal-text"
+                role="alert"
+                style={{ color: 'var(--error)' }}
+              >
                 {versionHistoryError}
               </p>
             )}

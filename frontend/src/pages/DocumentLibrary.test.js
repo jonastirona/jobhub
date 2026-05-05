@@ -360,5 +360,4 @@ describe('DocumentLibrary', () => {
     renderPage({ renameError: 'Failed to rename document (500)' });
     expect(screen.getByRole('alert')).toHaveTextContent(/failed to rename document/i);
   });
-
 });
