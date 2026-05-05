@@ -1329,7 +1329,7 @@ def patch_document(
             raise HTTPException(status_code=422, detail="status must not be blank")
         updates["status"] = _assert_document_status(body.status)
     if not updates:
-        raise HTTPException(status_code=422, detail="No fields provided to update")
+        raise HTTPException(status_code=400, detail="No fields to update")
     sb = get_supabase()
     existing = (
         sb.table("documents").select("id").eq("id", document_id).eq("user_id", user_id).execute()

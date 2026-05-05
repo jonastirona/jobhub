@@ -2443,7 +2443,7 @@ def test_patch_document_empty_payload_rejected():
             json={},
             headers={"authorization": AUTH_HEADER},
         )
-    assert response.status_code == 422
+    assert response.status_code == 400
 
 
 def test_patch_document_name_and_status_together():
