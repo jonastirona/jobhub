@@ -4,7 +4,7 @@ Backend tests for jobhub.
 Supabase is fully mocked — no live database or credentials required.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -46,7 +46,6 @@ from main import (
     app,
     get_profile_completion,
 )
-
 
 # ---------------------------------------------------------------------------
 # Health check
@@ -1276,7 +1275,9 @@ def _make_mock_sb_for_interview_create(event_data=None, job_exists=True):
 
 @pytest.mark.parametrize("method,url,kwargs", [
     ("get", f"/jobs/{SAMPLE_JOB['id']}/interviews", {}),
-    ("post", f"/jobs/{SAMPLE_JOB['id']}/interviews", {"json": {"round_type": "Phone Screen", "scheduled_at": "2026-05-10T15:00:00+00:00"}}),
+    ("post", f"/jobs/{SAMPLE_JOB['id']}/interviews", {
+        "json": {"round_type": "Phone Screen", "scheduled_at": "2026-05-10T15:00:00+00:00"},
+    }),
     ("put", f"/jobs/{SAMPLE_JOB['id']}/interviews/ie-1", {"json": {"notes": "Updated"}}),
     ("delete", f"/jobs/{SAMPLE_JOB['id']}/interviews/ie-1", {}),
 ], ids=["list", "create", "update", "delete"])
@@ -3011,7 +3012,9 @@ SAMPLE_REMINDER = {
 
 @pytest.mark.parametrize("method,url,kwargs", [
     ("get", "/reminders", {}),
-    ("post", "/reminders", {"json": {"job_id": SAMPLE_JOB["id"], "title": "Follow up", "due_date": FUTURE_DUE_DATE}}),
+    ("post", "/reminders", {
+        "json": {"job_id": SAMPLE_JOB["id"], "title": "Follow up", "due_date": FUTURE_DUE_DATE},
+    }),
     ("put", "/reminders/some-uuid", {"json": {"title": "Updated"}}),
     ("delete", "/reminders/some-uuid", {}),
 ], ids=["list", "create", "update", "delete"])
@@ -3955,7 +3958,9 @@ SAMPLE_EDUCATION = {
 
 @pytest.mark.parametrize("method,url,kwargs", [
     ("get", "/education", {}),
-    ("post", "/education", {"json": {"institution": "NJIT", "degree": "BS", "field_of_study": "CS", "start_year": 2022}}),
+    ("post", "/education", {
+        "json": {"institution": "NJIT", "degree": "BS", "field_of_study": "CS", "start_year": 2022},
+    }),
     ("put", "/education/some-uuid", {"json": {"institution": "MIT"}}),
     ("delete", "/education/some-uuid", {}),
 ], ids=["list", "create", "update", "delete"])
