@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useMemo, useState, useRef } from 'react';
 import AppShell from '../components/layout/AppShell';
 import AIRewriteModal from '../components/AIRewriteModal/AIRewriteModal';
 import { useAuth } from '../context/AuthContext';
@@ -38,9 +38,6 @@ function getLinkedJobLabel(doc) {
   const company = doc.jobs.company || 'Unknown company';
   return `${title} - ${company}`;
 }
-
-const FOCUSABLE_SELECTOR =
-  'button:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export default function DocumentLibrary() {
   const { session } = useAuth();
@@ -82,51 +79,70 @@ export default function DocumentLibrary() {
   } = useDocuments(session?.access_token, true, filters);
 
   const [rewriteDoc, setRewriteDoc] = useState(null);
-  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [expandedDocIds, setExpandedDocIds] = useState(() => new Set());
   const [renamingDocId, setRenamingDocId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
-  const overlayRef = useRef(null);
-  const modalRef = useRef(null);
+  const skipBlurRef = useRef(false);
 
-  function openDocumentModal(doc) {
-    clearDeleteError();
-    setSelectedDoc(doc);
-  }
-
-  function closeDocumentModal() {
-    setSelectedDoc(null);
-  }
-
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key === 'Escape') closeDocumentModal();
+  async function openDocument(documentId) {
+    const url = await viewDocument(documentId);
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }
 
-  const handleOverlayClick = useCallback((e) => {
-    if (e.target === overlayRef.current) closeDocumentModal();
-  }, []);
+  async function handleDownloadDocument(documentRecord) {
+    if (!documentRecord?.id) return;
+    let objectUrl = null;
+    const link = document.createElement('a');
+    try {
+      const url = await viewDocument(documentRecord.id);
+      if (!url) return;
 
-  const handleModalKeyDown = useCallback((e) => {
-    if (e.key !== 'Tab' || !modalRef.current) return;
-    const focusable = Array.from(modalRef.current.querySelectorAll(FOCUSABLE_SELECTOR));
-    if (focusable.length === 0) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (e.shiftKey) {
-      if (window.document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to download document: ${response.status}`);
       }
-    } else if (window.document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
+
+      const blob = await response.blob();
+      objectUrl = URL.createObjectURL(blob);
+      link.href = objectUrl;
+      link.rel = 'noopener noreferrer';
+      link.download = `${documentRecord.name || 'document'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+    } catch (err) {
+      // Download failed silently - error handling could be enhanced with toast notifications
+    } finally {
+      link.remove();
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
     }
-  }, []);
+  }
+
+  function toggleDocumentDetails(documentId) {
+    setExpandedDocIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(documentId)) {
+        next.delete(documentId);
+      } else {
+        next.add(documentId);
+      }
+      return next;
+    });
+  }
+
+  function expandAllDetails() {
+    setExpandedDocIds(new Set(documents.map((doc) => doc.id)));
+  }
+
+  function collapseAllDetails() {
+    setExpandedDocIds(new Set());
+  }
 
   async function handleDeleteDocument(documentId, docName) {
+    clearDeleteError();
     if (!window.confirm(`Delete "${docName}"? This cannot be undone.`)) return;
     await deleteDocument(documentId);
   }
@@ -150,17 +166,20 @@ export default function DocumentLibrary() {
   async function commitRename(documentId) {
     if (!renameValue.trim()) {
       setRenamingDocId(null);
+      skipBlurRef.current = false;
       return;
     }
     const result = await renameDocument(documentId, renameValue);
     if (result) {
       setRenamingDocId(null);
     }
+    skipBlurRef.current = false;
   }
 
   function cancelRename() {
     setRenamingDocId(null);
     setRenameValue('');
+    skipBlurRef.current = false;
   }
 
   return (
@@ -222,6 +241,27 @@ export default function DocumentLibrary() {
                 checked={showArchived}
                 onChange={(e) => setShowArchived(e.target.checked)}
               />
+            </div>
+            <div className="dashboard-sort-control">
+              <label className="dashboard-sort-label">Details</label>
+              <div className="document-details-controls">
+                <button
+                  type="button"
+                  className="view-toggle-btn"
+                  onClick={expandAllDetails}
+                  disabled={documents.length === 0}
+                >
+                  Expand all
+                </button>
+                <button
+                  type="button"
+                  className="view-toggle-btn"
+                  onClick={collapseAllDetails}
+                  disabled={documents.length === 0}
+                >
+                  Collapse all
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -295,66 +335,59 @@ export default function DocumentLibrary() {
 
             {!loading &&
               !error &&
-              documents.map((doc, index) => (
-                <tr key={doc.id}>
-                  <td className="row-number">{index + 1}</td>
-                  <td className="shell-cell-strong">
-                    {renamingDocId === doc.id ? (
-                      <input
-                        className="inline-rename-input"
-                        aria-label="New document name"
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        onBlur={() => commitRename(doc.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            commitRename(doc.id);
-                          } else if (e.key === 'Escape') {
-                            cancelRename();
-                          }
-                        }}
-                        autoFocus
-                      />
-                    ) : (
-                      doc.name
-                    )}
-                  </td>
-                  <td>{doc.doc_type || 'Draft'}</td>
-                  <td>{getLinkedJobLabel(doc)}</td>
-                  <td>
-                    <span className="date-text">{formatDocumentDate(doc.created_at, true)}</span>
-                  </td>
-                  <td>
-                    <span className="date-text">
-                      {formatDocumentDate(doc.updated_at || doc.created_at, true)}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="actions-cell">
-                      {(() => {
-                        const isArchived = doc.status === 'archived';
-                        const rowBusy =
-                          deletingId === doc.id ||
-                          renamingId === doc.id ||
-                          duplicatingId === doc.id ||
-                          archivingIds.has(doc.id);
-                        return (
-                          <>
-                            <button
-                              type="button"
-                              className="action-btn"
-                              aria-label="View document"
-                              onClick={() => openDocumentModal(doc)}
-                              disabled={rowBusy}
-                            >
-                              👁
-                            </button>
-                            {!isArchived && (
-                              <>
+              documents.map((doc, index) => {
+                const isArchived = doc.status === 'archived';
+                const rowBusy =
+                  deletingId === doc.id ||
+                  renamingId === doc.id ||
+                  duplicatingId === doc.id ||
+                  archivingIds.has(doc.id);
+                const isExpanded = expandedDocIds.has(doc.id);
+                return (
+                  <Fragment key={doc.id}>
+                    <tr key={doc.id}>
+                      <td className="row-number">{index + 1}</td>
+                      <td className="shell-cell-strong">
+                        <div className="document-name-cell">
+                          {renamingDocId === doc.id ? (
+                            <input
+                              className="inline-rename-input"
+                              aria-label="New document name"
+                              value={renameValue}
+                              onChange={(e) => setRenameValue(e.target.value)}
+                              onBlur={() => {
+                                if (skipBlurRef.current) {
+                                  skipBlurRef.current = false;
+                                  return;
+                                }
+                                commitRename(doc.id);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  skipBlurRef.current = true;
+                                  commitRename(doc.id);
+                                } else if (e.key === 'Escape') {
+                                  skipBlurRef.current = true;
+                                  cancelRename();
+                                }
+                              }}
+                              autoFocus
+                            />
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className="document-title-link"
+                                onClick={() => openDocument(doc.id)}
+                                disabled={rowBusy}
+                              >
+                                {doc.name}
+                              </button>
+                              {!isArchived && (
                                 <button
                                   type="button"
-                                  className="action-btn"
+                                  className="action-btn document-rename-btn"
                                   aria-label="Rename document"
                                   title="Rename"
                                   onClick={() => startRename(doc)}
@@ -362,62 +395,157 @@ export default function DocumentLibrary() {
                                 >
                                   ✏️
                                 </button>
-                                <button
-                                  type="button"
-                                  className="action-btn"
-                                  aria-label="Duplicate document"
-                                  title="Duplicate"
-                                  onClick={() => duplicateDocument(doc.id)}
-                                  disabled={rowBusy}
-                                >
-                                  {duplicatingId === doc.id ? '…' : '📋'}
-                                </button>
-                                {doc.content && (
-                                  <button
-                                    type="button"
-                                    className="action-btn"
-                                    aria-label="Rewrite with AI"
-                                    title="Rewrite with AI"
-                                    onClick={() => setRewriteDoc(doc)}
-                                    disabled={rowBusy}
-                                  >
-                                    ✦
-                                  </button>
-                                )}
-                              </>
-                            )}
-                            <button
-                              type="button"
-                              className="action-btn"
-                              aria-label={isArchived ? 'Restore document' : 'Archive document'}
-                              title={isArchived ? 'Restore' : 'Archive'}
-                              onClick={() =>
-                                isArchived
-                                  ? handleRestoreDocument(doc.id)
-                                  : handleArchiveDocument(doc.id)
-                              }
-                              disabled={rowBusy}
-                            >
-                              {archivingIds.has(doc.id) ? '…' : isArchived ? '↩' : '📦'}
-                            </button>
-                            {!isArchived && (
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                      <td>{doc.doc_type || 'Draft'}</td>
+                      <td>{getLinkedJobLabel(doc)}</td>
+                      <td>
+                        <span className="date-text">
+                          {formatDocumentDate(doc.created_at, true)}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="date-text">
+                          {formatDocumentDate(doc.updated_at || doc.created_at, true)}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="actions-cell">
+                          <button
+                            type="button"
+                            className="view-toggle-btn"
+                            aria-label={isExpanded ? 'Hide details' : 'View details'}
+                            onClick={() => toggleDocumentDetails(doc.id)}
+                            disabled={rowBusy}
+                          >
+                            {isExpanded ? 'Hide details' : 'View details'}
+                          </button>
+                          <button
+                            type="button"
+                            className="action-btn"
+                            aria-label="Download document"
+                            title="Download"
+                            onClick={() => handleDownloadDocument(doc)}
+                            disabled={rowBusy}
+                          >
+                            ⬇
+                          </button>
+                          {!isArchived && (
+                            <>
                               <button
                                 type="button"
                                 className="action-btn"
-                                aria-label="Delete document"
-                                onClick={() => handleDeleteDocument(doc.id, doc.name)}
+                                aria-label="Duplicate document"
+                                title="Duplicate"
+                                onClick={() => duplicateDocument(doc.id)}
                                 disabled={rowBusy}
                               >
-                                {deletingId === doc.id ? '…' : '🗑'}
+                                {duplicatingId === doc.id ? '…' : '📋'}
                               </button>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                              {doc.content && (
+                                <button
+                                  type="button"
+                                  className="action-btn"
+                                  aria-label="Rewrite with AI"
+                                  title="Rewrite with AI"
+                                  onClick={() => setRewriteDoc(doc)}
+                                  disabled={rowBusy}
+                                >
+                                  ✦
+                                </button>
+                              )}
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            className="action-btn"
+                            aria-label={isArchived ? 'Restore document' : 'Archive document'}
+                            title={isArchived ? 'Restore' : 'Archive'}
+                            onClick={() =>
+                              isArchived
+                                ? handleRestoreDocument(doc.id)
+                                : handleArchiveDocument(doc.id)
+                            }
+                            disabled={rowBusy}
+                          >
+                            {archivingIds.has(doc.id) ? '…' : isArchived ? '↩' : '📦'}
+                          </button>
+                          {!isArchived && (
+                            <button
+                              type="button"
+                              className="action-btn"
+                              aria-label="Delete document"
+                              onClick={() => handleDeleteDocument(doc.id, doc.name)}
+                              disabled={rowBusy}
+                            >
+                              {deletingId === doc.id ? '…' : '🗑'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr key={`${doc.id}-details`} className="document-details-row">
+                        <td colSpan={7}>
+                          <div className="document-inline-details">
+                            <p className="document-view-modal-text">
+                              <strong>Type:</strong> {doc.doc_type || 'Draft'}
+                            </p>
+                            <p className="document-view-modal-text">
+                              <strong>Status:</strong> {doc.status || '—'}
+                            </p>
+                            <p className="document-view-modal-text">
+                              <strong>Tags:</strong>{' '}
+                              {Array.isArray(doc.tags) && doc.tags.length > 0
+                                ? doc.tags.map((t, tagIndex) => (
+                                    <span
+                                      key={`${t}-${tagIndex}`}
+                                      className="draft-field-label"
+                                      style={{ display: 'inline-block', marginRight: 8 }}
+                                    >
+                                      {t}
+                                    </span>
+                                  ))
+                                : '—'}
+                            </p>
+                            <p className="document-view-modal-text">
+                              <strong>Linked:</strong> {getLinkedJobLabel(doc)}
+                            </p>
+                            <p className="document-view-modal-text">
+                              <strong>Uploaded:</strong> {formatDocumentDate(doc.created_at, true)}
+                            </p>
+                            <p className="document-view-modal-text">
+                              <strong>Last Updated:</strong>{' '}
+                              {formatDocumentDate(doc.updated_at || doc.created_at, true)}
+                            </p>
+                            <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                              <button
+                                type="button"
+                                className="document-view-modal-btn"
+                                onClick={() => openDocument(doc.id)}
+                                disabled={rowBusy}
+                              >
+                                Open file
+                              </button>
+                              <button
+                                type="button"
+                                className="document-view-modal-btn document-view-modal-btn--cancel"
+                                onClick={() => toggleDocumentDetails(doc.id)}
+                                disabled={rowBusy}
+                              >
+                                Close details
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
           </tbody>
         </table>
       </section>
@@ -432,92 +560,6 @@ export default function DocumentLibrary() {
             refetch();
           }}
         />
-      )}
-
-      {selectedDoc && (
-        <div
-          className="document-view-modal-overlay"
-          role="presentation"
-          onClick={handleOverlayClick}
-          ref={overlayRef}
-        >
-          <div
-            className="draft-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="document-view-title"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={handleModalKeyDown}
-            tabIndex={-1}
-            ref={modalRef}
-          >
-            <h2 className="document-view-modal-title" id="document-view-title">
-              {selectedDoc.name || 'Document'}
-            </h2>
-            <p className="document-view-modal-text">
-              <strong>Type:</strong> {selectedDoc.doc_type || 'Draft'}
-            </p>
-            <p className="document-view-modal-text">
-              <strong>Status:</strong> {selectedDoc.status || '—'}
-            </p>
-            <p className="document-view-modal-text">
-              <strong>Tags:</strong>{' '}
-              {Array.isArray(selectedDoc.tags) && selectedDoc.tags.length > 0
-                ? selectedDoc.tags.map((t, index) => (
-                    <span
-                      key={`${t}-${index}`}
-                      className="draft-field-label"
-                      style={{ display: 'inline-block', marginRight: 8 }}
-                    >
-                      {t}
-                    </span>
-                  ))
-                : '—'}
-            </p>
-            <p className="document-view-modal-text">
-              <strong>Linked:</strong> {getLinkedJobLabel(selectedDoc)}
-            </p>
-            <hr
-              style={{ margin: '12px 0', border: 'none', borderTop: '1px solid var(--border)' }}
-            />
-            <p
-              style={{
-                fontSize: '12px',
-                fontWeight: '600',
-                color: 'var(--text-secondary)',
-                marginBottom: 8,
-              }}
-            >
-              Timestamps
-            </p>
-            <p className="document-view-modal-text">
-              <strong>Uploaded:</strong> {formatDocumentDate(selectedDoc.created_at, true)}
-            </p>
-            <p className="document-view-modal-text">
-              <strong>Last Updated:</strong>{' '}
-              {formatDocumentDate(selectedDoc.updated_at || selectedDoc.created_at, true)}
-            </p>
-            <div style={{ marginTop: 18, display: 'flex', gap: 8 }}>
-              <button
-                type="button"
-                className="document-view-modal-btn"
-                onClick={async () => {
-                  const url = await viewDocument(selectedDoc.id);
-                  if (url) window.open(url, '_blank', 'noopener,noreferrer');
-                }}
-              >
-                Open file
-              </button>
-              <button
-                type="button"
-                className="document-view-modal-btn document-view-modal-btn--cancel"
-                onClick={closeDocumentModal}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </AppShell>
   );
