@@ -357,7 +357,8 @@ export default function JobOverviewModal({
                       <option value="">Select a document…</option>
                       {availableToLink.map((d) => (
                         <option key={d.id} value={d.id}>
-                          {d.name} ({d.doc_type || 'Draft'})
+                          {d.name} ({d.doc_type || 'Draft'}) —{' '}
+                          {formatDate(d.updated_at || d.created_at)}
                         </option>
                       ))}
                     </select>
