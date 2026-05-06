@@ -2376,7 +2376,7 @@ def test_rename_document_rejects_duplicate_name_type_and_job():
         "name": "Renamed Resume",
         "version_group_id": "other-group",
     }
-    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_JOB], [existing])
+    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT], [existing])
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.patch(
             f"/documents/{SAMPLE_DOCUMENT['id']}",
