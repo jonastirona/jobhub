@@ -751,7 +751,7 @@
 .document-title-link:disabled {
   color: var(--text-secondary);
   cursor: not-allowed;
-  text-decoration-color: currentColor;
+  text-decoration-color: currentcolor;
 }
 
 .document-rename-btn {
@@ -773,7 +773,7 @@
   color: var(--text-primary);
   border-radius: var(--radius-sm);
   padding: 6px 10px;
-  font-family: 'Outfit', sans-serif;
+  font-family: Outfit, sans-serif;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
