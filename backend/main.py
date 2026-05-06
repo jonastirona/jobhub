@@ -272,6 +272,7 @@ class DocumentUpdate(BaseModel):
 class DocumentPatch(BaseModel):
     name: Optional[str] = None
     status: Optional[str] = None
+    job_id: Optional[str] = None
 
 
 VALID_WORK_MODES = {"remote", "hybrid", "onsite", "any"}
@@ -1329,9 +1330,13 @@ def patch_document(
         if not body.status.strip():
             raise HTTPException(status_code=422, detail="status must not be blank")
         updates["status"] = _assert_document_status(body.status)
+    if "job_id" in body.model_fields_set:
+        updates["job_id"] = body.job_id  # None clears the link
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     sb = get_supabase()
+    if updates.get("job_id"):
+        _assert_linked_job_exists_for_user(sb, user_id, updates["job_id"])
     existing = (
         sb.table("documents").select("id").eq("id", document_id).eq("user_id", user_id).execute()
     )

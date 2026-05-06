@@ -55,6 +55,10 @@ export default function JobOverviewModal({
   onDownloadDocument,
   onDocumentSaved,
   onJobUpdated,
+  onLinkDocument,
+  linkingId = null,
+  linkError = null,
+  clearLinkError,
 }) {
   const overlayRef = useRef(null);
   const modalRef = useRef(null);
@@ -62,6 +66,7 @@ export default function JobOverviewModal({
   const [showResearch, setShowResearch] = useState(false);
   const [showSavedResearch, setShowSavedResearch] = useState(false);
   const [jobWithResearch, setJobWithResearch] = useState(null);
+  const [selectedLinkDocId, setSelectedLinkDocId] = useState('');
 
   useEffect(() => {
     const hasChildModal = showSavedResearch || showResearch || !!aiDraftType;
@@ -101,6 +106,23 @@ export default function JobOverviewModal({
   }, []);
 
   if (!job) return null;
+
+  const availableToLink = (Array.isArray(documents) ? documents : []).filter(
+    (d) => d.status !== 'archived' && d.job_id !== job.id
+  );
+
+  async function handleLinkDocument() {
+    if (!selectedLinkDocId || !onLinkDocument) return;
+    clearLinkError?.();
+    const result = await onLinkDocument(selectedLinkDocId, job.id);
+    if (result) setSelectedLinkDocId('');
+  }
+
+  async function handleUnlinkDocument(documentId) {
+    if (!onLinkDocument) return;
+    clearLinkError?.();
+    await onLinkDocument(documentId, null);
+  }
 
   const location = job.location?.trim() || '—';
   const description = job.description?.trim() || '—';
@@ -240,6 +262,12 @@ export default function JobOverviewModal({
                 <p className="job-overview-doc-empty">No documents are linked to this job yet.</p>
               )}
 
+              {linkError && (
+                <p className="job-overview-doc-empty job-overview-link-error" role="alert">
+                  {linkError}
+                </p>
+              )}
+
               {linkedDocuments.length > 0 && (
                 <ul className="job-overview-doc-list" aria-label="Documents linked to this job">
                   {linkedDocuments.map((documentRecord) => {
@@ -264,6 +292,7 @@ export default function JobOverviewModal({
                             className="job-overview-doc-btn"
                             aria-label={`Open ${documentLabel}`}
                             onClick={() => onOpenDocument?.(documentRecord.id)}
+                            disabled={linkingId === documentRecord.id}
                           >
                             Open
                           </button>
@@ -272,14 +301,58 @@ export default function JobOverviewModal({
                             className="job-overview-doc-btn"
                             aria-label={`Download ${documentLabel}`}
                             onClick={() => onDownloadDocument?.(documentRecord)}
+                            disabled={linkingId === documentRecord.id}
                           >
                             Download
                           </button>
+                          {onLinkDocument && (
+                            <button
+                              type="button"
+                              className="job-overview-doc-btn job-overview-doc-btn--unlink"
+                              aria-label={`Unlink ${documentLabel} from this job`}
+                              onClick={() => handleUnlinkDocument(documentRecord.id)}
+                              disabled={linkingId === documentRecord.id}
+                            >
+                              {linkingId === documentRecord.id ? '…' : 'Unlink'}
+                            </button>
+                          )}
                         </div>
                       </li>
                     );
                   })}
                 </ul>
+              )}
+
+              {onLinkDocument && availableToLink.length > 0 && (
+                <div className="job-overview-link-picker">
+                  <label className="job-overview-label" htmlFor="job-overview-link-select">
+                    Link a library document
+                  </label>
+                  <div className="job-overview-link-picker-row">
+                    <select
+                      id="job-overview-link-select"
+                      value={selectedLinkDocId}
+                      onChange={(e) => setSelectedLinkDocId(e.target.value)}
+                      className="job-overview-link-select"
+                    >
+                      <option value="">Select a document…</option>
+                      {availableToLink.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name} ({d.doc_type || 'Draft'})
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="job-overview-doc-btn"
+                      onClick={handleLinkDocument}
+                      disabled={!selectedLinkDocId || !!linkingId}
+                      aria-label="Link selected document to this job"
+                    >
+                      {linkingId && selectedLinkDocId === linkingId ? '…' : 'Link'}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

@@ -16,6 +16,8 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
   const [duplicateError, setDuplicateError] = useState(null);
   const [archivingIds, setArchivingIds] = useState(new Set());
   const [archiveError, setArchiveError] = useState(null);
+  const [linkingId, setLinkingId] = useState(null);
+  const [linkError, setLinkError] = useState(null);
   const pendingFetchRef = useRef(null);
   const pendingSaveRef = useRef(null);
 
@@ -430,6 +432,46 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     [accessToken, sortDocuments]
   );
 
+  const clearLinkError = useCallback(() => {
+    setLinkError(null);
+  }, []);
+
+  const linkDocument = useCallback(
+    async (documentId, jobId) => {
+      const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
+      if (!backendBase || !accessToken || !documentId) return null;
+      setLinkingId(documentId);
+      setLinkError(null);
+      try {
+        const res = await fetch(`${backendBase}/documents/${documentId}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ job_id: jobId ?? null }),
+        });
+        if (!res.ok) {
+          throw new Error(
+            (await extractErrorMessage(res)) || `Failed to update document link (${res.status})`
+          );
+        }
+        const updated = await res.json();
+        setDocuments((prev) =>
+          sortDocuments(prev.map((d) => (d.id === documentId ? { ...d, ...updated } : d)))
+        );
+        return updated;
+      } catch (err) {
+        Sentry.captureException(err);
+        setLinkError(err instanceof Error ? err.message : String(err));
+        return null;
+      } finally {
+        setLinkingId(null);
+      }
+    },
+    [accessToken, sortDocuments]
+  );
+
   return {
     documents,
     loading,
@@ -444,11 +486,14 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     duplicateError,
     archivingIds,
     archiveError,
+    linkingId,
+    linkError,
     clearSaveError,
     clearDeleteError,
     clearRenameError,
     clearDuplicateError,
     clearArchiveError,
+    clearLinkError,
     refetch,
     createDocument,
     deleteDocument,
@@ -457,5 +502,6 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     duplicateDocument,
     archiveDocument,
     restoreDocument,
+    linkDocument,
   };
 }

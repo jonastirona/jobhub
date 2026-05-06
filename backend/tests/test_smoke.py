@@ -2286,6 +2286,52 @@ def test_patch_document_name_and_status_together():
     assert body["status"] == "final"
 
 
+def test_patch_document_link_job():
+    linked = {**SAMPLE_DOCUMENT, "job_id": SAMPLE_JOB["id"]}
+    mock_sb, mock_query = _make_mock_sb_with_side_effects(
+        [{"id": SAMPLE_JOB["id"]}],  # job ownership check
+        [SAMPLE_DOCUMENT],  # document existence check
+        [linked],  # update
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.patch(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"job_id": SAMPLE_JOB["id"]},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["job_id"] == SAMPLE_JOB["id"]
+
+
+def test_patch_document_unlink_job():
+    unlinked = {**SAMPLE_DOCUMENT, "job_id": None}
+    mock_sb, mock_query = _make_mock_sb_with_side_effects(
+        [SAMPLE_DOCUMENT],  # document existence check
+        [unlinked],  # update
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.patch(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"job_id": None},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    assert response.json()["job_id"] is None
+
+
+def test_patch_document_link_job_not_found():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects(
+        [],  # job not found
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.patch(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"job_id": "nonexistent-job-id"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
 def test_list_documents_excludes_archived_by_default():
     active_doc = {**SAMPLE_DOCUMENT, "id": "doc-active", "status": "draft"}
     mock_sb, mock_query, _ = make_mock_sb(data=[active_doc])
