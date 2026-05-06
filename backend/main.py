@@ -1564,7 +1564,7 @@ def duplicate_document(
     user_id = get_user_id(authorization)
     sb = get_supabase()
     source = _get_document_for_user(sb, user_id, document_id)
-    requested_name = (body.name if body else None)
+    requested_name = body.name if body else None
     if requested_name is None:
         trimmed_name = _generate_unique_document_copy_name(
             sb,
