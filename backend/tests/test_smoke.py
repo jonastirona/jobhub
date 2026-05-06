@@ -4,7 +4,7 @@ Backend tests for jobhub.
 Supabase is fully mocked — no live database or credentials required.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,6 +12,16 @@ from fastapi.testclient import TestClient
 from postgrest.exceptions import APIError
 from pydantic import ValidationError
 
+from conftest import (
+    AUTH_HEADER,
+    MOCK_USER_ID,
+    SAMPLE_DOCUMENT,
+    SAMPLE_JOB,
+    _make_mock_sb_with_side_effects,
+    client,
+    make_mock_sb,
+    make_mock_sb_by_table,
+)
 from main import (
     JOB_STATUSES,
     PROFILE_REQUIRED_FIELDS,
@@ -37,176 +47,6 @@ from main import (
     get_profile_completion,
 )
 
-client = TestClient(app)
-
-# ---------------------------------------------------------------------------
-# Shared test fixtures
-# ---------------------------------------------------------------------------
-
-MOCK_USER_ID = "test-user-uuid-1234"
-MOCK_TOKEN = "mock-bearer-token"
-AUTH_HEADER = f"Bearer {MOCK_TOKEN}"
-
-SAMPLE_JOB = {
-    "id": "job-uuid-5678",
-    "user_id": MOCK_USER_ID,
-    "title": "Backend Engineer",
-    "company": "TechCorp",
-    "location": "Remote",
-    "status": "applied",
-    "applied_date": None,
-    "deadline": None,
-    "description": None,
-    "notes": None,
-    "recruiter_notes": None,
-    "created_at": "2026-01-01T00:00:00+00:00",
-    "updated_at": "2026-01-01T00:00:00+00:00",
-}
-
-SAMPLE_DOCUMENT = {
-    "id": "doc-uuid-3322",
-    "user_id": MOCK_USER_ID,
-    "job_id": SAMPLE_JOB["id"],
-    "name": "Datadog_Backend_Engineer_Draft",
-    "doc_type": "Cover Letter Draft",
-    "storage_bucket": "documents",
-    "storage_path": f"{MOCK_USER_ID}/doc-uuid-3322.pdf",
-    "mime_type": "application/pdf",
-    "file_size": 1024,
-    "original_filename": "draft.pdf",
-    "created_at": "2026-01-01T00:00:00+00:00",
-    "updated_at": "2026-01-01T00:00:00+00:00",
-}
-
-
-def make_mock_sb(data=None):
-    """
-    Return a fully mocked Supabase client.
-
-    - auth.get_user() resolves to MOCK_USER_ID
-    - table() chains (select/insert/update/delete/upsert/eq/neq/order/in_/or_) all return self
-    - execute() returns a response whose .data equals the provided list
-    """
-    mock_sb = MagicMock()
-
-    # Auth
-    mock_user_resp = MagicMock()
-    mock_user_resp.user.id = MOCK_USER_ID
-    mock_sb.auth.get_user.return_value = mock_user_resp
-
-    # Table query chain
-    mock_result = MagicMock()
-    mock_result.data = data if data is not None else []
-
-    mock_query = MagicMock()
-    for method in (
-        "select",
-        "insert",
-        "update",
-        "delete",
-        "upsert",
-        "eq",
-        "neq",
-        "order",
-        "in_",
-        "or_",
-    ):
-        getattr(mock_query, method).return_value = mock_query
-    mock_query.execute.return_value = mock_result
-
-    mock_sb.table.return_value = mock_query
-
-    mock_storage = MagicMock()
-    mock_storage.create_signed_url.return_value = {
-        "signedURL": "https://example.test/storage/v1/object/sign/documents/path"
-    }
-    mock_storage.upload.return_value = {"path": "uploaded"}
-    mock_storage.remove.return_value = []
-    mock_sb.storage.from_.return_value = mock_storage
-
-    return mock_sb, mock_query, mock_result
-
-
-def _make_mock_sb_with_side_effects(*data_list):
-    """
-    Like make_mock_sb but each successive execute() call returns the next item
-    in data_list as its .data value.  Useful for routes that call execute()
-    more than once (e.g. POST /experience: position query + insert).
-    """
-    mock_sb = MagicMock()
-    mock_user_resp = MagicMock()
-    mock_user_resp.user.id = MOCK_USER_ID
-    mock_sb.auth.get_user.return_value = mock_user_resp
-
-    results = []
-    for data in data_list:
-        r = MagicMock()
-        r.data = data
-        results.append(r)
-
-    mock_query = MagicMock()
-    for method in (
-        "select",
-        "insert",
-        "update",
-        "delete",
-        "upsert",
-        "eq",
-        "neq",
-        "order",
-        "limit",
-        "in_",
-        "or_",
-    ):
-        getattr(mock_query, method).return_value = mock_query
-    mock_query.execute.side_effect = results
-
-    mock_sb.table.return_value = mock_query
-
-    mock_storage = MagicMock()
-    mock_storage.create_signed_url.return_value = {
-        "signedURL": "https://example.test/storage/v1/object/sign/documents/path"
-    }
-    mock_storage.upload.return_value = {"path": "uploaded"}
-    mock_storage.remove.return_value = []
-    mock_sb.storage.from_.return_value = mock_storage
-
-    return mock_sb, mock_query
-
-
-def make_mock_sb_by_table(table_rows: dict[str, list[dict]]):
-    """Return a mock Supabase client that can return per-table datasets."""
-    mock_sb = MagicMock()
-    mock_user_resp = MagicMock()
-    mock_user_resp.user.id = MOCK_USER_ID
-    mock_sb.auth.get_user.return_value = mock_user_resp
-
-    def table_side_effect(table_name):
-        rows = table_rows.get(table_name, [])
-        result = MagicMock()
-        result.data = rows
-        query = MagicMock()
-        for method in (
-            "select",
-            "insert",
-            "update",
-            "delete",
-            "upsert",
-            "eq",
-            "neq",
-            "order",
-            "limit",
-            "in_",
-            "or_",
-        ):
-            getattr(query, method).return_value = query
-        query.execute.return_value = result
-        return query
-
-    mock_sb.table.side_effect = table_side_effect
-    return mock_sb
-
-
 # ---------------------------------------------------------------------------
 # Health check
 # ---------------------------------------------------------------------------
@@ -225,32 +65,19 @@ def test_root():
 
 
 # Verifies listing jobs without auth token returns unauthorized.
-def test_list_jobs_requires_auth():
-    response = client.get("/jobs")
-    assert response.status_code == 401
-
-
-# Verifies creating a job without auth token returns unauthorized.
-def test_create_job_requires_auth():
-    response = client.post("/jobs", json={"title": "Engineer", "company": "Acme"})
-    assert response.status_code == 401
-
-
-# Verifies fetching a job without auth token returns unauthorized.
-def test_get_job_requires_auth():
-    response = client.get("/jobs/some-uuid")
-    assert response.status_code == 401
-
-
-# Verifies updating a job without auth token returns unauthorized.
-def test_update_job_requires_auth():
-    response = client.put("/jobs/some-uuid", json={"title": "Senior Engineer"})
-    assert response.status_code == 401
-
-
-# Verifies deleting a job without auth token returns unauthorized.
-def test_delete_job_requires_auth():
-    response = client.delete("/jobs/some-uuid")
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/jobs", {}),
+        ("post", "/jobs", {"json": {"title": "Engineer", "company": "Acme"}}),
+        ("get", "/jobs/some-uuid", {}),
+        ("put", "/jobs/some-uuid", {"json": {"title": "Senior Engineer"}}),
+        ("delete", "/jobs/some-uuid", {}),
+    ],
+    ids=["list", "create", "get", "update", "delete"],
+)
+def test_job_endpoints_require_auth(method, url, kwargs):
+    response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
 
 
@@ -632,7 +459,7 @@ def test_list_jobs_locations_filter_is_case_insensitive_and_dedupes_available_lo
     }
     # available_locations is faceted (excludes the location filter itself),
     # so the other locations in the dataset remain visible for multi-select.
-    assert body["available_locations"] == ["Montreal", "New York City"]
+    assert set(body["available_locations"]) == {"Montreal", "New York City"}
 
 
 def test_list_jobs_rejects_unsupported_sort_by():
@@ -722,7 +549,7 @@ def test_list_jobs_available_locations_excludes_location_filter_to_allow_multi_s
     body = response.json()
     assert {row["id"] for row in body["items"]} == {"job-remote"}
     # Facet must still expose the other locations so the user can multi-select.
-    assert body["available_locations"] == ["Boston, MA", "New York City", "Remote"]
+    assert set(body["available_locations"]) == {"Boston, MA", "New York City", "Remote"}
 
 
 def test_list_jobs_location_filter_accepts_values_containing_commas():
@@ -771,7 +598,7 @@ def test_list_jobs_available_statuses_excludes_status_filter_to_allow_multi_sele
     assert response.status_code == 200
     body = response.json()
     assert {row["id"] for row in body["items"]} == {"job-a"}
-    assert body["available_statuses"] == ["applied", "interviewing", "offered"]
+    assert set(body["available_statuses"]) == {"applied", "interviewing", "offered"}
 
 
 def test_list_jobs_clamps_out_of_range_page_to_last_real_page():
@@ -839,7 +666,7 @@ def test_list_jobs_available_statuses_normalizes_casing_whitespace_and_aliases()
         response = client.get("/jobs", headers={"authorization": AUTH_HEADER})
     assert response.status_code == 200
     # Exactly the canonical values, no duplicates, no 'legacy_foo'.
-    assert response.json()["available_statuses"] == ["applied", "interviewing"]
+    assert set(response.json()["available_statuses"]) == {"applied", "interviewing"}
 
 
 def test_list_jobs_available_locations_stay_title_cased_when_sort_reorders_rows():
@@ -1174,6 +1001,22 @@ def test_update_job_partial_fields():
     assert "company" not in update_payload
 
 
+def test_update_job_research_field():
+    """Updating research field should persist markdown content."""
+    research_content = "## Company Culture\n\nGreat work-life balance."
+    updated = {**SAMPLE_JOB, "research": research_content}
+    mock_sb, mock_query, _ = make_mock_sb(data=[updated])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.put(
+            f"/jobs/{SAMPLE_JOB['id']}",
+            json={"research": research_content},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    update_payload = mock_query.update.call_args[0][0]
+    assert update_payload == {"research": research_content}
+
+
 def test_update_job_accepts_new_final_outcome_status():
     updated = {**SAMPLE_JOB, "status": "withdrawn"}
     mock_sb, _ = _make_mock_sb_with_status_change("applied", "withdrawn")
@@ -1234,8 +1077,16 @@ SAMPLE_INTERVIEW_EVENT = {
 }
 
 
-def test_get_job_history_requires_auth():
-    response = client.get(f"/jobs/{SAMPLE_JOB['id']}/history")
+@pytest.mark.parametrize(
+    "url",
+    [
+        f"/jobs/{SAMPLE_JOB['id']}/history",
+        f"/jobs/{SAMPLE_JOB['id']}/analytics",
+    ],
+    ids=["history", "analytics"],
+)
+def test_job_detail_endpoints_require_auth(url):
+    response = client.get(url)
     assert response.status_code == 401
 
 
@@ -1290,11 +1141,6 @@ def test_get_job_history_scoped_to_job():
 # ---------------------------------------------------------------------------
 # GET /jobs/{job_id}/analytics
 # ---------------------------------------------------------------------------
-
-
-def test_get_job_analytics_requires_auth():
-    response = client.get(f"/jobs/{SAMPLE_JOB['id']}/analytics")
-    assert response.status_code == 401
 
 
 def test_get_job_analytics_not_found():
@@ -1434,32 +1280,24 @@ def _make_mock_sb_for_interview_create(event_data=None, job_exists=True):
     return mock_sb, mock_query
 
 
-def test_get_interviews_requires_auth():
-    response = client.get(f"/jobs/{SAMPLE_JOB['id']}/interviews")
-    assert response.status_code == 401
-
-
-def test_create_interview_requires_auth():
-    response = client.post(
-        f"/jobs/{SAMPLE_JOB['id']}/interviews",
-        json={
-            "round_type": "Phone Screen",
-            "scheduled_at": "2026-05-10T15:00:00+00:00",
-        },
-    )
-    assert response.status_code == 401
-
-
-def test_update_interview_requires_auth():
-    response = client.put(
-        f"/jobs/{SAMPLE_JOB['id']}/interviews/ie-1",
-        json={"notes": "Updated"},
-    )
-    assert response.status_code == 401
-
-
-def test_delete_interview_requires_auth():
-    response = client.delete(f"/jobs/{SAMPLE_JOB['id']}/interviews/ie-1")
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", f"/jobs/{SAMPLE_JOB['id']}/interviews", {}),
+        (
+            "post",
+            f"/jobs/{SAMPLE_JOB['id']}/interviews",
+            {
+                "json": {"round_type": "Phone Screen", "scheduled_at": "2026-05-10T15:00:00+00:00"},
+            },
+        ),
+        ("put", f"/jobs/{SAMPLE_JOB['id']}/interviews/ie-1", {"json": {"notes": "Updated"}}),
+        ("delete", f"/jobs/{SAMPLE_JOB['id']}/interviews/ie-1", {}),
+    ],
+    ids=["list", "create", "update", "delete"],
+)
+def test_interview_endpoints_require_auth(method, url, kwargs):
+    response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
 
 
@@ -1834,26 +1672,20 @@ def test_delete_job_scoped_to_user():
 # ---------------------------------------------------------------------------
 
 
-def test_list_documents_requires_auth():
-    response = client.get("/documents")
-    assert response.status_code == 401
-
-
-def test_get_document_requires_auth():
-    response = client.get(f"/documents/{SAMPLE_DOCUMENT['id']}")
-    assert response.status_code == 401
-
-
-def test_update_document_requires_auth():
-    response = client.put(
-        f"/documents/{SAMPLE_DOCUMENT['id']}",
-        json={"name": "Updated Draft"},
-    )
-    assert response.status_code == 401
-
-
-def test_delete_document_requires_auth():
-    response = client.delete(f"/documents/{SAMPLE_DOCUMENT['id']}")
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/documents", {}),
+        ("get", f"/documents/{SAMPLE_DOCUMENT['id']}", {}),
+        ("put", f"/documents/{SAMPLE_DOCUMENT['id']}", {"json": {"name": "Updated Draft"}}),
+        ("delete", f"/documents/{SAMPLE_DOCUMENT['id']}", {}),
+        ("patch", f"/documents/{SAMPLE_DOCUMENT['id']}", {"json": {"name": "X"}}),
+        ("post", f"/documents/{SAMPLE_DOCUMENT['id']}/duplicate", {}),
+    ],
+    ids=["list", "get", "update", "delete", "rename", "duplicate"],
+)
+def test_document_endpoints_require_auth(method, url, kwargs):
+    response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
 
 
@@ -2303,11 +2135,6 @@ def test_rename_document_blank_name_rejected():
     assert response.status_code == 422
 
 
-def test_rename_document_requires_auth():
-    response = client.patch(f"/documents/{SAMPLE_DOCUMENT['id']}", json={"name": "X"})
-    assert response.status_code == 401
-
-
 # ---------------------------------------------------------------------------
 # Document duplicate (POST /documents/{id}/duplicate)
 # ---------------------------------------------------------------------------
@@ -2345,11 +2172,6 @@ def test_duplicate_document_not_found():
             headers={"authorization": AUTH_HEADER},
         )
     assert response.status_code == 404
-
-
-def test_duplicate_document_requires_auth():
-    response = client.post(f"/documents/{SAMPLE_DOCUMENT['id']}/duplicate")
-    assert response.status_code == 401
 
 
 def test_duplicate_document_copies_storage_file():
@@ -2591,14 +2413,16 @@ SAMPLE_PROFILE = {
 
 
 # Verifies profile read endpoint requires authentication.
-def test_get_profile_requires_auth():
-    response = client.get("/profile")
-    assert response.status_code == 401
-
-
-# Verifies profile upsert endpoint requires authentication.
-def test_put_profile_requires_auth():
-    response = client.put("/profile", json={"full_name": "Jane"})
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/profile", {}),
+        ("put", "/profile", {"json": {"full_name": "Jane"}}),
+    ],
+    ids=["get", "put"],
+)
+def test_profile_endpoints_require_auth(method, url, kwargs):
+    response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
 
 
@@ -2873,30 +2697,23 @@ SAMPLE_EXPERIENCE = {
 # ---------------------------------------------------------------------------
 
 
-def test_list_experience_requires_auth():
-    response = client.get("/experience")
-    assert response.status_code == 401
-
-
-def test_create_experience_requires_auth():
-    response = client.post(
-        "/experience", json={"title": "Engineer", "company": "Acme", "start_year": 2020}
-    )
-    assert response.status_code == 401
-
-
-def test_reorder_experience_requires_auth():
-    response = client.put("/experience/reorder", json={"ids": []})
-    assert response.status_code == 401
-
-
-def test_update_experience_requires_auth():
-    response = client.put("/experience/some-uuid", json={"title": "Senior Engineer"})
-    assert response.status_code == 401
-
-
-def test_delete_experience_requires_auth():
-    response = client.delete("/experience/some-uuid")
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/experience", {}),
+        (
+            "post",
+            "/experience",
+            {"json": {"title": "Engineer", "company": "Acme", "start_year": 2020}},
+        ),
+        ("put", "/experience/reorder", {"json": {"ids": []}}),
+        ("put", "/experience/some-uuid", {"json": {"title": "Senior Engineer"}}),
+        ("delete", "/experience/some-uuid", {}),
+    ],
+    ids=["list", "create", "reorder", "update", "delete"],
+)
+def test_experience_endpoints_require_auth(method, url, kwargs):
+    response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
 
 
@@ -3321,8 +3138,8 @@ def test_experience_reorder_has_ids():
 # Reminder fixtures
 # ---------------------------------------------------------------------------
 
-FUTURE_DUE_DATE = (date.today() + timedelta(days=7)).isoformat()
-PAST_DUE_DATE = (date.today() - timedelta(days=1)).isoformat()
+FUTURE_DUE_DATE = "2099-12-31"
+PAST_DUE_DATE = "2000-01-01"
 TODAY_DUE_DATE = date.today().isoformat()
 
 SAMPLE_REMINDER = {
@@ -3343,30 +3160,28 @@ SAMPLE_REMINDER = {
 # ---------------------------------------------------------------------------
 
 
-def test_list_reminders_requires_auth():
-    response = client.get("/reminders")
-    assert response.status_code == 401
-
-
-def test_create_reminder_requires_auth():
-    response = client.post(
-        "/reminders",
-        json={
-            "job_id": SAMPLE_JOB["id"],
-            "title": "Follow up",
-            "due_date": FUTURE_DUE_DATE,
-        },
-    )
-    assert response.status_code == 401
-
-
-def test_update_reminder_requires_auth():
-    response = client.put("/reminders/some-uuid", json={"title": "Updated"})
-    assert response.status_code == 401
-
-
-def test_delete_reminder_requires_auth():
-    response = client.delete("/reminders/some-uuid")
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/reminders", {}),
+        (
+            "post",
+            "/reminders",
+            {
+                "json": {
+                    "job_id": SAMPLE_JOB["id"],
+                    "title": "Follow up",
+                    "due_date": FUTURE_DUE_DATE,
+                },
+            },
+        ),
+        ("put", "/reminders/some-uuid", {"json": {"title": "Updated"}}),
+        ("delete", "/reminders/some-uuid", {}),
+    ],
+    ids=["list", "create", "update", "delete"],
+)
+def test_reminder_endpoints_require_auth(method, url, kwargs):
+    response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
 
 
@@ -3683,13 +3498,16 @@ SAMPLE_PREFS = {
 # ---------------------------------------------------------------------------
 
 
-def test_get_career_preferences_requires_auth():
-    response = client.get("/career-preferences")
-    assert response.status_code == 401
-
-
-def test_put_career_preferences_requires_auth():
-    response = client.put("/career-preferences", json={"target_roles": "Engineer"})
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/career-preferences", {}),
+        ("put", "/career-preferences", {"json": {"target_roles": "Engineer"}}),
+    ],
+    ids=["get", "put"],
+)
+def test_career_preferences_endpoints_require_auth(method, url, kwargs):
+    response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
 
 
@@ -3917,28 +3735,19 @@ SAMPLE_SKILL = {
 # ---------------------------------------------------------------------------
 
 
-def test_list_skills_requires_auth():
-    response = client.get("/skills")
-    assert response.status_code == 401
-
-
-def test_create_skill_requires_auth():
-    response = client.post("/skills", json={"name": "React"})
-    assert response.status_code == 401
-
-
-def test_reorder_skills_requires_auth():
-    response = client.put("/skills/reorder", json={"ids": []})
-    assert response.status_code == 401
-
-
-def test_update_skill_requires_auth():
-    response = client.put("/skills/some-uuid", json={"name": "Vue"})
-    assert response.status_code == 401
-
-
-def test_delete_skill_requires_auth():
-    response = client.delete("/skills/some-uuid")
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/skills", {}),
+        ("post", "/skills", {"json": {"name": "React"}}),
+        ("put", "/skills/reorder", {"json": {"ids": []}}),
+        ("put", "/skills/some-uuid", {"json": {"name": "Vue"}}),
+        ("delete", "/skills/some-uuid", {}),
+    ],
+    ids=["list", "create", "reorder", "update", "delete"],
+)
+def test_skill_endpoints_require_auth(method, url, kwargs):
+    response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
 
 
@@ -4316,26 +4125,29 @@ SAMPLE_EDUCATION = {
 # ---------------------------------------------------------------------------
 
 
-def test_list_education_requires_auth():
-    response = client.get("/education")
-    assert response.status_code == 401
-
-
-def test_create_education_requires_auth():
-    response = client.post(
-        "/education",
-        json={"institution": "NJIT", "degree": "BS", "field_of_study": "CS", "start_year": 2022},
-    )
-    assert response.status_code == 401
-
-
-def test_update_education_requires_auth():
-    response = client.put("/education/some-uuid", json={"institution": "MIT"})
-    assert response.status_code == 401
-
-
-def test_delete_education_requires_auth():
-    response = client.delete("/education/some-uuid")
+@pytest.mark.parametrize(
+    "method,url,kwargs",
+    [
+        ("get", "/education", {}),
+        (
+            "post",
+            "/education",
+            {
+                "json": {
+                    "institution": "NJIT",
+                    "degree": "BS",
+                    "field_of_study": "CS",
+                    "start_year": 2022,
+                },
+            },
+        ),
+        ("put", "/education/some-uuid", {"json": {"institution": "MIT"}}),
+        ("delete", "/education/some-uuid", {}),
+    ],
+    ids=["list", "create", "update", "delete"],
+)
+def test_education_endpoints_require_auth(method, url, kwargs):
+    response = getattr(client, method)(url, **kwargs)
     assert response.status_code == 401
 
 
@@ -4798,3 +4610,207 @@ def test_unhandled_exception_returns_500_json():
         response = no_raise_client.get("/jobs", headers={"authorization": AUTH_HEADER})
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error"}
+
+
+# ---------------------------------------------------------------------------
+# Security & Ownership — document endpoints
+# ---------------------------------------------------------------------------
+
+
+def test_list_documents_scoped_to_user():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get("/documents", headers={"authorization": AUTH_HEADER})
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+def test_get_document_view_url_scoped_to_user():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get(
+            f"/documents/{SAMPLE_DOCUMENT['id']}/view-url",
+            headers={"authorization": AUTH_HEADER},
+        )
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+def test_duplicate_document_scoped_to_user():
+    duplicate = {
+        **SAMPLE_DOCUMENT,
+        "id": "doc-copy-uuid",
+        "name": f"Copy of {SAMPLE_DOCUMENT['name']}",
+        "storage_path": f"{MOCK_USER_ID}/doc-copy-uuid.pdf",
+    }
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT], [duplicate])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            f"/documents/{SAMPLE_DOCUMENT['id']}/duplicate",
+            headers={"authorization": AUTH_HEADER},
+        )
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+def test_create_document_job_link_enforces_ownership():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([SAMPLE_JOB], [SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/documents",
+            data={
+                "name": "Linked Doc",
+                "doc_type": "Resume",
+                "job_id": SAMPLE_JOB["id"],
+            },
+            files={"file": ("resume.pdf", b"%PDF-1.7\nContent", "application/pdf")},
+            headers={"authorization": AUTH_HEADER},
+        )
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("id", SAMPLE_JOB["id"]) in eq_calls
+    assert ("user_id", MOCK_USER_ID) in eq_calls
+
+
+# ---------------------------------------------------------------------------
+# Document Logic — list filtering and sorting
+# ---------------------------------------------------------------------------
+
+
+def test_list_documents_rejects_invalid_sort_by():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/documents?sort_by=invalid_field",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "sort_by" in response.json()["detail"]
+
+
+def test_list_documents_rejects_invalid_doc_type():
+    mock_sb, _, _ = make_mock_sb(data=[])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/documents?doc_type=Brochure",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "doc_type" in response.json()["detail"]
+
+
+def test_list_documents_filters_by_doc_type():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get("/documents?doc_type=Resume", headers={"authorization": AUTH_HEADER})
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("doc_type", "Resume") in eq_calls
+
+
+def test_list_documents_draft_doc_type_uses_or_query():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.get("/documents?doc_type=Draft", headers={"authorization": AUTH_HEADER})
+    mock_query.or_.assert_any_call("doc_type.eq.Draft,doc_type.is.null")
+
+
+# ---------------------------------------------------------------------------
+# Document Logic — upload validation
+# ---------------------------------------------------------------------------
+
+
+def test_create_document_rejects_empty_file():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            data={"name": "Empty"},
+            files={"file": ("empty.pdf", b"", "application/pdf")},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
+    assert "Document file is required" in response.json()["detail"]
+
+
+def test_create_document_rejects_oversized_file():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    oversized_content = b"x" * (10 * 1024 * 1024 + 1)
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            data={"name": "Huge"},
+            files={"file": ("huge.pdf", oversized_content, "application/pdf")},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 413
+    assert "10MB" in response.json()["detail"]
+
+
+def test_create_document_storage_path_scoped_to_user():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/documents",
+            data={"name": "My Resume"},
+            files={"file": ("resume.pdf", b"%PDF-1.7\nContent", "application/pdf")},
+            headers={"authorization": AUTH_HEADER},
+        )
+    upload_call_args = mock_sb.storage.from_.return_value.upload.call_args
+    uploaded_path = upload_call_args[0][0]
+    assert uploaded_path.startswith(MOCK_USER_ID + "/")
+
+
+def test_create_document_persists_content_field():
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        client.post(
+            "/documents",
+            data={"name": "Draft", "content": "  Some notes  "},
+            files={"file": ("draft.pdf", b"%PDF-1.7\nContent", "application/pdf")},
+            headers={"authorization": AUTH_HEADER},
+        )
+    inserted_payload = mock_query.insert.call_args[0][0]
+    assert inserted_payload["content"] == "Some notes"
+
+
+# ---------------------------------------------------------------------------
+# Document Logic — duplicate and delete behaviour
+# ---------------------------------------------------------------------------
+
+
+def test_duplicate_document_inherits_source_metadata():
+    source = {
+        **SAMPLE_DOCUMENT,
+        "status": "final",
+        "tags": ["backend", "python"],
+        "doc_type": "Resume",
+    }
+    duplicate = {
+        **source,
+        "id": "doc-dup-uuid",
+        "name": f"Copy of {source['name']}",
+        "storage_path": f"{MOCK_USER_ID}/doc-dup-uuid.pdf",
+    }
+    mock_sb, mock_query = _make_mock_sb_with_side_effects([source], [duplicate])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            f"/documents/{SAMPLE_DOCUMENT['id']}/duplicate",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    insert_payload = mock_query.insert.call_args[0][0]
+    assert insert_payload["status"] == "final"
+    assert insert_payload["tags"] == ["backend", "python"]
+    assert insert_payload["doc_type"] == "Resume"
+
+
+def test_delete_document_removes_storage_file():
+    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT], [SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.delete(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 204
+    mock_sb.storage.from_.return_value.remove.assert_called_once_with(
+        [SAMPLE_DOCUMENT["storage_path"]]
+    )

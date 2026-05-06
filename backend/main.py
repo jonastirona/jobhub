@@ -165,6 +165,7 @@ class JobUpdate(BaseModel):
     notes: Optional[str] = None
     recruiter_notes: Optional[str] = None
     is_archived: Optional[bool] = None
+    research: Optional[str] = None
 
 
 class ProfileUpsert(BaseModel):

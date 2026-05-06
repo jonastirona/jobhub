@@ -371,6 +371,30 @@
   color: var(--text-muted);
 }
 
+.action-btn--active {
+  position: relative;
+  background: var(--orange-50);
+  border: 1px solid var(--orange-200);
+}
+
+.action-btn--active::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--orange-500);
+  border: 1px solid var(--bg-card);
+}
+
+.action-btn--active:hover {
+  background: var(--orange-100);
+  border-color: var(--orange-300);
+  border-style: solid;
+}
+
 /* Table Footer */
 .table-footer {
   display: flex;
