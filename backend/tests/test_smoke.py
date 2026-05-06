@@ -2292,6 +2292,7 @@ def test_patch_document_link_job():
         [{"id": SAMPLE_JOB["id"]}],  # job ownership check
         [SAMPLE_DOCUMENT],  # document existence check
         [linked],  # update
+        [linked],  # join select for consistent response shape
     )
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.patch(
@@ -2309,6 +2310,7 @@ def test_patch_document_unlink_job():
     mock_sb, mock_query = _make_mock_sb_with_side_effects(
         [SAMPLE_DOCUMENT],  # document existence check
         [unlinked],  # update
+        [unlinked],  # join select for consistent response shape
     )
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.patch(

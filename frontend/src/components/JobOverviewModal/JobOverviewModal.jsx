@@ -351,7 +351,7 @@ export default function JobOverviewModal({
                       type="button"
                       className="job-overview-doc-btn"
                       onClick={handleLinkDocument}
-                      disabled={!selectedLinkDocId || linkingIds.size > 0}
+                      disabled={!selectedLinkDocId || linkingIds.has(selectedLinkDocId)}
                       aria-label="Link selected document to this job"
                     >
                       {linkingIds.has(selectedLinkDocId) ? '…' : 'Link'}

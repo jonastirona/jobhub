@@ -1353,6 +1353,16 @@ def patch_document(
     )
     if not response.data:
         raise HTTPException(status_code=404, detail="Document not found")
+    if "job_id" in updates:
+        joined = (
+            sb.table("documents")
+            .select("*, jobs(title, company)")
+            .eq("id", document_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        if joined.data:
+            return joined.data[0]
     return response.data[0]
 
 
