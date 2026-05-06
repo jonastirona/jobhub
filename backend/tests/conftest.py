@@ -63,7 +63,7 @@ def make_mock_sb(data=None):
     Return a fully mocked Supabase client.
 
     - auth.get_user() resolves to MOCK_USER_ID
-    - table() chains (select/insert/update/delete/upsert/eq/order) all return self
+    - table() chains (select/insert/update/delete/upsert/eq/neq/order/in_/or_) all return self
     - execute() returns a response whose .data equals the provided list
     """
     mock_sb = MagicMock()
@@ -85,6 +85,7 @@ def make_mock_sb(data=None):
         "delete",
         "upsert",
         "eq",
+        "neq",
         "order",
         "in_",
         "or_",
@@ -130,6 +131,7 @@ def _make_mock_sb_with_side_effects(*data_list):
         "delete",
         "upsert",
         "eq",
+        "neq",
         "order",
         "limit",
         "in_",
@@ -170,6 +172,7 @@ def make_mock_sb_by_table(table_rows: dict[str, list[dict]]):
             "delete",
             "upsert",
             "eq",
+            "neq",
             "order",
             "limit",
             "in_",

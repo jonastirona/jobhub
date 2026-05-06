@@ -46,10 +46,15 @@ export default function DocumentLibrary() {
   const { session } = useAuth();
   const [selectedDocType, setSelectedDocType] = useState('');
   const [selectedSortBy, setSelectedSortBy] = useState('updated_at');
+  const [showArchived, setShowArchived] = useState(false);
 
   const filters = useMemo(
-    () => ({ docType: selectedDocType || undefined, sortBy: selectedSortBy }),
-    [selectedDocType, selectedSortBy]
+    () => ({
+      docType: selectedDocType || undefined,
+      sortBy: selectedSortBy,
+      includeArchived: showArchived,
+    }),
+    [selectedDocType, selectedSortBy, showArchived]
   );
 
   const {
@@ -62,12 +67,17 @@ export default function DocumentLibrary() {
     renameError,
     duplicatingId,
     duplicateError,
+    archivingIds,
+    archiveError,
     viewDocument,
     deleteDocument,
     clearDeleteError,
     clearRenameError,
+    clearArchiveError,
     renameDocument,
     duplicateDocument,
+    archiveDocument,
+    restoreDocument,
     refetch,
   } = useDocuments(session?.access_token, true, filters);
 
@@ -119,6 +129,16 @@ export default function DocumentLibrary() {
   async function handleDeleteDocument(documentId, docName) {
     if (!window.confirm(`Delete "${docName}"? This cannot be undone.`)) return;
     await deleteDocument(documentId);
+  }
+
+  async function handleArchiveDocument(documentId) {
+    clearArchiveError();
+    await archiveDocument(documentId);
+  }
+
+  async function handleRestoreDocument(documentId) {
+    clearArchiveError();
+    await restoreDocument(documentId);
   }
 
   function startRename(doc) {
@@ -192,6 +212,17 @@ export default function DocumentLibrary() {
                 ))}
               </select>
             </div>
+            <div className="dashboard-sort-control">
+              <label className="dashboard-sort-label" htmlFor="doc-show-archived">
+                Show archived
+              </label>
+              <input
+                id="doc-show-archived"
+                type="checkbox"
+                checked={showArchived}
+                onChange={(e) => setShowArchived(e.target.checked)}
+              />
+            </div>
           </div>
         </div>
 
@@ -204,6 +235,12 @@ export default function DocumentLibrary() {
         {renameError && (
           <p className="table-empty table-state--error" role="alert">
             {renameError}
+          </p>
+        )}
+
+        {archiveError && (
+          <p className="table-empty table-state--error" role="alert">
+            {archiveError}
           </p>
         )}
 
@@ -296,10 +333,12 @@ export default function DocumentLibrary() {
                   <td>
                     <div className="actions-cell">
                       {(() => {
+                        const isArchived = doc.status === 'archived';
                         const rowBusy =
                           deletingId === doc.id ||
                           renamingId === doc.id ||
-                          duplicatingId === doc.id;
+                          duplicatingId === doc.id ||
+                          archivingIds.has(doc.id);
                         return (
                           <>
                             <button
@@ -311,47 +350,67 @@ export default function DocumentLibrary() {
                             >
                               👁
                             </button>
-                            <button
-                              type="button"
-                              className="action-btn"
-                              aria-label="Rename document"
-                              title="Rename"
-                              onClick={() => startRename(doc)}
-                              disabled={rowBusy}
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              type="button"
-                              className="action-btn"
-                              aria-label="Duplicate document"
-                              title="Duplicate"
-                              onClick={() => duplicateDocument(doc.id)}
-                              disabled={rowBusy}
-                            >
-                              {duplicatingId === doc.id ? '…' : '📋'}
-                            </button>
-                            {doc.content && (
-                              <button
-                                type="button"
-                                className="action-btn"
-                                aria-label="Rewrite with AI"
-                                title="Rewrite with AI"
-                                onClick={() => setRewriteDoc(doc)}
-                                disabled={rowBusy}
-                              >
-                                ✦
-                              </button>
+                            {!isArchived && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="action-btn"
+                                  aria-label="Rename document"
+                                  title="Rename"
+                                  onClick={() => startRename(doc)}
+                                  disabled={rowBusy}
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  type="button"
+                                  className="action-btn"
+                                  aria-label="Duplicate document"
+                                  title="Duplicate"
+                                  onClick={() => duplicateDocument(doc.id)}
+                                  disabled={rowBusy}
+                                >
+                                  {duplicatingId === doc.id ? '…' : '📋'}
+                                </button>
+                                {doc.content && (
+                                  <button
+                                    type="button"
+                                    className="action-btn"
+                                    aria-label="Rewrite with AI"
+                                    title="Rewrite with AI"
+                                    onClick={() => setRewriteDoc(doc)}
+                                    disabled={rowBusy}
+                                  >
+                                    ✦
+                                  </button>
+                                )}
+                              </>
                             )}
                             <button
                               type="button"
                               className="action-btn"
-                              aria-label="Delete document"
-                              onClick={() => handleDeleteDocument(doc.id, doc.name)}
+                              aria-label={isArchived ? 'Restore document' : 'Archive document'}
+                              title={isArchived ? 'Restore' : 'Archive'}
+                              onClick={() =>
+                                isArchived
+                                  ? handleRestoreDocument(doc.id)
+                                  : handleArchiveDocument(doc.id)
+                              }
                               disabled={rowBusy}
                             >
-                              {deletingId === doc.id ? '…' : '🗑'}
+                              {archivingIds.has(doc.id) ? '…' : isArchived ? '↩' : '📦'}
                             </button>
+                            {!isArchived && (
+                              <button
+                                type="button"
+                                className="action-btn"
+                                aria-label="Delete document"
+                                onClick={() => handleDeleteDocument(doc.id, doc.name)}
+                                disabled={rowBusy}
+                              >
+                                {deletingId === doc.id ? '…' : '🗑'}
+                              </button>
+                            )}
                           </>
                         );
                       })()}

@@ -269,8 +269,9 @@ class DocumentUpdate(BaseModel):
     job_id: Optional[str] = None
 
 
-class DocumentRename(BaseModel):
-    name: str
+class DocumentPatch(BaseModel):
+    name: Optional[str] = None
+    status: Optional[str] = None
 
 
 VALID_WORK_MODES = {"remote", "hybrid", "onsite", "any"}
@@ -1177,6 +1178,7 @@ def list_documents(
     authorization: Optional[str] = Header(default=None),
     doc_type: Optional[str] = Query(default=None),
     sort_by: str = Query(default="updated_at"),
+    include_archived: bool = Query(default=False),
 ):
     user_id = get_user_id(authorization)
     if sort_by not in DOCUMENT_SORT_OPTIONS:
@@ -1189,6 +1191,8 @@ def list_documents(
         raise HTTPException(status_code=422, detail="doc_type contains unsupported values")
     sb = get_supabase()
     query = sb.table("documents").select("*, jobs(title, company)").eq("user_id", user_id)
+    if not include_archived:
+        query = query.or_("status.neq.archived,status.is.null")
     if normalized_doc_type:
         if normalized_doc_type == "Draft":
             query = query.or_("doc_type.eq.Draft,doc_type.is.null")
@@ -1309,15 +1313,24 @@ def update_document(
 
 
 @app.patch("/documents/{document_id}")
-def rename_document(
+def patch_document(
     document_id: str,
-    body: DocumentRename,
+    body: DocumentPatch,
     authorization: Optional[str] = Header(default=None),
 ):
     user_id = get_user_id(authorization)
-    trimmed = (body.name or "").strip()
-    if not trimmed:
-        raise HTTPException(status_code=422, detail="name must not be blank")
+    updates: dict = {}
+    if body.name is not None:
+        trimmed = body.name.strip()
+        if not trimmed:
+            raise HTTPException(status_code=422, detail="name must not be blank")
+        updates["name"] = trimmed
+    if body.status is not None:
+        if not body.status.strip():
+            raise HTTPException(status_code=422, detail="status must not be blank")
+        updates["status"] = _assert_document_status(body.status)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
     sb = get_supabase()
     existing = (
         sb.table("documents").select("id").eq("id", document_id).eq("user_id", user_id).execute()
@@ -1325,11 +1338,7 @@ def rename_document(
     if not existing.data:
         raise HTTPException(status_code=404, detail="Document not found")
     response = (
-        sb.table("documents")
-        .update({"name": trimmed})
-        .eq("id", document_id)
-        .eq("user_id", user_id)
-        .execute()
+        sb.table("documents").update(updates).eq("id", document_id).eq("user_id", user_id).execute()
     )
     if not response.data:
         raise HTTPException(status_code=404, detail="Document not found")

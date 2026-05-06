@@ -43,15 +43,20 @@ function renderPage(overrides = {}) {
     renameError: null,
     duplicatingId: null,
     duplicateError: null,
+    archivingIds: new Set(),
+    archiveError: null,
     viewDocument: jest.fn().mockResolvedValue('https://signed.example/doc.pdf'),
     deleteDocument: jest.fn().mockResolvedValue(true),
     renameDocument: jest.fn().mockResolvedValue({ ...baseDoc, name: 'Renamed' }),
     duplicateDocument: jest
       .fn()
       .mockResolvedValue({ ...baseDoc, id: 'doc-2', name: 'Copy of Resume_2026' }),
+    archiveDocument: jest.fn().mockResolvedValue({ ...baseDoc, status: 'archived' }),
+    restoreDocument: jest.fn().mockResolvedValue({ ...baseDoc, status: 'draft' }),
     clearDeleteError: jest.fn(),
     clearRenameError: jest.fn(),
     clearDuplicateError: jest.fn(),
+    clearArchiveError: jest.fn(),
     ...overrides,
   });
   return render(<DocumentLibrary />);
@@ -291,5 +296,71 @@ describe('DocumentLibrary', () => {
     renderPage({ duplicateError: 'Failed to duplicate document (500)', deleteError: null });
     const alerts = screen.getAllByRole('alert');
     expect(alerts.some((a) => /failed to duplicate document/i.test(a.textContent))).toBe(true);
+  });
+
+  test('calls archiveDocument when archive button is clicked', async () => {
+    const archiveDocument = jest.fn().mockResolvedValue({ ...baseDoc, status: 'archived' });
+    renderPage({ archiveDocument });
+
+    fireEvent.click(screen.getByRole('button', { name: /archive document/i }));
+
+    await waitFor(() => {
+      expect(archiveDocument).toHaveBeenCalledWith('doc-1');
+    });
+  });
+
+  test('calls restoreDocument when restore button is clicked on archived doc', async () => {
+    const archivedDoc = { ...baseDoc, status: 'archived' };
+    const restoreDocument = jest.fn().mockResolvedValue({ ...baseDoc, status: 'draft' });
+    renderPage({ documents: [archivedDoc], restoreDocument });
+
+    fireEvent.click(screen.getByRole('button', { name: /restore document/i }));
+
+    await waitFor(() => {
+      expect(restoreDocument).toHaveBeenCalledWith('doc-1');
+    });
+  });
+
+  test('hides rename, duplicate, delete, and AI rewrite buttons for archived documents', () => {
+    const archivedDoc = { ...baseDoc, status: 'archived', content: 'some content' };
+    renderPage({ documents: [archivedDoc] });
+
+    expect(screen.queryByRole('button', { name: /rename document/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /duplicate document/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /delete document/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /rewrite with ai/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /restore document/i })).toBeInTheDocument();
+  });
+
+  test('all row action buttons are disabled when archivingIds contains the row id', () => {
+    renderPage({ archivingIds: new Set(['doc-1']) });
+
+    expect(screen.getByRole('button', { name: /view document/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /rename document/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /duplicate document/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /archive document/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /delete document/i })).toBeDisabled();
+  });
+
+  test('renders archive error alert when archiveError exists', () => {
+    renderPage({ archiveError: 'Failed to archive document (500)' });
+    const alerts = screen.getAllByRole('alert');
+    expect(alerts.some((a) => /failed to archive document/i.test(a.textContent))).toBe(true);
+  });
+
+  test('show archived checkbox toggles includeArchived in hook filters', () => {
+    renderPage();
+    const checkbox = screen.getByRole('checkbox', { name: /show archived/i });
+
+    expect(checkbox).toBeInTheDocument();
+    expect(mockUseDocuments.mock.calls[mockUseDocuments.mock.calls.length - 1][2]).toMatchObject({
+      includeArchived: false,
+    });
+
+    fireEvent.click(checkbox);
+
+    expect(mockUseDocuments.mock.calls[mockUseDocuments.mock.calls.length - 1][2]).toMatchObject({
+      includeArchived: true,
+    });
   });
 });
