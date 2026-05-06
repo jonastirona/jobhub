@@ -171,7 +171,19 @@ def _make_mock_sb_with_side_effects(*data_list):
         "or_",
     ):
         getattr(mock_query, method).return_value = mock_query
-    mock_query.execute.side_effect = results
+    # Use a callable side_effect to avoid StopIteration if tests call execute
+    # more times than entries in data_list. After exhausting provided
+    # responses, the last response will be returned repeatedly.
+    def _execute_side_effect(*args, **kwargs):
+        idx = getattr(_execute_side_effect, "idx", 0)
+        if idx < len(results):
+            res = results[idx]
+            _execute_side_effect.idx = idx + 1
+            return res
+        return results[-1] if results else MagicMock()
+
+    _execute_side_effect.idx = 0
+    mock_query.execute.side_effect = _execute_side_effect
 
     mock_sb.table.return_value = mock_query
 
@@ -1972,10 +1984,11 @@ def test_create_document_from_existing_document_without_file_copies_source_file(
         "storage_path": f"{MOCK_USER_ID}/doc-v2.pdf",
     }
     mock_sb, mock_query = _make_mock_sb_with_side_effects(
-        [SAMPLE_DOCUMENT],
-        [SAMPLE_DOCUMENT],
-        [{"version_number": SAMPLE_DOCUMENT["version_number"]}],
-        [created],
+        [SAMPLE_DOCUMENT],  # _get_document_for_user
+        [SAMPLE_JOB],  # _assert_linked_job_exists_for_user (job validation)
+        [SAMPLE_DOCUMENT],  # _assert_document_name_available_for_user (uniqueness check)
+        [{"version_number": SAMPLE_DOCUMENT["version_number"]}],  # _get_next_document_version_number
+        [created],  # insert
     )
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
