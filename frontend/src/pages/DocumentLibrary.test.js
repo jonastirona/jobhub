@@ -370,7 +370,7 @@ describe('DocumentLibrary', () => {
     const alerts = screen.getAllByRole('alert');
     expect(alerts.some((a) => /failed to duplicate document/i.test(a.textContent))).toBe(true);
   });
-  
+
   test('calls archiveDocument when archive button is clicked', async () => {
     const archiveDocument = jest.fn().mockResolvedValue({ ...baseDoc, status: 'archived' });
     renderPage({ archiveDocument });
