@@ -128,6 +128,10 @@ test('clicking View opens read-only overview with job details', async () => {
 
 test('job overview shows linked documents sorted by latest version and supports open/download', async () => {
   const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+  URL.createObjectURL = jest.fn(() => 'blob:download');
+  URL.revokeObjectURL = jest.fn();
 
   global.fetch = jest.fn((url) => {
     if (url.startsWith('http://localhost:8000/jobs')) {
@@ -186,6 +190,13 @@ test('job overview shows linked documents sorted by latest version and supports 
       });
     }
 
+    if (url === 'https://example.test/document.pdf') {
+      return Promise.resolve({
+        ok: true,
+        blob: () => Promise.resolve(new Blob(['pdf-data'], { type: 'application/pdf' })),
+      });
+    }
+
     return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
   });
 
@@ -218,6 +229,16 @@ test('job overview shows linked documents sorted by latest version and supports 
 
   expect(openSpy).toHaveBeenCalled();
   openSpy.mockRestore();
+  if (originalCreateObjectURL) {
+    URL.createObjectURL = originalCreateObjectURL;
+  } else {
+    delete URL.createObjectURL;
+  }
+  if (originalRevokeObjectURL) {
+    URL.revokeObjectURL = originalRevokeObjectURL;
+  } else {
+    delete URL.revokeObjectURL;
+  }
 });
 
 // Verifies API failures surface a user-visible load error message.
