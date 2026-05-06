@@ -738,10 +738,14 @@
   text-underline-offset: 2px;
 }
 
-.document-title-link:hover,
+.document-title-link:hover {
+  color: var(--orange-700);
+}
+
 .document-title-link:focus-visible {
   color: var(--orange-700);
-  outline: none;
+  outline: 2px solid var(--orange-500);
+  outline-offset: 2px;
 }
 
 .document-title-link:disabled {
