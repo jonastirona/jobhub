@@ -85,20 +85,9 @@ export default function DocumentLibrary() {
   const skipBlurRef = useRef(false);
 
   async function openDocument(documentId) {
-    const newWin = window.open('about:blank', '_blank', 'noopener,noreferrer');
-    if (!newWin) {
-      return;
-    }
-    try {
-      const url = await viewDocument(documentId);
-      if (url) {
-        newWin.location.href = url;
-      } else {
-        newWin.close();
-      }
-    } catch (err) {
-      newWin.close();
-      throw err;
+    const url = await viewDocument(documentId);
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
   }
 
