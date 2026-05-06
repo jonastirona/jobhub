@@ -2363,6 +2363,21 @@ def test_patch_document_blank_job_id_rejected():
     mock_query.update.assert_not_called()
 
 
+def test_patch_document_not_found_precedence():
+    mock_sb, mock_query = _make_mock_sb_with_side_effects(
+        [],  # document not found
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.patch(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"job_id": SAMPLE_JOB["id"]},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Document not found"
+    mock_query.update.assert_not_called()
+
+
 def test_list_documents_excludes_archived_by_default():
     active_doc = {**SAMPLE_DOCUMENT, "id": "doc-active", "status": "draft"}
     mock_sb, mock_query, _ = make_mock_sb(data=[active_doc])

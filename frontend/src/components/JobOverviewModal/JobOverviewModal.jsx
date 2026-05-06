@@ -81,8 +81,11 @@ export default function JobOverviewModal({
         d.status !== 'archived' &&
         (d.job_id === null || d.job_id === undefined)
     );
-    if (!stillAvailable) setSelectedLinkDocId('');
-  }, [documents, selectedLinkDocId]);
+    if (!stillAvailable) {
+      setSelectedLinkDocId('');
+      clearLinkError?.();
+    }
+  }, [documents, selectedLinkDocId, clearLinkError]);
 
   useEffect(() => {
     const hasChildModal = showSavedResearch || showResearch || !!aiDraftType;
