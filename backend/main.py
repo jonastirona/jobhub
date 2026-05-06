@@ -1564,14 +1564,24 @@ def duplicate_document(
     user_id = get_user_id(authorization)
     sb = get_supabase()
     source = _get_document_for_user(sb, user_id, document_id)
-    requested_name = (body.name if body else None) or f"Copy of {source.get('name', 'Document')}"
-    trimmed_name = _generate_unique_document_copy_name(
-        sb,
-        user_id,
-        requested_name.strip(),
-        source.get("doc_type"),
-        source.get("job_id"),
-    )
+    requested_name = (body.name if body else None)
+    if requested_name is None:
+        trimmed_name = _generate_unique_document_copy_name(
+            sb,
+            user_id,
+            f"Copy of {source.get('name', 'Document')}".strip(),
+            source.get("doc_type"),
+            source.get("job_id"),
+        )
+    else:
+        trimmed_name = requested_name.strip()
+        _assert_document_name_available_for_user(
+            sb,
+            user_id,
+            trimmed_name,
+            source.get("doc_type"),
+            source.get("job_id"),
+        )
 
     source_path = source.get("storage_path")
     bucket = source.get("storage_bucket") or DOCUMENTS_BUCKET
