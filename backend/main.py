@@ -411,6 +411,26 @@ def _assert_document_name_available_for_user(
         )
 
 
+def _generate_unique_document_copy_name(
+    sb,
+    user_id: str,
+    base_name: str,
+    doc_type: Optional[str],
+    job_id: Optional[str],
+) -> str:
+    candidate = base_name
+    suffix = 2
+    while True:
+        try:
+            _assert_document_name_available_for_user(sb, user_id, candidate, doc_type, job_id)
+            return candidate
+        except HTTPException as exc:
+            if exc.status_code != 409:
+                raise
+            candidate = f"{base_name} ({suffix})"
+            suffix += 1
+
+
 def _get_document_for_user(sb, user_id: str, document_id: Optional[str]) -> Optional[dict]:
     if not document_id:
         return None
@@ -436,6 +456,19 @@ def _get_next_document_version_number(sb, user_id: str, version_group_id: str) -
         return 1
     latest = response.data[0].get("version_number") or 0
     return int(latest) + 1
+
+
+def _normalize_single_row_response(response) -> dict:
+    data = response.data
+    if isinstance(data, list):
+        if not data:
+            raise HTTPException(status_code=500, detail="Unexpected empty document response")
+        row = data[0]
+    else:
+        row = data
+    if not isinstance(row, dict):
+        raise HTTPException(status_code=500, detail="Unexpected document response shape")
+    return dict(row)
 
 
 async def _upload_document_to_storage(sb, user_id: str, upload: UploadFile) -> tuple[str, str, int]:
@@ -1380,7 +1413,11 @@ async def create_document(
     if not response.data:
         _delete_document_from_storage(sb, DOCUMENTS_BUCKET, storage_path)
         raise HTTPException(status_code=500, detail="Failed to create document")
-    return response.data[0]
+    created = _normalize_single_row_response(response)
+    created.setdefault("version_group_id", payload["version_group_id"])
+    created.setdefault("version_number", payload["version_number"])
+    created.setdefault("previous_version_id", payload["previous_version_id"])
+    return created
 
 
 @app.get("/documents/{document_id}")
@@ -1461,11 +1498,12 @@ def patch_document(
 ):
     user_id = get_user_id(authorization)
     updates: dict = {}
+    trimmed_name: Optional[str] = None
     if body.name is not None:
-        trimmed = body.name.strip()
-        if not trimmed:
+        trimmed_name = body.name.strip()
+        if not trimmed_name:
             raise HTTPException(status_code=422, detail="name must not be blank")
-        updates["name"] = trimmed
+        updates["name"] = trimmed_name
     if body.status is not None:
         if not body.status.strip():
             raise HTTPException(status_code=422, detail="status must not be blank")
@@ -1527,11 +1565,10 @@ def duplicate_document(
     sb = get_supabase()
     source = _get_document_for_user(sb, user_id, document_id)
     requested_name = (body.name if body else None) or f"Copy of {source.get('name', 'Document')}"
-    trimmed_name = requested_name.strip()
-    _assert_document_name_available_for_user(
+    trimmed_name = _generate_unique_document_copy_name(
         sb,
         user_id,
-        trimmed_name,
+        requested_name.strip(),
         source.get("doc_type"),
         source.get("job_id"),
     )
@@ -1579,7 +1616,11 @@ def duplicate_document(
         if new_storage_path:
             _delete_document_from_storage(sb, bucket, new_storage_path)
         raise HTTPException(status_code=500, detail="Failed to duplicate document")
-    return response.data[0]
+    created = _normalize_single_row_response(response)
+    created.setdefault("version_group_id", payload["version_group_id"])
+    created.setdefault("version_number", payload["version_number"])
+    created.setdefault("previous_version_id", payload["previous_version_id"])
+    return created
 
 
 @app.delete("/documents/{document_id}")

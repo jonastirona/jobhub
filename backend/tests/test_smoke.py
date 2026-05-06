@@ -47,6 +47,195 @@ from main import (
     get_profile_completion,
 )
 
+client = TestClient(app)
+
+# ---------------------------------------------------------------------------
+# Shared test fixtures
+# ---------------------------------------------------------------------------
+
+MOCK_USER_ID = "test-user-uuid-1234"
+MOCK_TOKEN = "mock-bearer-token"
+AUTH_HEADER = f"Bearer {MOCK_TOKEN}"
+
+SAMPLE_JOB = {
+    "id": "job-uuid-5678",
+    "user_id": MOCK_USER_ID,
+    "title": "Backend Engineer",
+    "company": "TechCorp",
+    "location": "Remote",
+    "status": "applied",
+    "applied_date": None,
+    "deadline": None,
+    "description": None,
+    "notes": None,
+    "recruiter_notes": None,
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-01T00:00:00+00:00",
+}
+
+SAMPLE_DOCUMENT = {
+    "id": "doc-uuid-3322",
+    "user_id": MOCK_USER_ID,
+    "job_id": SAMPLE_JOB["id"],
+    "version_group_id": "doc-group-1111",
+    "version_number": 1,
+    "previous_version_id": None,
+    "name": "Datadog_Backend_Engineer_Draft",
+    "doc_type": "Cover Letter Draft",
+    "storage_bucket": "documents",
+    "storage_path": f"{MOCK_USER_ID}/doc-uuid-3322.pdf",
+    "mime_type": "application/pdf",
+    "file_size": 1024,
+    "original_filename": "draft.pdf",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-01T00:00:00+00:00",
+}
+
+
+def make_mock_sb(data=None):
+    """
+    Return a fully mocked Supabase client.
+
+    - auth.get_user() resolves to MOCK_USER_ID
+    - table() chains (select/insert/update/delete/upsert/eq/order) all return self
+    - execute() returns a response whose .data equals the provided list
+    """
+    mock_sb = MagicMock()
+
+    # Auth
+    mock_user_resp = MagicMock()
+    mock_user_resp.user.id = MOCK_USER_ID
+    mock_sb.auth.get_user.return_value = mock_user_resp
+
+    # Table query chain
+    mock_result = MagicMock()
+    mock_result.data = data if data is not None else []
+
+    mock_query = MagicMock()
+    for method in (
+        "select",
+        "insert",
+        "update",
+        "delete",
+        "upsert",
+        "eq",
+        "order",
+        "limit",
+        "in_",
+        "or_",
+    ):
+        getattr(mock_query, method).return_value = mock_query
+    mock_query.execute.return_value = mock_result
+
+    mock_sb.table.return_value = mock_query
+
+    mock_storage = MagicMock()
+    mock_storage.create_signed_url.return_value = {
+        "signedURL": "https://example.test/storage/v1/object/sign/documents/path"
+    }
+    mock_storage.upload.return_value = {"path": "uploaded"}
+    mock_storage.remove.return_value = []
+    mock_sb.storage.from_.return_value = mock_storage
+
+    return mock_sb, mock_query, mock_result
+
+
+def _make_mock_sb_with_side_effects(*data_list):
+    """
+    Like make_mock_sb but each successive execute() call returns the next item
+    in data_list as its .data value.  Useful for routes that call execute()
+    more than once (e.g. POST /experience: position query + insert).
+    """
+    mock_sb = MagicMock()
+    mock_user_resp = MagicMock()
+    mock_user_resp.user.id = MOCK_USER_ID
+    mock_sb.auth.get_user.return_value = mock_user_resp
+
+    results = []
+    for data in data_list:
+        r = MagicMock()
+        # Ensure response.data is a list of rows as expected by route handlers.
+        if isinstance(data, list):
+            r.data = data
+        elif data is None:
+            r.data = []
+        else:
+            r.data = [data]
+        results.append(r)
+
+    mock_query = MagicMock()
+    for method in (
+        "select",
+        "insert",
+        "update",
+        "delete",
+        "upsert",
+        "eq",
+        "order",
+        "limit",
+        "in_",
+        "or_",
+    ):
+        getattr(mock_query, method).return_value = mock_query
+    # Use a callable side_effect to avoid StopIteration if tests call execute
+    # more times than entries in data_list. After exhausting provided
+    # responses, the last response will be returned repeatedly.
+    def _execute_side_effect(*args, **kwargs):
+        idx = getattr(_execute_side_effect, "idx", 0)
+        if idx < len(results):
+            res = results[idx]
+            _execute_side_effect.idx = idx + 1
+            return res
+        return results[-1] if results else MagicMock()
+
+    _execute_side_effect.idx = 0
+    mock_query.execute.side_effect = _execute_side_effect
+
+    mock_sb.table.return_value = mock_query
+
+    mock_storage = MagicMock()
+    mock_storage.create_signed_url.return_value = {
+        "signedURL": "https://example.test/storage/v1/object/sign/documents/path"
+    }
+    mock_storage.upload.return_value = {"path": "uploaded"}
+    mock_storage.remove.return_value = []
+    mock_sb.storage.from_.return_value = mock_storage
+
+    return mock_sb, mock_query
+
+
+def make_mock_sb_by_table(table_rows: dict[str, list[dict]]):
+    """Return a mock Supabase client that can return per-table datasets."""
+    mock_sb = MagicMock()
+    mock_user_resp = MagicMock()
+    mock_user_resp.user.id = MOCK_USER_ID
+    mock_sb.auth.get_user.return_value = mock_user_resp
+
+    def table_side_effect(table_name):
+        rows = table_rows.get(table_name, [])
+        result = MagicMock()
+        result.data = rows
+        query = MagicMock()
+        for method in (
+            "select",
+            "insert",
+            "update",
+            "delete",
+            "upsert",
+            "eq",
+            "order",
+            "limit",
+            "in_",
+            "or_",
+        ):
+            getattr(query, method).return_value = query
+        query.execute.return_value = result
+        return query
+
+    mock_sb.table.side_effect = table_side_effect
+    return mock_sb
+
+
 # ---------------------------------------------------------------------------
 # Health check
 # ---------------------------------------------------------------------------
@@ -1804,9 +1993,7 @@ def test_create_document_from_existing_document_without_file_copies_source_file(
         [SAMPLE_DOCUMENT],  # _get_document_for_user
         [SAMPLE_JOB],  # _assert_linked_job_exists_for_user (job validation)
         [SAMPLE_DOCUMENT],  # _assert_document_name_available_for_user (uniqueness check)
-        [
-            {"version_number": SAMPLE_DOCUMENT["version_number"]}
-        ],  # _get_next_document_version_number
+        [{"version_number": SAMPLE_DOCUMENT["version_number"]}],  # _get_next_document_version_number
         created,  # insert
     )
     with patch("main.get_supabase", return_value=mock_sb):
