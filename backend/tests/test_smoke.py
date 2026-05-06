@@ -144,7 +144,13 @@ def _make_mock_sb_with_side_effects(*data_list):
     results = []
     for data in data_list:
         r = MagicMock()
-        r.data = data
+        # Ensure response.data is a list of rows as expected by route handlers.
+        if isinstance(data, list):
+            r.data = data
+        elif data is None:
+            r.data = []
+        else:
+            r.data = [data]
         results.append(r)
 
     mock_query = MagicMock()
@@ -2002,7 +2008,7 @@ def test_create_document_from_existing_document_without_file_copies_source_file(
         [SAMPLE_JOB],  # _assert_linked_job_exists_for_user (job validation)
         [SAMPLE_DOCUMENT],  # _assert_document_name_available_for_user (uniqueness check)
         [{"version_number": SAMPLE_DOCUMENT["version_number"]}],  # _get_next_document_version_number
-        [created],  # insert
+        created,  # insert
     )
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
