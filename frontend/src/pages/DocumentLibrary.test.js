@@ -63,9 +63,17 @@ function renderPage(overrides = {}) {
 }
 
 describe('DocumentLibrary', () => {
+  const originalFetch = global.fetch;
+
   beforeEach(() => {
     jest.clearAllMocks();
     window.open = jest.fn();
+    process.env.REACT_APP_BACKEND_URL = 'http://localhost:8000';
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    delete process.env.REACT_APP_BACKEND_URL;
   });
 
   test('opens signed url in a new tab when View is clicked', async () => {
