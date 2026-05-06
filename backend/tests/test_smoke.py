@@ -2287,10 +2287,14 @@ def test_patch_document_name_and_status_together():
 
 
 def test_patch_document_link_job():
-    linked = {**SAMPLE_DOCUMENT, "job_id": SAMPLE_JOB["id"]}
+    linked = {
+        **SAMPLE_DOCUMENT,
+        "job_id": SAMPLE_JOB["id"],
+        "jobs": {"title": SAMPLE_JOB["title"], "company": SAMPLE_JOB["company"]},
+    }
     mock_sb, mock_query = _make_mock_sb_with_side_effects(
-        [{"id": SAMPLE_JOB["id"]}],  # job ownership check
         [SAMPLE_DOCUMENT],  # document existence check
+        [{"id": SAMPLE_JOB["id"]}],  # job ownership check
         [linked],  # update
         [linked],  # join select for consistent response shape
     )
@@ -2302,11 +2306,15 @@ def test_patch_document_link_job():
         )
     assert response.status_code == 200
     assert response.json()["job_id"] == SAMPLE_JOB["id"]
+    assert response.json()["jobs"] == {
+        "title": SAMPLE_JOB["title"],
+        "company": SAMPLE_JOB["company"],
+    }
     assert mock_query.update.call_args[0][0] == {"job_id": SAMPLE_JOB["id"]}
 
 
 def test_patch_document_unlink_job():
-    unlinked = {**SAMPLE_DOCUMENT, "job_id": None}
+    unlinked = {**SAMPLE_DOCUMENT, "job_id": None, "jobs": None}
     mock_sb, mock_query = _make_mock_sb_with_side_effects(
         [SAMPLE_DOCUMENT],  # document existence check
         [unlinked],  # update
@@ -2320,11 +2328,13 @@ def test_patch_document_unlink_job():
         )
     assert response.status_code == 200
     assert response.json()["job_id"] is None
+    assert response.json()["jobs"] is None
     assert mock_query.update.call_args[0][0] == {"job_id": None}
 
 
 def test_patch_document_link_job_not_found():
     mock_sb, mock_query = _make_mock_sb_with_side_effects(
+        [SAMPLE_DOCUMENT],  # document existence check
         [],  # job not found
     )
     with patch("main.get_supabase", return_value=mock_sb):
@@ -2335,6 +2345,9 @@ def test_patch_document_link_job_not_found():
         )
     assert response.status_code == 404
     assert response.json()["detail"] == "Linked job not found"
+    eq_calls = [call[0] for call in mock_query.eq.call_args_list]
+    assert ("id", "nonexistent-job-id") in eq_calls
+    assert ("user_id", MOCK_USER_ID) in eq_calls
     mock_query.update.assert_not_called()
 
 

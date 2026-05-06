@@ -1341,13 +1341,13 @@ def patch_document(
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     sb = get_supabase()
-    if "job_id" in updates and updates["job_id"] is not None:
-        _assert_linked_job_exists_for_user(sb, user_id, updates["job_id"])
     existing = (
         sb.table("documents").select("id").eq("id", document_id).eq("user_id", user_id).execute()
     )
     if not existing.data:
         raise HTTPException(status_code=404, detail="Document not found")
+    if "job_id" in updates and updates["job_id"] is not None:
+        _assert_linked_job_exists_for_user(sb, user_id, updates["job_id"])
     response = (
         sb.table("documents").update(updates).eq("id", document_id).eq("user_id", user_id).execute()
     )

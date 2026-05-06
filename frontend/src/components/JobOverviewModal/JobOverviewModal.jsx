@@ -74,6 +74,17 @@ export default function JobOverviewModal({
   }, [job?.id, clearLinkError]);
 
   useEffect(() => {
+    if (!selectedLinkDocId) return;
+    const stillAvailable = (Array.isArray(documents) ? documents : []).some(
+      (d) =>
+        d.id === selectedLinkDocId &&
+        d.status !== 'archived' &&
+        (d.job_id === null || d.job_id === undefined)
+    );
+    if (!stillAvailable) setSelectedLinkDocId('');
+  }, [documents, selectedLinkDocId]);
+
+  useEffect(() => {
     const hasChildModal = showSavedResearch || showResearch || !!aiDraftType;
     if (hasChildModal) return undefined;
     function onKey(e) {
