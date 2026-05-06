@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState, useRef } from 'react';
 import AppShell from '../components/layout/AppShell';
 import AIRewriteModal from '../components/AIRewriteModal/AIRewriteModal';
 import { useAuth } from '../context/AuthContext';
@@ -82,36 +82,53 @@ export default function DocumentLibrary() {
   const [expandedDocIds, setExpandedDocIds] = useState(() => new Set());
   const [renamingDocId, setRenamingDocId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
+  const skipBlurRef = useRef(false);
 
   async function openDocument(documentId) {
-    const url = await viewDocument(documentId);
-    if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
+    const newWin = window.open('about:blank', '_blank', 'noopener,noreferrer');
+    if (!newWin) {
+      return;
+    }
+    try {
+      const url = await viewDocument(documentId);
+      if (url) {
+        newWin.location.href = url;
+      } else {
+        newWin.close();
+      }
+    } catch (err) {
+      newWin.close();
+      throw err;
     }
   }
 
   async function handleDownloadDocument(documentRecord) {
     if (!documentRecord?.id) return;
-    const url = await viewDocument(documentRecord.id);
-    if (!url) return;
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to download document: ${response.status}`);
-    }
-
-    const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
+    let objectUrl = null;
     const link = document.createElement('a');
     try {
+      const url = await viewDocument(documentRecord.id);
+      if (!url) return;
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to download document: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      objectUrl = URL.createObjectURL(blob);
       link.href = objectUrl;
       link.rel = 'noopener noreferrer';
       link.download = `${documentRecord.name || 'document'}.pdf`;
       document.body.appendChild(link);
       link.click();
+    } catch (err) {
+      // Download failed silently - error handling could be enhanced with toast notifications
     } finally {
       link.remove();
-      URL.revokeObjectURL(objectUrl);
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
     }
   }
 
@@ -160,17 +177,20 @@ export default function DocumentLibrary() {
   async function commitRename(documentId) {
     if (!renameValue.trim()) {
       setRenamingDocId(null);
+      skipBlurRef.current = false;
       return;
     }
     const result = await renameDocument(documentId, renameValue);
     if (result) {
       setRenamingDocId(null);
     }
+    skipBlurRef.current = false;
   }
 
   function cancelRename() {
     setRenamingDocId(null);
     setRenameValue('');
+    skipBlurRef.current = false;
   }
 
   return (
@@ -346,12 +366,20 @@ export default function DocumentLibrary() {
                               aria-label="New document name"
                               value={renameValue}
                               onChange={(e) => setRenameValue(e.target.value)}
-                              onBlur={() => commitRename(doc.id)}
+                              onBlur={() => {
+                                if (skipBlurRef.current) {
+                                  skipBlurRef.current = false;
+                                  return;
+                                }
+                                commitRename(doc.id);
+                              }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                   e.preventDefault();
+                                  skipBlurRef.current = true;
                                   commitRename(doc.id);
                                 } else if (e.key === 'Escape') {
+                                  skipBlurRef.current = true;
                                   cancelRename();
                                 }
                               }}
