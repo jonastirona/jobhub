@@ -136,6 +136,7 @@ export default function DocumentLibrary() {
   }
 
   async function handleDeleteDocument(documentId, docName) {
+    clearDeleteError();
     if (!window.confirm(`Delete "${docName}"? This cannot be undone.`)) return;
     await deleteDocument(documentId);
   }
