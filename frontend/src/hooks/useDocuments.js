@@ -16,7 +16,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
   const [duplicateError, setDuplicateError] = useState(null);
   const [archivingIds, setArchivingIds] = useState(new Set());
   const [archiveError, setArchiveError] = useState(null);
-  const [linkingId, setLinkingId] = useState(null);
+  const [linkingIds, setLinkingIds] = useState(new Set());
   const [linkError, setLinkError] = useState(null);
   const pendingFetchRef = useRef(null);
   const pendingSaveRef = useRef(null);
@@ -440,7 +440,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     async (documentId, jobId) => {
       const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
       if (!backendBase || !accessToken || !documentId) return null;
-      setLinkingId(documentId);
+      setLinkingIds((prev) => new Set([...prev, documentId]));
       setLinkError(null);
       try {
         const res = await fetch(`${backendBase}/documents/${documentId}`, {
@@ -466,7 +466,11 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         setLinkError(err instanceof Error ? err.message : String(err));
         return null;
       } finally {
-        setLinkingId(null);
+        setLinkingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(documentId);
+          return next;
+        });
       }
     },
     [accessToken, sortDocuments]
@@ -486,7 +490,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     duplicateError,
     archivingIds,
     archiveError,
-    linkingId,
+    linkingIds,
     linkError,
     clearSaveError,
     clearDeleteError,

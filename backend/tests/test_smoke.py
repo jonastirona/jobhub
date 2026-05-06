@@ -2301,6 +2301,7 @@ def test_patch_document_link_job():
         )
     assert response.status_code == 200
     assert response.json()["job_id"] == SAMPLE_JOB["id"]
+    assert mock_query.update.call_args[0][0] == {"job_id": SAMPLE_JOB["id"]}
 
 
 def test_patch_document_unlink_job():
@@ -2317,6 +2318,7 @@ def test_patch_document_unlink_job():
         )
     assert response.status_code == 200
     assert response.json()["job_id"] is None
+    assert mock_query.update.call_args[0][0] == {"job_id": None}
 
 
 def test_patch_document_link_job_not_found():
@@ -2335,7 +2337,7 @@ def test_patch_document_link_job_not_found():
 
 
 def test_patch_document_blank_job_id_rejected():
-    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    mock_sb, mock_query, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.patch(
             f"/documents/{SAMPLE_DOCUMENT['id']}",
@@ -2343,6 +2345,7 @@ def test_patch_document_blank_job_id_rejected():
             headers={"authorization": AUTH_HEADER},
         )
     assert response.status_code == 422
+    mock_query.update.assert_not_called()
 
 
 def test_list_documents_excludes_archived_by_default():

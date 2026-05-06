@@ -56,7 +56,7 @@ export default function JobOverviewModal({
   onDocumentSaved,
   onJobUpdated,
   onLinkDocument,
-  linkingId = null,
+  linkingIds = new Set(),
   linkError = null,
   clearLinkError,
 }) {
@@ -297,7 +297,7 @@ export default function JobOverviewModal({
                             className="job-overview-doc-btn"
                             aria-label={`Open ${documentLabel}`}
                             onClick={() => onOpenDocument?.(documentRecord.id)}
-                            disabled={linkingId === documentRecord.id}
+                            disabled={linkingIds.has(documentRecord.id)}
                           >
                             Open
                           </button>
@@ -306,7 +306,7 @@ export default function JobOverviewModal({
                             className="job-overview-doc-btn"
                             aria-label={`Download ${documentLabel}`}
                             onClick={() => onDownloadDocument?.(documentRecord)}
-                            disabled={linkingId === documentRecord.id}
+                            disabled={linkingIds.has(documentRecord.id)}
                           >
                             Download
                           </button>
@@ -316,9 +316,9 @@ export default function JobOverviewModal({
                               className="job-overview-doc-btn job-overview-doc-btn--unlink"
                               aria-label={`Unlink ${documentLabel} from this job`}
                               onClick={() => handleUnlinkDocument(documentRecord.id)}
-                              disabled={linkingId === documentRecord.id}
+                              disabled={linkingIds.has(documentRecord.id)}
                             >
-                              {linkingId === documentRecord.id ? '…' : 'Unlink'}
+                              {linkingIds.has(documentRecord.id) ? '…' : 'Unlink'}
                             </button>
                           )}
                         </div>
@@ -351,10 +351,10 @@ export default function JobOverviewModal({
                       type="button"
                       className="job-overview-doc-btn"
                       onClick={handleLinkDocument}
-                      disabled={!selectedLinkDocId || !!linkingId}
+                      disabled={!selectedLinkDocId || linkingIds.size > 0}
                       aria-label="Link selected document to this job"
                     >
-                      {linkingId && selectedLinkDocId === linkingId ? '…' : 'Link'}
+                      {linkingIds.has(selectedLinkDocId) ? '…' : 'Link'}
                     </button>
                   </div>
                 </div>

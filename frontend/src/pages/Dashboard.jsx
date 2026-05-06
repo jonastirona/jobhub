@@ -152,7 +152,7 @@ export default function Dashboard() {
     saving: savingDraft,
     saveError: draftSaveError,
     linkDocument,
-    linkingId,
+    linkingIds,
     linkError,
     clearLinkError,
   } = useDocuments(session?.access_token, false);
@@ -964,7 +964,7 @@ export default function Dashboard() {
           onDocumentSaved={refetchDocuments}
           onJobUpdated={refetch}
           onLinkDocument={linkDocument}
-          linkingId={linkingId}
+          linkingIds={linkingIds}
           linkError={linkError}
           clearLinkError={clearLinkError}
         />
