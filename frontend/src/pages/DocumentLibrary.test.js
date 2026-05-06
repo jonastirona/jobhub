@@ -68,24 +68,13 @@ describe('DocumentLibrary', () => {
     window.open = jest.fn();
   });
 
-  test('opens signed url in a new tab when View is clicked', async () => {
+  test('clicking the document name opens the signed url in a new tab', async () => {
     const viewDocument = jest.fn().mockResolvedValue('https://signed.example/doc.pdf');
-    const clearDeleteError = jest.fn();
-    renderPage({ viewDocument, clearDeleteError });
+    renderPage({ viewDocument });
 
-    // clicking View opens the details modal
-    fireEvent.click(screen.getByRole('button', { name: /view document/i }));
-
-    // modal should show Open file button
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /open file/i })).toBeInTheDocument();
-    });
-
-    // clicking Open file should call viewDocument and open a new tab
-    fireEvent.click(screen.getByRole('button', { name: /open file/i }));
+    fireEvent.click(screen.getByRole('button', { name: /resume_2026/i }));
 
     await waitFor(() => {
-      expect(clearDeleteError).toHaveBeenCalledTimes(1);
       expect(viewDocument).toHaveBeenCalledWith('doc-1');
       expect(window.open).toHaveBeenCalledWith(
         'https://signed.example/doc.pdf',
@@ -95,18 +84,13 @@ describe('DocumentLibrary', () => {
     });
   });
 
-  test('does not open a tab when signed url is missing', async () => {
+  test('does not open a tab when signed url is missing from inline details', async () => {
     const viewDocument = jest.fn().mockResolvedValue(null);
     renderPage({ viewDocument });
 
-    fireEvent.click(screen.getByRole('button', { name: /view document/i }));
+    fireEvent.click(screen.getByRole('button', { name: /resume_2026/i }));
 
-    // click Open file in modal
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /open file/i })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /open file/i }));
+    expect(screen.getByRole('button', { name: /view details/i })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(viewDocument).toHaveBeenCalledWith('doc-1');
@@ -114,11 +98,11 @@ describe('DocumentLibrary', () => {
     });
   });
 
-  test('shows status and tags in details modal', async () => {
+  test('shows status and tags in inline details', async () => {
     const docWithMeta = { ...baseDoc, status: 'final', tags: ['alpha', 'beta'] };
-    renderPage({ documents: [docWithMeta], viewDocument: jest.fn(), clearDeleteError: jest.fn() });
+    renderPage({ documents: [docWithMeta], viewDocument: jest.fn() });
 
-    fireEvent.click(screen.getByRole('button', { name: /view document/i }));
+    fireEvent.click(screen.getByRole('button', { name: /view details/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/status:/i)).toBeInTheDocument();
@@ -191,6 +175,58 @@ describe('DocumentLibrary', () => {
     expect(screen.getByText(/no saved documents yet/i)).toBeInTheDocument();
   });
 
+  test('downloads document when Download is clicked', async () => {
+    const viewDocument = jest.fn().mockResolvedValue('https://signed.example/doc.pdf');
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    const originalFetch = global.fetch;
+
+    URL.createObjectURL = jest.fn(() => 'blob:download');
+    URL.revokeObjectURL = jest.fn();
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      blob: () => Promise.resolve(new Blob(['pdf-data'], { type: 'application/pdf' })),
+    });
+
+    renderPage({ viewDocument });
+    fireEvent.click(screen.getByRole('button', { name: /download document/i }));
+
+    await waitFor(() => {
+      expect(viewDocument).toHaveBeenCalledWith('doc-1');
+      expect(global.fetch).toHaveBeenCalledWith('https://signed.example/doc.pdf');
+      expect(URL.createObjectURL).toHaveBeenCalled();
+      expect(URL.revokeObjectURL).toHaveBeenCalled();
+    });
+
+    if (originalCreateObjectURL) {
+      URL.createObjectURL = originalCreateObjectURL;
+    } else {
+      delete URL.createObjectURL;
+    }
+    if (originalRevokeObjectURL) {
+      URL.revokeObjectURL = originalRevokeObjectURL;
+    } else {
+      delete URL.revokeObjectURL;
+    }
+    global.fetch = originalFetch;
+  });
+
+  test('expand all and collapse all control inline details rows', () => {
+    const docs = [
+      { ...baseDoc, id: 'doc-1' },
+      { ...baseDoc, id: 'doc-2', name: 'CoverLetter_2026' },
+    ];
+    renderPage({ documents: docs });
+
+    expect(screen.queryAllByRole('button', { name: /open file/i })).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: /expand all/i }));
+    expect(screen.getAllByRole('button', { name: /open file/i })).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: /collapse all/i }));
+    expect(screen.queryAllByRole('button', { name: /open file/i })).toHaveLength(0);
+  });
+
   test('shows inline rename input when rename button is clicked', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /rename document/i }));
@@ -257,7 +293,8 @@ describe('DocumentLibrary', () => {
   test('all row action buttons are disabled when duplicatingId matches the row', () => {
     renderPage({ duplicatingId: 'doc-1' });
 
-    expect(screen.getByRole('button', { name: /view document/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /view details/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /download document/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /rename document/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /duplicate document/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /delete document/i })).toBeDisabled();
@@ -266,7 +303,8 @@ describe('DocumentLibrary', () => {
   test('all row action buttons are disabled when renamingId matches the row', () => {
     renderPage({ renamingId: 'doc-1' });
 
-    expect(screen.getByRole('button', { name: /view document/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /view details/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /download document/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /rename document/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /duplicate document/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /delete document/i })).toBeDisabled();
@@ -335,7 +373,8 @@ describe('DocumentLibrary', () => {
   test('all row action buttons are disabled when archivingIds contains the row id', () => {
     renderPage({ archivingIds: new Set(['doc-1']) });
 
-    expect(screen.getByRole('button', { name: /view document/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /view details/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /download document/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /rename document/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /duplicate document/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /archive document/i })).toBeDisabled();
