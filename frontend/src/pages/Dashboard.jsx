@@ -361,14 +361,23 @@ export default function Dashboard() {
       const url = await viewDocument(documentRecord.id);
       if (!url) return;
 
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to download document: ${response.status}`);
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.download = `${documentRecord.name || 'document'}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      try {
+        link.href = objectUrl;
+        link.rel = 'noopener noreferrer';
+        link.download = `${documentRecord.name || 'document'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+      } finally {
+        link.remove();
+        URL.revokeObjectURL(objectUrl);
+      }
     },
     [viewDocument]
   );
