@@ -375,4 +375,12 @@ describe('JobOverviewModal', () => {
       screen.queryByRole('combobox', { name: /link a library document/i })
     ).not.toBeInTheDocument();
   });
+
+  test('documents linked to other jobs do not appear in the link picker', () => {
+    const otherJobDoc = { ...UNLINKED_DOC, id: 'doc-other', job_id: 'job-other' };
+    renderModal({ documents: [otherJobDoc], onLinkDocument: jest.fn() });
+    expect(
+      screen.queryByRole('combobox', { name: /link a library document/i })
+    ).not.toBeInTheDocument();
+  });
 });

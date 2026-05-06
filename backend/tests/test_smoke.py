@@ -2330,6 +2330,19 @@ def test_patch_document_link_job_not_found():
             headers={"authorization": AUTH_HEADER},
         )
     assert response.status_code == 404
+    assert response.json()["detail"] == "Linked job not found"
+    mock_query.update.assert_not_called()
+
+
+def test_patch_document_blank_job_id_rejected():
+    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.patch(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"job_id": "   "},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 422
 
 
 def test_list_documents_excludes_archived_by_default():

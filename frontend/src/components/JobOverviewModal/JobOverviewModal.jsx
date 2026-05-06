@@ -69,6 +69,11 @@ export default function JobOverviewModal({
   const [selectedLinkDocId, setSelectedLinkDocId] = useState('');
 
   useEffect(() => {
+    clearLinkError?.();
+    setSelectedLinkDocId('');
+  }, [job?.id, clearLinkError]);
+
+  useEffect(() => {
     const hasChildModal = showSavedResearch || showResearch || !!aiDraftType;
     if (hasChildModal) return undefined;
     function onKey(e) {
@@ -108,7 +113,7 @@ export default function JobOverviewModal({
   if (!job) return null;
 
   const availableToLink = (Array.isArray(documents) ? documents : []).filter(
-    (d) => d.status !== 'archived' && d.job_id !== job.id
+    (d) => d.status !== 'archived' && (d.job_id === null || d.job_id === undefined)
   );
 
   async function handleLinkDocument() {

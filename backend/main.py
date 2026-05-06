@@ -1331,11 +1331,17 @@ def patch_document(
             raise HTTPException(status_code=422, detail="status must not be blank")
         updates["status"] = _assert_document_status(body.status)
     if "job_id" in body.model_fields_set:
-        updates["job_id"] = body.job_id  # None clears the link
+        if body.job_id is None:
+            updates["job_id"] = None  # explicit unlink
+        else:
+            normalized_job_id = body.job_id.strip()
+            if not normalized_job_id:
+                raise HTTPException(status_code=422, detail="job_id must not be blank")
+            updates["job_id"] = normalized_job_id
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     sb = get_supabase()
-    if updates.get("job_id"):
+    if "job_id" in updates and updates["job_id"] is not None:
         _assert_linked_job_exists_for_user(sb, user_id, updates["job_id"])
     existing = (
         sb.table("documents").select("id").eq("id", document_id).eq("user_id", user_id).execute()
