@@ -177,7 +177,6 @@ def _make_mock_sb_with_side_effects(*data_list):
         "or_",
     ):
         getattr(mock_query, method).return_value = mock_query
-
     # Use a callable side_effect to avoid StopIteration if tests call execute
     # more times than entries in data_list. After exhausting provided
     # responses, the last response will be returned repeatedly.
