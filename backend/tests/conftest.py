@@ -41,6 +41,9 @@ SAMPLE_DOCUMENT = {
     "id": "doc-uuid-3322",
     "user_id": MOCK_USER_ID,
     "job_id": SAMPLE_JOB["id"],
+    "version_group_id": "doc-group-1111",
+    "version_number": 1,
+    "previous_version_id": None,
     "name": "Datadog_Backend_Engineer_Draft",
     "doc_type": "Cover Letter Draft",
     "storage_bucket": "documents",
@@ -138,7 +141,17 @@ def _make_mock_sb_with_side_effects(*data_list):
         "or_",
     ):
         getattr(mock_query, method).return_value = mock_query
-    mock_query.execute.side_effect = results
+
+    def _execute_side_effect(*args, **kwargs):
+        idx = getattr(_execute_side_effect, "idx", 0)
+        if idx < len(results):
+            result = results[idx]
+            _execute_side_effect.idx = idx + 1
+            return result
+        return results[-1] if results else MagicMock(data=[])
+
+    _execute_side_effect.idx = 0
+    mock_query.execute.side_effect = _execute_side_effect
 
     mock_sb.table.return_value = mock_query
 
