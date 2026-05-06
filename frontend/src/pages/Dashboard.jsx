@@ -151,6 +151,10 @@ export default function Dashboard() {
     clearSaveError,
     saving: savingDraft,
     saveError: draftSaveError,
+    linkDocument,
+    linkingIds,
+    linkError,
+    clearLinkError,
   } = useDocuments(session?.access_token, false);
   const [formState, setFormState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', job }
   const [historyJob, setHistoryJob] = useState(null);
@@ -959,6 +963,10 @@ export default function Dashboard() {
           onDownloadDocument={handleDownloadDocument}
           onDocumentSaved={refetchDocuments}
           onJobUpdated={refetch}
+          onLinkDocument={linkDocument}
+          linkingIds={linkingIds}
+          linkError={linkError}
+          clearLinkError={clearLinkError}
         />
       )}
 

@@ -281,4 +281,106 @@ describe('JobOverviewModal', () => {
     );
     expect(container.innerHTML).toBe('');
   });
+
+  // ---------------------------------------------------------------------------
+  // Link / unlink documents
+  // ---------------------------------------------------------------------------
+
+  const LINKED_DOC = {
+    id: 'doc-linked',
+    name: 'Resume_Draft',
+    doc_type: 'Resume',
+    job_id: 'job-1',
+    status: 'draft',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+
+  const UNLINKED_DOC = {
+    id: 'doc-unlinked',
+    name: 'Cover_Letter',
+    doc_type: 'Cover Letter',
+    job_id: null,
+    status: 'draft',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+
+  test('shows Unlink button for each linked document when onLinkDocument is provided', () => {
+    renderModal({ documents: [LINKED_DOC], onLinkDocument: jest.fn() });
+    expect(screen.getByRole('button', { name: /unlink resume_draft/i })).toBeInTheDocument();
+  });
+
+  test('does not show Unlink button when onLinkDocument is not provided', () => {
+    renderModal({ documents: [LINKED_DOC] });
+    expect(screen.queryByRole('button', { name: /unlink/i })).not.toBeInTheDocument();
+  });
+
+  test('calls onLinkDocument with null when Unlink is clicked', async () => {
+    const onLinkDocument = jest.fn().mockResolvedValue(null);
+    renderModal({ documents: [LINKED_DOC], onLinkDocument });
+
+    fireEvent.click(screen.getByRole('button', { name: /unlink resume_draft/i }));
+
+    await waitFor(() => {
+      expect(onLinkDocument).toHaveBeenCalledWith('doc-linked', null);
+    });
+  });
+
+  test('shows link picker when unlinked documents exist and onLinkDocument is provided', () => {
+    renderModal({ documents: [UNLINKED_DOC], onLinkDocument: jest.fn() });
+    expect(screen.getByRole('combobox', { name: /link a library document/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /cover_letter/i })).toBeInTheDocument();
+  });
+
+  test('does not show link picker when no unlinked documents exist', () => {
+    renderModal({ documents: [LINKED_DOC], onLinkDocument: jest.fn() });
+    expect(
+      screen.queryByRole('combobox', { name: /link a library document/i })
+    ).not.toBeInTheDocument();
+  });
+
+  test('calls onLinkDocument with job id when Link is clicked', async () => {
+    const onLinkDocument = jest.fn().mockResolvedValue({ ...UNLINKED_DOC, job_id: 'job-1' });
+    renderModal({ documents: [UNLINKED_DOC], onLinkDocument });
+
+    fireEvent.change(screen.getByRole('combobox', { name: /link a library document/i }), {
+      target: { value: 'doc-unlinked' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /link selected document/i }));
+
+    await waitFor(() => {
+      expect(onLinkDocument).toHaveBeenCalledWith('doc-unlinked', 'job-1');
+    });
+  });
+
+  test('Link button is disabled when no document is selected', () => {
+    renderModal({ documents: [UNLINKED_DOC], onLinkDocument: jest.fn() });
+    expect(screen.getByRole('button', { name: /link selected document/i })).toBeDisabled();
+  });
+
+  test('renders link error alert when linkError is provided', () => {
+    renderModal({
+      documents: [LINKED_DOC],
+      onLinkDocument: jest.fn(),
+      linkError: 'Failed to update document link (404)',
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent(/failed to update document link/i);
+  });
+
+  test('archived documents do not appear in the link picker', () => {
+    const archivedDoc = { ...UNLINKED_DOC, id: 'doc-archived', status: 'archived' };
+    renderModal({ documents: [archivedDoc], onLinkDocument: jest.fn() });
+    expect(
+      screen.queryByRole('combobox', { name: /link a library document/i })
+    ).not.toBeInTheDocument();
+  });
+
+  test('documents linked to other jobs do not appear in the link picker', () => {
+    const otherJobDoc = { ...UNLINKED_DOC, id: 'doc-other', job_id: 'job-other' };
+    renderModal({ documents: [otherJobDoc], onLinkDocument: jest.fn() });
+    expect(
+      screen.queryByRole('combobox', { name: /link a library document/i })
+    ).not.toBeInTheDocument();
+  });
 });

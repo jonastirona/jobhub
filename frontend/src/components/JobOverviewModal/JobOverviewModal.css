@@ -218,3 +218,39 @@
 .job-overview-done:hover {
   filter: brightness(1.05);
 }
+
+.job-overview-doc-btn--unlink {
+  color: var(--text-secondary);
+}
+
+.job-overview-doc-btn--unlink:hover {
+  border-color: var(--red-400, #f87171);
+  color: var(--red-600, #dc2626);
+}
+
+.job-overview-link-picker {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.job-overview-link-picker-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.job-overview-link-select {
+  flex: 1;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: #fff;
+}
+
+.job-overview-link-error {
+  color: var(--red-600, #dc2626);
+}

@@ -272,6 +272,7 @@ class DocumentUpdate(BaseModel):
 class DocumentPatch(BaseModel):
     name: Optional[str] = None
     status: Optional[str] = None
+    job_id: Optional[str] = None
 
 
 VALID_WORK_MODES = {"remote", "hybrid", "onsite", "any"}
@@ -1329,6 +1330,14 @@ def patch_document(
         if not body.status.strip():
             raise HTTPException(status_code=422, detail="status must not be blank")
         updates["status"] = _assert_document_status(body.status)
+    if "job_id" in body.model_fields_set:
+        if body.job_id is None:
+            updates["job_id"] = None  # explicit unlink
+        else:
+            normalized_job_id = body.job_id.strip()
+            if not normalized_job_id:
+                raise HTTPException(status_code=422, detail="job_id must not be blank")
+            updates["job_id"] = normalized_job_id
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     sb = get_supabase()
@@ -1337,11 +1346,23 @@ def patch_document(
     )
     if not existing.data:
         raise HTTPException(status_code=404, detail="Document not found")
+    if "job_id" in updates and updates["job_id"] is not None:
+        _assert_linked_job_exists_for_user(sb, user_id, updates["job_id"])
     response = (
         sb.table("documents").update(updates).eq("id", document_id).eq("user_id", user_id).execute()
     )
     if not response.data:
         raise HTTPException(status_code=404, detail="Document not found")
+    if "job_id" in updates:
+        joined = (
+            sb.table("documents")
+            .select("*, jobs(title, company)")
+            .eq("id", document_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        if joined.data:
+            return joined.data[0]
     return response.data[0]
 
 
