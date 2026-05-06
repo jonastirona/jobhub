@@ -278,10 +278,6 @@ class DocumentDuplicate(BaseModel):
     name: Optional[str] = None
 
 
-class DocumentDuplicate(BaseModel):
-    name: Optional[str] = None
-
-
 VALID_WORK_MODES = {"remote", "hybrid", "onsite", "any"}
 
 
