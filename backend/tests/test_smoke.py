@@ -204,38 +204,6 @@ def _make_mock_sb_with_side_effects(*data_list):
     return mock_sb, mock_query
 
 
-def make_mock_sb_by_table(table_rows: dict[str, list[dict]]):
-    """Return a mock Supabase client that can return per-table datasets."""
-    mock_sb = MagicMock()
-    mock_user_resp = MagicMock()
-    mock_user_resp.user.id = MOCK_USER_ID
-    mock_sb.auth.get_user.return_value = mock_user_resp
-
-    def table_side_effect(table_name):
-        rows = table_rows.get(table_name, [])
-        result = MagicMock()
-        result.data = rows
-        query = MagicMock()
-        for method in (
-            "select",
-            "insert",
-            "update",
-            "delete",
-            "upsert",
-            "eq",
-            "order",
-            "limit",
-            "in_",
-            "or_",
-        ):
-            getattr(query, method).return_value = query
-        query.execute.return_value = result
-        return query
-
-    mock_sb.table.side_effect = table_side_effect
-    return mock_sb
-
-
 # ---------------------------------------------------------------------------
 # Health check
 # ---------------------------------------------------------------------------
