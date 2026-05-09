@@ -247,6 +247,41 @@ describe('DocumentLibrary', () => {
     expect(screen.getByText(/no saved documents yet/i)).toBeInTheDocument();
   });
 
+  test('keeps the latest version per group and sorts grouped rows by the selected sort', () => {
+    const documents = [
+      {
+        ...baseDoc,
+        id: 'doc-b1',
+        version_group_id: 'group-b',
+        version_number: 1,
+        name: 'Beta Draft',
+      },
+      {
+        ...baseDoc,
+        id: 'doc-a1',
+        version_group_id: 'group-a',
+        version_number: 1,
+        name: 'Zulu Draft',
+      },
+      {
+        ...baseDoc,
+        id: 'doc-a2',
+        version_group_id: 'group-a',
+        version_number: '2',
+        name: 'Alpha Draft',
+      },
+    ];
+
+    renderPage({ documents });
+
+    fireEvent.change(screen.getByLabelText(/sort by/i), { target: { value: 'name' } });
+
+    const titleButtons = screen.getAllByRole('button', { name: /draft/i });
+    expect(titleButtons).toHaveLength(2);
+    expect(titleButtons[0]).toHaveTextContent('Alpha Draft');
+    expect(titleButtons[1]).toHaveTextContent('Beta Draft');
+  });
+
   test('downloads document when Download is clicked', async () => {
     const viewDocument = jest.fn().mockResolvedValue('https://signed.example/doc.pdf');
     const originalCreateObjectURL = URL.createObjectURL;

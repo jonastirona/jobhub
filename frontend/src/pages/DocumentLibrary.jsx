@@ -13,6 +13,23 @@ const SORT_OPTIONS = [
   { value: 'name', label: 'Name (A–Z)' },
 ];
 
+function getDocumentSortValue(doc, sortBy) {
+  if (!doc) return '';
+  if (sortBy === 'name') {
+    return doc.name || '';
+  }
+  return doc[sortBy] || '';
+}
+
+function compareDocumentsForLibrary(a, b, sortBy) {
+  const aValue = getDocumentSortValue(a, sortBy);
+  const bValue = getDocumentSortValue(b, sortBy);
+  if (sortBy === 'name') {
+    return aValue.localeCompare(bValue);
+  }
+  return String(bValue).localeCompare(String(aValue));
+}
+
 function formatDocumentDate(dateStr, includeTime = false) {
   if (!dateStr) return '—';
   const parsed = new Date(dateStr);
@@ -90,13 +107,15 @@ export default function DocumentLibrary() {
     const latestByGroup = new Map();
     for (const doc of documents) {
       const group = doc.version_group_id ?? doc.id;
-      const version = typeof doc.version_number === 'number' ? doc.version_number : 1;
+      const versionValue = Number(doc.version_number);
+      const version = Number.isFinite(versionValue) ? versionValue : 1;
       const cur = latestByGroup.get(group);
       if (!cur) {
         latestByGroup.set(group, doc);
         continue;
       }
-      const curVersion = typeof cur.version_number === 'number' ? cur.version_number : 1;
+      const curVersionValue = Number(cur.version_number);
+      const curVersion = Number.isFinite(curVersionValue) ? curVersionValue : 1;
       if (version > curVersion) {
         latestByGroup.set(group, doc);
       } else if (version === curVersion) {
@@ -106,20 +125,10 @@ export default function DocumentLibrary() {
       }
     }
 
-    // Preserve relative order from the original list by iterating and collecting first-seen groups
-    const seen = new Set();
-    const result = [];
-    for (const doc of documents) {
-      const group = doc.version_group_id ?? doc.id;
-      if (seen.has(group)) continue;
-      const latest = latestByGroup.get(group);
-      if (latest) {
-        result.push(latest);
-        seen.add(group);
-      }
-    }
-    return result;
-  }, [documents]);
+    return Array.from(latestByGroup.values()).sort((a, b) =>
+      compareDocumentsForLibrary(a, b, selectedSortBy)
+    );
+  }, [documents, selectedSortBy]);
   const [rewriteDoc, setRewriteDoc] = useState(null);
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [renamingDocId, setRenamingDocId] = useState(null);
