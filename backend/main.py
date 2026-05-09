@@ -1365,6 +1365,7 @@ async def create_document(
     version_number = 1
     previous_version_id = None
     storage_path = None
+    storage_bucket = DOCUMENTS_BUCKET  # Track the actual bucket used
     mime_type = PDF_MIME_TYPE
     file_size = None
     original_filename = None
@@ -1376,6 +1377,7 @@ async def create_document(
     if file is not None:
         storage_path, mime_type, file_size = await _upload_document_to_storage(sb, user_id, file)
         original_filename = file.filename
+        storage_bucket = DOCUMENTS_BUCKET  # Uploaded files go to DOCUMENTS_BUCKET
     elif source_document:
         source_path = source_document.get("storage_path")
         source_bucket = source_document.get("storage_bucket") or DOCUMENTS_BUCKET
@@ -1390,6 +1392,7 @@ async def create_document(
         mime_type = source_document.get("mime_type") or PDF_MIME_TYPE
         file_size = source_document.get("file_size")
         original_filename = source_document.get("original_filename")
+        storage_bucket = source_bucket  # Copied files go to source_bucket
     else:
         raise HTTPException(status_code=422, detail="Document file is required")
 
@@ -1400,7 +1403,7 @@ async def create_document(
         "doc_type": trimmed_doc_type,
         "status": normalized_status,
         "tags": parsed_tags,
-        "storage_bucket": DOCUMENTS_BUCKET,
+        "storage_bucket": storage_bucket,
         "storage_path": storage_path,
         "mime_type": mime_type,
         "file_size": file_size,
@@ -1412,7 +1415,7 @@ async def create_document(
     }
     response = sb.table("documents").insert(payload).execute()
     if not response.data:
-        _delete_document_from_storage(sb, DOCUMENTS_BUCKET, storage_path)
+        _delete_document_from_storage(sb, storage_bucket, storage_path)
         raise HTTPException(status_code=500, detail="Failed to create document")
     created = _normalize_single_row_response(response)
     created.setdefault("version_group_id", payload["version_group_id"])
