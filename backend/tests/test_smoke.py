@@ -1993,7 +1993,9 @@ def test_create_document_from_existing_document_without_file_copies_source_file(
         [SAMPLE_DOCUMENT],  # _get_document_for_user
         [SAMPLE_JOB],  # _assert_linked_job_exists_for_user (job validation)
         [SAMPLE_DOCUMENT],  # _assert_document_name_available_for_user (uniqueness check)
-        [{"version_number": SAMPLE_DOCUMENT["version_number"]}],  # _get_next_document_version_number
+        [
+            {"version_number": SAMPLE_DOCUMENT["version_number"]}
+        ],  # _get_next_document_version_number
         created,  # insert
     )
     with patch("main.get_supabase", return_value=mock_sb):
