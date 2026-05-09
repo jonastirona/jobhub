@@ -107,6 +107,7 @@ export default function DocumentLibrary() {
     archiveError,
     updatingIds,
     updateError, // eslint-disable-line @typescript-eslint/no-unused-vars
+    saveError,
     viewDocument,
     createDocument,
     deleteDocument,
@@ -115,6 +116,7 @@ export default function DocumentLibrary() {
     clearDuplicateError,
     clearArchiveError,
     clearUpdateError, // eslint-disable-line @typescript-eslint/no-unused-vars
+    clearSaveError,
     renameDocument,
     updateDocumentStatus,
     updateDocumentTags,
@@ -190,7 +192,8 @@ export default function DocumentLibrary() {
     setShowDuplicateForm(false);
     setDuplicateName('');
     clearDuplicateError();
-  }, [clearDuplicateError]);
+    clearSaveError();
+  }, [clearDuplicateError, clearSaveError]);
 
   useEffect(() => {
     function onKey(e) {
@@ -242,6 +245,8 @@ export default function DocumentLibrary() {
     const created = await duplicateDocument(selectedDoc.id, trimmed);
     if (created) {
       setSelectedDoc(created);
+      setVersionHistory([]);
+      setShowVersionHistory(false);
       setShowDuplicateForm(false);
       setDuplicateName('');
       await refetch();
@@ -856,6 +861,19 @@ export default function DocumentLibrary() {
                 Duplicate with new name
               </button>
             </div>
+            {saveError && (
+              <p
+                className="document-view-modal-text"
+                role="alert"
+                style={{
+                  color: 'var(--error)',
+                  fontSize: '12px',
+                  marginTop: 12,
+                }}
+              >
+                {saveError}
+              </p>
+            )}
             {showDuplicateForm && (
               <div style={{ marginTop: 14 }}>
                 <label className="draft-field-label" htmlFor="duplicate-name-input">
