@@ -415,9 +415,10 @@ def _validate_document_tags(tags: Optional[list[str]]) -> Optional[list[str]]:
             raise HTTPException(status_code=422, detail="Tags cannot be empty strings")
 
         if tag_stripped not in valid_tags_set:
+            allowed_tags = ", ".join(DOCUMENT_TAGS)
             raise HTTPException(
                 status_code=422,
-                detail=f"Invalid tag: '{tag_stripped}'. Allowed tags are: {', '.join(DOCUMENT_TAGS)}",
+                detail=f"Invalid tag: '{tag_stripped}'. Allowed tags are: {allowed_tags}",
             )
 
         normalized_tags.append(tag_stripped)
