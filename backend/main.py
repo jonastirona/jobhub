@@ -274,6 +274,7 @@ class DocumentPatch(BaseModel):
     status: Optional[str] = None
     job_id: Optional[str] = None
 
+
 class DocumentDuplicate(BaseModel):
     name: Optional[str] = None
 
