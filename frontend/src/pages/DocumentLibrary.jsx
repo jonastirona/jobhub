@@ -259,7 +259,7 @@ export default function DocumentLibrary() {
     // Allow relative requests when REACT_APP_BACKEND_URL is not configured so
     // tests that mock `fetch` (or environments using a proxy) still exercise
     // the network call. Keeping loading state deterministic for accessibility.
-    const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/\/+$/, '');
+    const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '');
     setVersionHistoryLoading(true);
     setVersionHistoryError(null);
     try {

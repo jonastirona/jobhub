@@ -385,16 +385,27 @@ def _assert_document_name_available_for_user(
     if not normalized_name:
         raise HTTPException(status_code=422, detail="name must not be blank")
 
-    response = (
+    normalized_doc_type = (doc_type or "Draft").strip() or "Draft"
+    query = (
         sb.table("documents")
         .select("id, name, doc_type, job_id, version_group_id")
         .eq("user_id", user_id)
-        .execute()
     )
+
+    if normalized_doc_type == "Draft":
+        query = query.or_("doc_type.eq.Draft,doc_type.is.null")
+    else:
+        query = query.eq("doc_type", normalized_doc_type)
+
+    if job_id is None:
+        query = query.or_("job_id.is.null")
+    else:
+        query = query.eq("job_id", job_id)
+
+    response = query.execute()
     if response.data is None:
         raise HTTPException(status_code=500, detail="Failed to validate document name")
 
-    normalized_doc_type = (doc_type or "Draft").strip() or "Draft"
     for row in response.data or []:
         if exclude_document_id and row.get("id") == exclude_document_id:
             continue
