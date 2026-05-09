@@ -1,12 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppShell from '../components/layout/AppShell';
 import AIRewriteModal from '../components/AIRewriteModal/AIRewriteModal';
+import TagSelector from '../components/common/TagSelector';
 import { useAuth } from '../context/AuthContext';
 import { useDocuments } from '../hooks/useDocuments';
 import './ShellPages.css';
 import '../styles/Dashboard.css';
 
 const DOC_TYPES = ['Resume', 'Cover Letter', 'Draft', 'Other'];
+const STATUS_FLAGS = ['draft', 'final', 'archived'];
+const DOCUMENT_TAGS = [
+  'Resume',
+  'Cover Letter',
+  'Portfolio',
+  'Transcript',
+  'Reference List',
+  'Writing Sample',
+  'Certification',
+  'Work Authorization',
+  'Offer Letter',
+  'Contract',
+  'Job Description',
+  'Interview Prep',
+  'Thank You Note',
+  'Other',
+];
 const SORT_OPTIONS = [
   { value: 'updated_at', label: 'Last Updated' },
   { value: 'created_at', label: 'Date Added' },
@@ -87,6 +105,8 @@ export default function DocumentLibrary() {
     duplicateError,
     archivingIds,
     archiveError,
+    updatingIds,
+    updateError, // eslint-disable-line @typescript-eslint/no-unused-vars
     viewDocument,
     createDocument,
     deleteDocument,
@@ -94,7 +114,10 @@ export default function DocumentLibrary() {
     clearRenameError,
     clearDuplicateError,
     clearArchiveError,
+    clearUpdateError, // eslint-disable-line @typescript-eslint/no-unused-vars
     renameDocument,
+    updateDocumentStatus,
+    updateDocumentTags,
     duplicateDocument,
     archiveDocument,
     restoreDocument,
@@ -133,6 +156,10 @@ export default function DocumentLibrary() {
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [renamingDocId, setRenamingDocId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
+  const [editingStatus, setEditingStatus] = useState(false);
+  const [statusValue, setStatusValue] = useState('');
+  const [editingTags, setEditingTags] = useState(false);
+  const [tagsValue, setTagsValue] = useState([]);
   const [versionHistory, setVersionHistory] = useState([]);
   const [versionHistoryLoading, setVersionHistoryLoading] = useState(false);
   const [versionHistoryError, setVersionHistoryError] = useState(null);
@@ -150,6 +177,10 @@ export default function DocumentLibrary() {
     setVersionHistory([]);
     setVersionHistoryError(null);
     setDuplicateName('');
+    setEditingStatus(false);
+    setStatusValue(doc.status || '');
+    setEditingTags(false);
+    setTagsValue(Array.isArray(doc.tags) ? doc.tags : []);
     clearDuplicateError();
     setSelectedDoc(doc);
   }
@@ -252,6 +283,36 @@ export default function DocumentLibrary() {
   function cancelRename() {
     setRenamingDocId(null);
     setRenameValue('');
+  }
+
+  async function commitStatusChange(documentId) {
+    if (!statusValue.trim()) {
+      setEditingStatus(false);
+      return;
+    }
+    const result = await updateDocumentStatus(documentId, statusValue);
+    if (result) {
+      setEditingStatus(false);
+      setSelectedDoc(result);
+    }
+  }
+
+  function cancelStatusChange() {
+    setEditingStatus(false);
+    setStatusValue(selectedDoc?.status || '');
+  }
+
+  async function commitTagsChange(documentId) {
+    const result = await updateDocumentTags(documentId, tagsValue);
+    if (result) {
+      setEditingTags(false);
+      setSelectedDoc(result);
+    }
+  }
+
+  function cancelTagsChange() {
+    setEditingTags(false);
+    setTagsValue(Array.isArray(selectedDoc?.tags) ? selectedDoc.tags : []);
   }
 
   async function loadVersionHistory(docId) {
@@ -649,21 +710,105 @@ export default function DocumentLibrary() {
               <strong>Type:</strong> {selectedDoc.doc_type || 'Draft'}
             </p>
             <p className="document-view-modal-text">
-              <strong>Status:</strong> {selectedDoc.status || '—'}
+              <strong>Status:</strong>{' '}
+              {editingStatus ? (
+                <select
+                  className="inline-rename-input"
+                  value={statusValue}
+                  onChange={(e) => setStatusValue(e.target.value)}
+                  onBlur={() => commitStatusChange(selectedDoc.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      commitStatusChange(selectedDoc.id);
+                    } else if (e.key === 'Escape') {
+                      cancelStatusChange();
+                    }
+                  }}
+                  autoFocus
+                  disabled={updatingIds.has(selectedDoc.id)}
+                >
+                  <option value="">—</option>
+                  {STATUS_FLAGS.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <>
+                  <span>{selectedDoc.status || '—'}</span>
+                  <button
+                    type="button"
+                    className="document-view-modal-btn"
+                    onClick={() => {
+                      setEditingStatus(true);
+                      setStatusValue(selectedDoc.status || '');
+                    }}
+                    disabled={updatingIds.has(selectedDoc.id)}
+                    style={{ marginLeft: 8, padding: '2px 6px', fontSize: '12px' }}
+                  >
+                    Edit
+                  </button>
+                </>
+              )}
             </p>
             <p className="document-view-modal-text">
               <strong>Tags:</strong>{' '}
-              {Array.isArray(selectedDoc.tags) && selectedDoc.tags.length > 0
-                ? selectedDoc.tags.map((t, index) => (
-                    <span
-                      key={`${t}-${index}`}
-                      className="draft-field-label"
-                      style={{ display: 'inline-block', marginRight: 8 }}
+              {editingTags ? (
+                <div style={{ marginTop: 8 }}>
+                  <TagSelector
+                    selectedTags={tagsValue}
+                    availableTags={DOCUMENT_TAGS}
+                    onTagsChange={setTagsValue}
+                    disabled={updatingIds.has(selectedDoc.id)}
+                    label=""
+                  />
+                  <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="document-view-modal-btn"
+                      onClick={() => commitTagsChange(selectedDoc.id)}
+                      disabled={updatingIds.has(selectedDoc.id)}
                     >
-                      {t}
-                    </span>
-                  ))
-                : '—'}
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      className="document-view-modal-btn document-view-modal-btn--cancel"
+                      onClick={cancelTagsChange}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {Array.isArray(selectedDoc.tags) && selectedDoc.tags.length > 0
+                    ? selectedDoc.tags.map((t, index) => (
+                        <span
+                          key={`${t}-${index}`}
+                          className="draft-field-label"
+                          style={{ display: 'inline-block', marginRight: 8 }}
+                        >
+                          {t}
+                        </span>
+                      ))
+                    : '—'}
+                  <button
+                    type="button"
+                    className="document-view-modal-btn"
+                    onClick={() => {
+                      setEditingTags(true);
+                      setTagsValue(Array.isArray(selectedDoc.tags) ? selectedDoc.tags : []);
+                    }}
+                    disabled={updatingIds.has(selectedDoc.id)}
+                    style={{ marginLeft: 8, padding: '2px 6px', fontSize: '12px' }}
+                  >
+                    Edit
+                  </button>
+                </>
+              )}
             </p>
             <p className="document-view-modal-text">
               <strong>Version:</strong>{' '}

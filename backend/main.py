@@ -71,6 +71,22 @@ JOB_STATUSES = {
 # Must stay in sync with the DB CHECK constraint added in migration 016
 # (`documents_status_allowed_values`).
 DOCUMENT_STATUSES = {"draft", "final", "archived"}
+DOCUMENT_TAGS = [
+    "Resume",
+    "Cover Letter",
+    "Portfolio",
+    "Transcript",
+    "Reference List",
+    "Writing Sample",
+    "Certification",
+    "Work Authorization",
+    "Offer Letter",
+    "Contract",
+    "Job Description",
+    "Interview Prep",
+    "Thank You Note",
+    "Other",
+]
 JOB_STATUS_ALIAS = {"interview": "interviewing", "offer": "offered"}
 PDF_EXTENSION = ".pdf"
 PDF_MIME_TYPE = "application/pdf"
@@ -272,6 +288,7 @@ class DocumentUpdate(BaseModel):
 class DocumentPatch(BaseModel):
     name: Optional[str] = None
     status: Optional[str] = None
+    tags: Optional[list[str]] = None
     job_id: Optional[str] = None
 
 
@@ -366,6 +383,54 @@ def _assert_document_status(status: Optional[str]) -> Optional[str]:
     if s not in DOCUMENT_STATUSES:
         raise HTTPException(status_code=422, detail="status must be one of: draft, final, archived")
     return s
+
+
+def _validate_document_tags(tags: Optional[list[str]]) -> Optional[list[str]]:
+    """Validate and normalize document tags.
+
+    Args:
+        tags: List of tag strings to validate
+
+    Returns:
+        Normalized list of tags or None if no tags provided
+
+    Raises:
+        HTTPException if any tag is invalid
+    """
+    if not tags:
+        return None
+
+    if not isinstance(tags, list):
+        raise HTTPException(status_code=422, detail="tags must be a list")
+
+    valid_tags_set = set(DOCUMENT_TAGS)
+    normalized_tags = []
+
+    for tag in tags:
+        if not isinstance(tag, str):
+            raise HTTPException(status_code=422, detail="Each tag must be a string")
+
+        tag_stripped = tag.strip()
+        if not tag_stripped:
+            raise HTTPException(status_code=422, detail="Tags cannot be empty strings")
+
+        if tag_stripped not in valid_tags_set:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid tag: '{tag_stripped}'. Allowed tags are: {', '.join(DOCUMENT_TAGS)}",
+            )
+
+        normalized_tags.append(tag_stripped)
+
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_tags = []
+    for tag in normalized_tags:
+        if tag not in seen:
+            seen.add(tag)
+            unique_tags.append(tag)
+
+    return unique_tags if unique_tags else None
 
 
 def _normalize_document_name(name: Optional[str]) -> str:
@@ -1293,6 +1358,12 @@ DOCUMENT_SORT_OPTIONS = {"updated_at", "created_at", "name"}
 DOCUMENT_TYPE_OPTIONS = {"Resume", "Cover Letter", "Draft", "Other"}
 
 
+@app.get("/documents/tags")
+def get_document_tags():
+    """Get the list of available document tags."""
+    return {"tags": DOCUMENT_TAGS}
+
+
 @app.get("/documents")
 def list_documents(
     authorization: Optional[str] = Header(default=None),
@@ -1371,6 +1442,9 @@ async def create_document(
                     detail="tags must be a JSON array or comma-separated list",
                 )
             parsed_tags = [str(x).strip() for x in parsed if str(x).strip()]
+
+        # Validate the tags
+        parsed_tags = _validate_document_tags(parsed_tags)
 
     version_group_id = str(uuid.uuid4())
     version_number = 1
@@ -1523,6 +1597,11 @@ def patch_document(
         if not body.status.strip():
             raise HTTPException(status_code=422, detail="status must not be blank")
         updates["status"] = _assert_document_status(body.status)
+    if "tags" in body.model_fields_set:
+        if body.tags is None:
+            updates["tags"] = None  # explicit clear tags
+        else:
+            updates["tags"] = _validate_document_tags(body.tags)
     if "job_id" in body.model_fields_set:
         if body.job_id is None:
             updates["job_id"] = None  # explicit unlink

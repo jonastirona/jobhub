@@ -18,6 +18,8 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
   const [archiveError, setArchiveError] = useState(null);
   const [linkingIds, setLinkingIds] = useState(new Set());
   const [linkError, setLinkError] = useState(null);
+  const [updatingIds, setUpdatingIds] = useState(new Set());
+  const [updateError, setUpdateError] = useState(null);
   const pendingFetchRef = useRef(null);
   const pendingSaveRef = useRef(null);
 
@@ -239,6 +241,10 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     setArchiveError(null);
   }, []);
 
+  const clearUpdateError = useCallback(() => {
+    setUpdateError(null);
+  }, []);
+
   const deleteDocument = useCallback(
     async (documentId) => {
       const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
@@ -316,6 +322,93 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         return null;
       } finally {
         setRenamingId(null);
+      }
+    },
+    [accessToken, sortDocuments]
+  );
+
+  const updateDocumentStatus = useCallback(
+    async (documentId, newStatus) => {
+      const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
+      if (!backendBase || !accessToken || !documentId) return null;
+      const trimmed = (newStatus || '').trim();
+      if (!trimmed) {
+        setUpdateError('Status must not be blank.');
+        return null;
+      }
+      setUpdatingIds((prev) => new Set([...prev, documentId]));
+      setUpdateError(null);
+      try {
+        const res = await fetch(`${backendBase}/documents/${documentId}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status: trimmed }),
+        });
+        if (!res.ok) {
+          throw new Error(
+            (await extractErrorMessage(res)) || `Failed to update document status (${res.status})`
+          );
+        }
+        const updated = await res.json();
+        setDocuments((prev) =>
+          sortDocuments(prev.map((d) => (d.id === documentId ? { ...d, ...updated } : d)))
+        );
+        return updated;
+      } catch (err) {
+        Sentry.captureException(err);
+        setUpdateError(err instanceof Error ? err.message : String(err));
+        return null;
+      } finally {
+        setUpdatingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(documentId);
+          return next;
+        });
+      }
+    },
+    [accessToken, sortDocuments]
+  );
+
+  const updateDocumentTags = useCallback(
+    async (documentId, newTags) => {
+      const backendBase = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/+$/, '') || null;
+      if (!backendBase || !accessToken || !documentId) return null;
+
+      const tagsArray = Array.isArray(newTags) ? newTags : [];
+      setUpdatingIds((prev) => new Set([...prev, documentId]));
+      setUpdateError(null);
+      try {
+        const res = await fetch(`${backendBase}/documents/${documentId}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ tags: tagsArray.length > 0 ? tagsArray : null }),
+        });
+        if (!res.ok) {
+          throw new Error(
+            (await extractErrorMessage(res)) || `Failed to update document tags (${res.status})`
+          );
+        }
+        const updated = await res.json();
+        setDocuments((prev) =>
+          sortDocuments(prev.map((d) => (d.id === documentId ? { ...d, ...updated } : d)))
+        );
+        return updated;
+      } catch (err) {
+        Sentry.captureException(err);
+        setUpdateError(err instanceof Error ? err.message : String(err));
+        return null;
+      } finally {
+        setUpdatingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(documentId);
+          return next;
+        });
       }
     },
     [accessToken, sortDocuments]
@@ -500,17 +593,22 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
     archiveError,
     linkingIds,
     linkError,
+    updatingIds,
+    updateError,
     clearSaveError,
     clearDeleteError,
     clearRenameError,
     clearDuplicateError,
     clearArchiveError,
     clearLinkError,
+    clearUpdateError,
     refetch,
     createDocument,
     deleteDocument,
     viewDocument,
     renameDocument,
+    updateDocumentStatus,
+    updateDocumentTags,
     duplicateDocument,
     archiveDocument,
     restoreDocument,
