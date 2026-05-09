@@ -127,7 +127,7 @@ describe('DocumentLibrary', () => {
     const refetch = jest.fn().mockResolvedValue(undefined);
     renderPage({ createDocument, refetch, clearDeleteError: jest.fn() });
 
-    fireEvent.click(screen.getByRole('button', { name: /view document/i }));
+    fireEvent.click(screen.getByRole('button', { name: /view details/i }));
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /upload new version/i })).toBeInTheDocument();
     });
@@ -165,7 +165,7 @@ describe('DocumentLibrary', () => {
     );
     renderPage({ clearDeleteError: jest.fn() });
 
-    fireEvent.click(screen.getByRole('button', { name: /view document/i }));
+    fireEvent.click(screen.getByRole('button', { name: /view details/i }));
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /view version history/i })).toBeInTheDocument();
     });
