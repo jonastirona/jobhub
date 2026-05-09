@@ -468,7 +468,9 @@ export default function DocumentLibrary() {
                                 disabled={rowBusy}
                               >
                                 {doc.name}
-                                <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)' }}>
+                                <span
+                                  style={{ fontSize: '0.85em', color: 'var(--text-secondary)' }}
+                                >
                                   {getVersionBadge(doc)}
                                 </span>
                               </button>
@@ -597,7 +599,9 @@ export default function DocumentLibrary() {
                             </p>
                             {getVersionCount(doc) > 1 && (
                               <p className="document-view-modal-text">
-                                <strong>Version:</strong> {typeof doc.version_number === 'number' ? doc.version_number : 1} of {getVersionCount(doc)}
+                                <strong>Version:</strong>{' '}
+                                {typeof doc.version_number === 'number' ? doc.version_number : 1} of{' '}
+                                {getVersionCount(doc)}
                               </p>
                             )}
                             <p className="document-view-modal-text">
@@ -686,7 +690,14 @@ export default function DocumentLibrary() {
             <p className="document-view-modal-text">
               <strong>Document:</strong> {versioningDoc.name}
             </p>
-            <p style={{ marginTop: 12, marginBottom: 16, fontSize: '0.95em', color: 'var(--text-secondary)' }}>
+            <p
+              style={{
+                marginTop: 12,
+                marginBottom: 16,
+                fontSize: '0.95em',
+                color: 'var(--text-secondary)',
+              }}
+            >
               Choose how to create the new version:
             </p>
             <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>

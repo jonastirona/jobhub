@@ -771,8 +771,8 @@ export default function DocumentLibrary() {
                       <li key={version.id} className="document-view-modal-text">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span>
-                          {version.name} - v{version.version_number || 1} -{' '}
-                          {formatDocumentDate(version.updated_at || version.created_at, true)}
+                            {version.name} - v{version.version_number || 1} -{' '}
+                            {formatDocumentDate(version.updated_at || version.created_at, true)}
                           </span>
                           <button
                             type="button"
