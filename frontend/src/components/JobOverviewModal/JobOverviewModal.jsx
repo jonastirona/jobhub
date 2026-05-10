@@ -61,6 +61,8 @@ export default function JobOverviewModal({
   onRefreshDocuments,
   onOpenDocument,
   onDownloadDocument,
+  downloadError = null,
+  clearDownloadError,
   onDocumentSaved,
   onJobUpdated,
   onLinkDocument,
@@ -78,8 +80,9 @@ export default function JobOverviewModal({
 
   useEffect(() => {
     clearLinkError?.();
+    clearDownloadError?.();
     setSelectedLinkDocId('');
-  }, [job?.id, clearLinkError]);
+  }, [job?.id, clearLinkError, clearDownloadError]);
 
   useEffect(() => {
     if (!selectedLinkDocId) return;
@@ -306,6 +309,22 @@ export default function JobOverviewModal({
               {linkError && (
                 <p className="job-overview-doc-empty job-overview-link-error" role="alert">
                   {linkError}
+                </p>
+              )}
+
+              {downloadError && (
+                <p className="job-overview-doc-empty job-overview-link-error" role="alert">
+                  Download error: {downloadError}
+                  {clearDownloadError && (
+                    <button
+                      type="button"
+                      onClick={clearDownloadError}
+                      className="job-overview-error-dismiss"
+                      aria-label="Dismiss download error"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </p>
               )}
 
