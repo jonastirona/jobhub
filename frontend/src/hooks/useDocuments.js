@@ -353,9 +353,12 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
           );
         }
         const updated = await res.json();
-        setDocuments((prev) =>
-          sortDocuments(prev.map((d) => (d.id === documentId ? { ...d, ...updated } : d)))
-        );
+        setDocuments((prev) => {
+          if (updated?.status === 'archived' && !includeArchived) {
+            return sortDocuments(prev.filter((d) => d.id !== documentId));
+          }
+          return sortDocuments(prev.map((d) => (d.id === documentId ? { ...d, ...updated } : d)));
+        });
         return updated;
       } catch (err) {
         Sentry.captureException(err);
@@ -369,7 +372,7 @@ export function useDocuments(accessToken, loadOnMount = true, filters = {}) {
         });
       }
     },
-    [accessToken, sortDocuments]
+    [accessToken, sortDocuments, includeArchived]
   );
 
   const updateDocumentTags = useCallback(
