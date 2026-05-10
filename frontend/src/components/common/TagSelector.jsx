@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import './TagSelector.css';
 
 /**
@@ -11,6 +12,8 @@ export default function TagSelector({
   disabled = false,
   label = 'Tags',
 }) {
+  const labelId = useId();
+
   const handleToggleTag = (tag) => {
     if (disabled) return;
 
@@ -28,9 +31,13 @@ export default function TagSelector({
 
   return (
     <div className="tag-selector">
-      {label && <label className="tag-selector-label">{label}</label>}
+      {label && (
+        <div id={labelId} className="tag-selector-label">
+          {label}
+        </div>
+      )}
 
-      <div className="tag-selector-buttons">
+      <div className="tag-selector-buttons" role="group" aria-labelledby={label ? labelId : undefined}>
         {availableTags.map((tag) => (
           <button
             key={tag}
