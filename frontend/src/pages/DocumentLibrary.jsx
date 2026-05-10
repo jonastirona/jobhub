@@ -4,6 +4,7 @@ import AIRewriteModal from '../components/AIRewriteModal/AIRewriteModal';
 import TagSelector from '../components/common/TagSelector';
 import { useAuth } from '../context/AuthContext';
 import { useDocuments } from '../hooks/useDocuments';
+import { extractErrorMessage } from '../utils/apiError';
 import './ShellPages.css';
 import '../styles/Dashboard.css';
 
@@ -333,7 +334,9 @@ export default function DocumentLibrary() {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (!res.ok) {
-        throw new Error(`Failed to load version history (${res.status})`);
+        const message =
+          (await extractErrorMessage(res)) || `Failed to load version history (${res.status})`;
+        throw new Error(message);
       }
       const data = await res.json();
       setVersionHistory(Array.isArray(data) ? data : []);
