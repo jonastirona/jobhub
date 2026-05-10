@@ -370,7 +370,9 @@ export default function Dashboard() {
         const response = await fetch(url);
         if (!response.ok) {
           setDownloadError(
-            `Failed to download document: ${response.status === 401 ? 'link expired or unauthorized' : response.status}`
+            `Failed to download document: ${
+              response.status === 401 ? 'link expired or unauthorized' : response.status
+            }`
           );
           return;
         }
@@ -389,9 +391,7 @@ export default function Dashboard() {
         }
       } catch (err) {
         Sentry.captureException(err);
-        setDownloadError(
-          err instanceof Error ? err.message : 'Failed to download document'
-        );
+        setDownloadError(err instanceof Error ? err.message : 'Failed to download document');
       }
     },
     [viewDocument]
