@@ -107,7 +107,7 @@ export default function DocumentLibrary() {
     archivingIds,
     archiveError,
     updatingIds,
-    updateError, // eslint-disable-line @typescript-eslint/no-unused-vars
+    updateError,
     saveError,
     viewDocument,
     createDocument,
@@ -116,7 +116,7 @@ export default function DocumentLibrary() {
     clearRenameError,
     clearDuplicateError,
     clearArchiveError,
-    clearUpdateError, // eslint-disable-line @typescript-eslint/no-unused-vars
+    clearUpdateError,
     clearSaveError,
     renameDocument,
     updateDocumentStatus,
@@ -192,9 +192,12 @@ export default function DocumentLibrary() {
     setSelectedDoc(null);
     setShowDuplicateForm(false);
     setDuplicateName('');
+    setEditingStatus(false);
+    setEditingTags(false);
     clearDuplicateError();
     clearSaveError();
-  }, [clearDuplicateError, clearSaveError]);
+    clearUpdateError();
+  }, [clearDuplicateError, clearSaveError, clearUpdateError]);
 
   useEffect(() => {
     function onKey(e) {
@@ -306,6 +309,7 @@ export default function DocumentLibrary() {
   function cancelStatusChange() {
     setEditingStatus(false);
     setStatusValue(selectedDoc?.status || '');
+    clearUpdateError();
   }
 
   async function commitTagsChange(documentId) {
@@ -319,6 +323,7 @@ export default function DocumentLibrary() {
   function cancelTagsChange() {
     setEditingTags(false);
     setTagsValue(Array.isArray(selectedDoc?.tags) ? selectedDoc.tags : []);
+    clearUpdateError();
   }
 
   async function loadVersionHistory(docId) {
@@ -818,6 +823,19 @@ export default function DocumentLibrary() {
                 </>
               )}
             </p>
+            {updateError && (
+              <p
+                className="document-view-modal-text"
+                role="alert"
+                style={{
+                  color: 'var(--error)',
+                  fontSize: '12px',
+                  marginTop: 8,
+                }}
+              >
+                {updateError}
+              </p>
+            )}
             <p className="document-view-modal-text">
               <strong>Version:</strong>{' '}
               {selectedDoc.version_number ? `v${selectedDoc.version_number}` : 'v1'}
