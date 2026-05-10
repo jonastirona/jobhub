@@ -37,7 +37,11 @@ export default function TagSelector({
         </div>
       )}
 
-      <div className="tag-selector-buttons" role="group" aria-labelledby={label ? labelId : undefined}>
+      <div
+        className="tag-selector-buttons"
+        role="group"
+        aria-labelledby={label ? labelId : undefined}
+      >
         {availableTags.map((tag) => (
           <button
             key={tag}
