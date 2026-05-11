@@ -465,9 +465,10 @@ describe('DocumentLibrary', () => {
     });
   });
 
-  test('hides upload form after successful upload', async () => {
+  test('hides upload form and refetches after successful upload', async () => {
     const createDocument = jest.fn().mockResolvedValue({ ...baseDoc, id: 'doc-new' });
-    renderPage({ createDocument });
+    const refetch = jest.fn();
+    renderPage({ createDocument, refetch });
 
     fireEvent.click(screen.getByRole('button', { name: /upload document/i }));
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'My Resume' } });
@@ -479,6 +480,7 @@ describe('DocumentLibrary', () => {
 
     await waitFor(() => {
       expect(screen.queryByLabelText(/^name$/i)).not.toBeInTheDocument();
+      expect(refetch).toHaveBeenCalled();
     });
   });
 
