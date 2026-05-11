@@ -203,7 +203,7 @@ export default function DocumentLibrary() {
   async function handleUpload(e) {
     e.preventDefault();
     const trimmedName = uploadName.trim();
-    if (!trimmedName || !uploadFile) return;
+    if (!trimmedName || !uploadFile || saving) return;
     const result = await createDocument({
       name: trimmedName,
       doc_type: uploadType,
@@ -230,7 +230,9 @@ export default function DocumentLibrary() {
           <button
             type="button"
             className="btn-add"
+            disabled={saving}
             onClick={() => {
+              if (saving) return;
               if (showUploadForm) {
                 resetUploadForm();
               } else {

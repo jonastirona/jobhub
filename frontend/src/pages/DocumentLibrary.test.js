@@ -489,8 +489,40 @@ describe('DocumentLibrary', () => {
   });
 
   test('upload submit button is disabled while saving', () => {
-    renderPage({ saving: true });
+    const { rerender } = renderPage({ saving: false });
     fireEvent.click(screen.getByRole('button', { name: /upload document/i }));
+
+    mockUseDocuments.mockReturnValue({
+      documents: [baseDoc],
+      loading: false,
+      error: null,
+      saving: true,
+      saveError: null,
+      deletingId: null,
+      deleteError: null,
+      renamingId: null,
+      renameError: null,
+      duplicatingId: null,
+      duplicateError: null,
+      archivingIds: new Set(),
+      archiveError: null,
+      viewDocument: jest.fn(),
+      deleteDocument: jest.fn(),
+      renameDocument: jest.fn(),
+      duplicateDocument: jest.fn(),
+      archiveDocument: jest.fn(),
+      restoreDocument: jest.fn(),
+      createDocument: jest.fn(),
+      clearDeleteError: jest.fn(),
+      clearRenameError: jest.fn(),
+      clearDuplicateError: jest.fn(),
+      clearArchiveError: jest.fn(),
+      clearSaveError: jest.fn(),
+      refetch: jest.fn(),
+    });
+    rerender(<DocumentLibrary />);
+
     expect(screen.getByRole('button', { name: /uploading/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /upload document/i })).toBeDisabled();
   });
 });
