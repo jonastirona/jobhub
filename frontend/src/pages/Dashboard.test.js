@@ -244,18 +244,15 @@ describe('Dashboard draft modal accessibility', () => {
       'title',
       'Edit application'
     );
-    expect(screen.getByRole('button', { name: /save draft for backend engineer/i })).toHaveAttribute(
-      'title',
-      'Save draft'
-    );
-    expect(screen.getByRole('button', { name: /archive application backend engineer/i })).toHaveAttribute(
-      'title',
-      'Archive application'
-    );
-    expect(screen.getByRole('button', { name: /delete application backend engineer/i })).toHaveAttribute(
-      'title',
-      'Delete application'
-    );
+    expect(
+      screen.getByRole('button', { name: /save draft for backend engineer/i })
+    ).toHaveAttribute('title', 'Save draft');
+    expect(
+      screen.getByRole('button', { name: /archive application backend engineer/i })
+    ).toHaveAttribute('title', 'Archive application');
+    expect(
+      screen.getByRole('button', { name: /delete application backend engineer/i })
+    ).toHaveAttribute('title', 'Delete application');
   });
 
   test('research button shows "No research saved" tooltip when no research exists', () => {

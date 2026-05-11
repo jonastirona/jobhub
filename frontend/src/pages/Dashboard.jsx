@@ -898,7 +898,9 @@ export default function Dashboard() {
                             aria-label={
                               job.research?.trim() ? 'View saved research' : 'No research saved'
                             }
-                            title={job.research?.trim() ? 'View saved research' : 'No research saved'}
+                            title={
+                              job.research?.trim() ? 'View saved research' : 'No research saved'
+                            }
                             onClick={() => openResearch(job)}
                             disabled={deletingJobId === job.id}
                           >
