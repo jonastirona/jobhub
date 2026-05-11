@@ -1503,7 +1503,11 @@ async def create_document(
         "version_number": version_number,
         "previous_version_id": previous_version_id,
     }
-    response = sb.table("documents").insert(payload).execute()
+    try:
+        response = sb.table("documents").insert(payload).execute()
+    except Exception:
+        _delete_document_from_storage(sb, storage_bucket, storage_path)
+        raise HTTPException(status_code=500, detail="Failed to create document")
     if not response.data:
         _delete_document_from_storage(sb, storage_bucket, storage_path)
         raise HTTPException(status_code=500, detail="Failed to create document")
