@@ -83,10 +83,21 @@ export function contentToPdfBlob(content, { singlePage = false } = {}) {
 
   let scale = 1.0;
   if (singlePage) {
-    let lo = 0.3, hi = 2.0;
+    let lo = 0.3,
+      hi = 2.0;
     for (let i = 0; i < 14; i++) {
       const mid = (lo + hi) / 2;
-      const testBottom = processLines(doc, content, marginX, maxWidth, mid, false, 0, pageHeight, marginY);
+      const testBottom = processLines(
+        doc,
+        content,
+        marginX,
+        maxWidth,
+        mid,
+        false,
+        0,
+        pageHeight,
+        marginY
+      );
       if (testBottom <= availableHeight) lo = mid;
       else hi = mid;
     }
