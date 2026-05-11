@@ -58,6 +58,8 @@ export default function DocumentLibrary() {
     documents,
     loading,
     error,
+    saving,
+    saveError,
     deletingId,
     deleteError,
     renamingId,
@@ -71,10 +73,12 @@ export default function DocumentLibrary() {
     clearDeleteError,
     clearRenameError,
     clearArchiveError,
+    clearSaveError,
     renameDocument,
     duplicateDocument,
     archiveDocument,
     restoreDocument,
+    createDocument,
     refetch,
   } = useDocuments(session?.access_token, true, filters);
 
@@ -83,6 +87,11 @@ export default function DocumentLibrary() {
   const [renamingDocId, setRenamingDocId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
   const skipBlurRef = useRef(false);
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [uploadName, setUploadName] = useState('');
+  const [uploadType, setUploadType] = useState('Resume');
+  const [uploadFile, setUploadFile] = useState(null);
+  const uploadFileRef = useRef(null);
 
   async function openDocument(documentId) {
     const url = await viewDocument(documentId);
@@ -182,6 +191,29 @@ export default function DocumentLibrary() {
     skipBlurRef.current = false;
   }
 
+  function resetUploadForm() {
+    setShowUploadForm(false);
+    setUploadName('');
+    setUploadType('Resume');
+    setUploadFile(null);
+    if (uploadFileRef.current) uploadFileRef.current.value = '';
+    clearSaveError();
+  }
+
+  async function handleUpload(e) {
+    e.preventDefault();
+    const trimmedName = uploadName.trim();
+    if (!trimmedName || !uploadFile) return;
+    const result = await createDocument({
+      name: trimmedName,
+      doc_type: uploadType,
+      file: uploadFile,
+    });
+    if (result) {
+      resetUploadForm();
+    }
+  }
+
   return (
     <AppShell title="Document Library" notificationCount={0}>
       <section className="shell-card" aria-labelledby="document-library-heading">
@@ -194,7 +226,90 @@ export default function DocumentLibrary() {
               Uploaded draft documents are stored in secure storage and linked to job context.
             </p>
           </div>
+          <button
+            type="button"
+            className="btn-add"
+            onClick={() => {
+              clearSaveError();
+              setShowUploadForm((prev) => !prev);
+            }}
+          >
+            + Upload Document
+          </button>
         </div>
+
+        {showUploadForm && (
+          <form className="doc-upload-form" onSubmit={handleUpload} noValidate>
+            <div className="doc-upload-row">
+              <div className="doc-upload-field">
+                <label htmlFor="upload-doc-name" className="dashboard-sort-label">
+                  Name
+                </label>
+                <input
+                  id="upload-doc-name"
+                  type="text"
+                  className="jf-input"
+                  value={uploadName}
+                  onChange={(e) => setUploadName(e.target.value)}
+                  placeholder="Document name"
+                  required
+                />
+              </div>
+              <div className="doc-upload-field">
+                <label htmlFor="upload-doc-type" className="dashboard-sort-label">
+                  Type
+                </label>
+                <select
+                  id="upload-doc-type"
+                  className="jf-input"
+                  value={uploadType}
+                  onChange={(e) => setUploadType(e.target.value)}
+                >
+                  {DOC_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="doc-upload-field">
+                <label htmlFor="upload-doc-file" className="dashboard-sort-label">
+                  File (PDF)
+                </label>
+                <input
+                  id="upload-doc-file"
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  ref={uploadFileRef}
+                  onChange={(e) => setUploadFile(e.target.files[0] || null)}
+                  required
+                />
+              </div>
+            </div>
+            {saveError && (
+              <p className="table-empty table-state--error" role="alert">
+                {saveError}
+              </p>
+            )}
+            <div className="doc-upload-actions">
+              <button
+                type="submit"
+                className="btn-add"
+                disabled={saving || !uploadName.trim() || !uploadFile}
+              >
+                {saving ? 'Uploading…' : 'Upload'}
+              </button>
+              <button
+                type="button"
+                className="view-toggle-btn"
+                onClick={resetUploadForm}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
 
         <div className="table-search-row">
           <div className="dashboard-filter-controls">
@@ -478,6 +593,7 @@ export default function DocumentLibrary() {
                               type="button"
                               className="action-btn"
                               aria-label="Delete document"
+                              title="Delete document"
                               onClick={() => handleDeleteDocument(doc.id, doc.name)}
                               disabled={rowBusy}
                             >

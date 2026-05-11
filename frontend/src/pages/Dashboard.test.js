@@ -229,4 +229,64 @@ describe('Dashboard draft modal accessibility', () => {
     expect(request.body).toBe(JSON.stringify({ is_archived: true }));
     await waitFor(() => expect(refetch).toHaveBeenCalled());
   });
+
+  test('action buttons have correct title tooltips', () => {
+    renderPage();
+    expect(screen.getByRole('button', { name: /view application/i })).toHaveAttribute(
+      'title',
+      'View application'
+    );
+    expect(screen.getByRole('button', { name: /view stage history/i })).toHaveAttribute(
+      'title',
+      'View stage history'
+    );
+    expect(screen.getByRole('button', { name: /edit application/i })).toHaveAttribute(
+      'title',
+      'Edit application'
+    );
+    expect(screen.getByRole('button', { name: /save draft for backend engineer/i })).toHaveAttribute(
+      'title',
+      'Save draft'
+    );
+    expect(screen.getByRole('button', { name: /archive application backend engineer/i })).toHaveAttribute(
+      'title',
+      'Archive application'
+    );
+    expect(screen.getByRole('button', { name: /delete application backend engineer/i })).toHaveAttribute(
+      'title',
+      'Delete application'
+    );
+  });
+
+  test('research button shows "No research saved" tooltip when no research exists', () => {
+    renderPage();
+    expect(screen.getByRole('button', { name: /no research saved/i })).toHaveAttribute(
+      'title',
+      'No research saved'
+    );
+  });
+
+  test('research button shows "View saved research" tooltip when research exists', () => {
+    renderPage({
+      jobsHookOverrides: {
+        jobs: [{ ...JOB, research: 'Some research notes' }],
+        meta: {
+          total: 1,
+          page: 1,
+          pageSize: 10,
+          totalPages: 1,
+          availableStatuses: [],
+          availableLocations: [],
+          statusCounts: { interviewing: 0, offered: 0 },
+        },
+        loading: false,
+        error: null,
+        refetch: jest.fn(),
+      },
+    });
+    expect(screen.getByRole('button', { name: /view saved research/i })).toHaveAttribute(
+      'title',
+      'View saved research'
+    );
+  });
 });
