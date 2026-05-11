@@ -286,4 +286,27 @@ describe('Dashboard draft modal accessibility', () => {
       'View saved research'
     );
   });
+
+  test('archive button shows "Restore application" tooltip for an archived job', () => {
+    renderPage({
+      jobsHookOverrides: {
+        jobs: [{ ...JOB, is_archived: true }],
+        meta: {
+          total: 1,
+          page: 1,
+          pageSize: 10,
+          totalPages: 1,
+          availableStatuses: [],
+          availableLocations: [],
+          statusCounts: { interviewing: 0, offered: 0 },
+        },
+        loading: false,
+        error: null,
+        refetch: jest.fn(),
+      },
+    });
+    expect(
+      screen.getByRole('button', { name: /restore application backend engineer/i })
+    ).toHaveAttribute('title', 'Restore application');
+  });
 });

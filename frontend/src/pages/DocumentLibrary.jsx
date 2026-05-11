@@ -211,6 +211,7 @@ export default function DocumentLibrary() {
     });
     if (result) {
       resetUploadForm();
+      refetch();
     }
   }
 
@@ -223,15 +224,19 @@ export default function DocumentLibrary() {
               Documents
             </h2>
             <p className="shell-card-subtitle">
-              Uploaded draft documents are stored in secure storage and linked to job context.
+              Upload general documents or job-linked documents. All files are stored securely.
             </p>
           </div>
           <button
             type="button"
             className="btn-add"
             onClick={() => {
-              clearSaveError();
-              setShowUploadForm((prev) => !prev);
+              if (showUploadForm) {
+                resetUploadForm();
+              } else {
+                clearSaveError();
+                setShowUploadForm(true);
+              }
             }}
           >
             + Upload Document
