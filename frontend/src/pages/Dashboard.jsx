@@ -831,6 +831,7 @@ export default function Dashboard() {
                             type="button"
                             className="action-btn"
                             aria-label="View application"
+                            title="View application"
                             onClick={() => openView(job)}
                             disabled={deletingJobId === job.id}
                           >
@@ -840,6 +841,7 @@ export default function Dashboard() {
                             type="button"
                             className="action-btn"
                             aria-label="View stage history"
+                            title="View stage history"
                             onClick={() => openHistory(job)}
                           >
                             📜
@@ -848,6 +850,7 @@ export default function Dashboard() {
                             type="button"
                             className="action-btn"
                             aria-label="Edit application"
+                            title="Edit application"
                             onClick={() => openEdit(job)}
                             disabled={deletingJobId === job.id}
                           >
@@ -857,6 +860,7 @@ export default function Dashboard() {
                             type="button"
                             className="action-btn"
                             aria-label={`Save draft for ${job.title}`}
+                            title="Save draft"
                             onClick={() => openDraft(job)}
                             disabled={deletingJobId === job.id}
                           >
@@ -870,6 +874,7 @@ export default function Dashboard() {
                                 ? `Restore application ${job.title}`
                                 : `Archive application ${job.title}`
                             }
+                            title={job.is_archived ? 'Restore application' : 'Archive application'}
                             onClick={() => updateArchiveState(job, !job.is_archived)}
                             disabled={deletingJobId === job.id || updatingArchiveJobId === job.id}
                           >
@@ -879,6 +884,7 @@ export default function Dashboard() {
                             type="button"
                             className="action-btn"
                             aria-label={`Delete application ${job.title}`}
+                            title="Delete application"
                             onClick={() => requestDelete(job)}
                             disabled={deletingJobId === job.id || updatingArchiveJobId === job.id}
                           >
@@ -890,6 +896,9 @@ export default function Dashboard() {
                               job.research?.trim() ? 'action-btn--active' : ''
                             }`}
                             aria-label={
+                              job.research?.trim() ? 'View saved research' : 'No research saved'
+                            }
+                            title={
                               job.research?.trim() ? 'View saved research' : 'No research saved'
                             }
                             onClick={() => openResearch(job)}

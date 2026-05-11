@@ -37,6 +37,8 @@ function renderPage(overrides = {}) {
     documents: [baseDoc],
     loading: false,
     error: null,
+    saving: false,
+    saveError: null,
     deletingId: null,
     deleteError: null,
     renamingId: null,
@@ -53,10 +55,13 @@ function renderPage(overrides = {}) {
       .mockResolvedValue({ ...baseDoc, id: 'doc-2', name: 'Copy of Resume_2026' }),
     archiveDocument: jest.fn().mockResolvedValue({ ...baseDoc, status: 'archived' }),
     restoreDocument: jest.fn().mockResolvedValue({ ...baseDoc, status: 'draft' }),
+    createDocument: jest.fn().mockResolvedValue({ ...baseDoc, id: 'doc-new' }),
     clearDeleteError: jest.fn(),
     clearRenameError: jest.fn(),
     clearDuplicateError: jest.fn(),
     clearArchiveError: jest.fn(),
+    clearSaveError: jest.fn(),
+    refetch: jest.fn(),
     ...overrides,
   });
   return render(<DocumentLibrary />);
@@ -401,5 +406,125 @@ describe('DocumentLibrary', () => {
     expect(mockUseDocuments.mock.calls[mockUseDocuments.mock.calls.length - 1][2]).toMatchObject({
       includeArchived: true,
     });
+  });
+
+  test('delete button has tooltip title', () => {
+    renderPage();
+    expect(screen.getByRole('button', { name: /delete document/i })).toHaveAttribute(
+      'title',
+      'Delete document'
+    );
+  });
+
+  test('upload document button toggles the upload form', () => {
+    renderPage();
+    expect(screen.queryByLabelText(/^name$/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /upload document/i }));
+    expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/file \(pdf\)/i)).toBeInTheDocument();
+  });
+
+  test('cancel button hides the upload form', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /upload document/i }));
+    expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(screen.queryByLabelText(/^name$/i)).not.toBeInTheDocument();
+  });
+
+  test('upload submit button is disabled when name or file is missing', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /upload document/i }));
+
+    const uploadBtn = screen.getByRole('button', { name: /^upload$/i });
+    expect(uploadBtn).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'My Resume' } });
+    expect(uploadBtn).toBeDisabled();
+  });
+
+  test('calls createDocument with name, doc_type, and file on submit', async () => {
+    const createDocument = jest.fn().mockResolvedValue({ ...baseDoc, id: 'doc-new' });
+    renderPage({ createDocument });
+
+    fireEvent.click(screen.getByRole('button', { name: /upload document/i }));
+
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'My Resume' } });
+
+    const file = new File(['pdf content'], 'resume.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText(/file \(pdf\)/i), { target: { files: [file] } });
+
+    fireEvent.click(screen.getByRole('button', { name: /^upload$/i }));
+
+    await waitFor(() => {
+      expect(createDocument).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'My Resume', doc_type: 'Resume', file })
+      );
+    });
+  });
+
+  test('hides upload form and refetches after successful upload', async () => {
+    const createDocument = jest.fn().mockResolvedValue({ ...baseDoc, id: 'doc-new' });
+    const refetch = jest.fn();
+    renderPage({ createDocument, refetch });
+
+    fireEvent.click(screen.getByRole('button', { name: /upload document/i }));
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'My Resume' } });
+
+    const file = new File(['pdf content'], 'resume.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText(/file/i), { target: { files: [file] } });
+
+    fireEvent.click(screen.getByRole('button', { name: /^upload$/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText(/^name$/i)).not.toBeInTheDocument();
+      expect(refetch).toHaveBeenCalled();
+    });
+  });
+
+  test('shows save error alert when upload fails', () => {
+    renderPage({ saveError: 'Failed to save document (500)' });
+    fireEvent.click(screen.getByRole('button', { name: /upload document/i }));
+    expect(screen.getByRole('alert')).toHaveTextContent(/failed to save document/i);
+  });
+
+  test('upload submit button is disabled while saving', () => {
+    const { rerender } = renderPage({ saving: false });
+    fireEvent.click(screen.getByRole('button', { name: /upload document/i }));
+
+    mockUseDocuments.mockReturnValue({
+      documents: [baseDoc],
+      loading: false,
+      error: null,
+      saving: true,
+      saveError: null,
+      deletingId: null,
+      deleteError: null,
+      renamingId: null,
+      renameError: null,
+      duplicatingId: null,
+      duplicateError: null,
+      archivingIds: new Set(),
+      archiveError: null,
+      viewDocument: jest.fn(),
+      deleteDocument: jest.fn(),
+      renameDocument: jest.fn(),
+      duplicateDocument: jest.fn(),
+      archiveDocument: jest.fn(),
+      restoreDocument: jest.fn(),
+      createDocument: jest.fn(),
+      clearDeleteError: jest.fn(),
+      clearRenameError: jest.fn(),
+      clearDuplicateError: jest.fn(),
+      clearArchiveError: jest.fn(),
+      clearSaveError: jest.fn(),
+      refetch: jest.fn(),
+    });
+    rerender(<DocumentLibrary />);
+
+    expect(screen.getByRole('button', { name: /uploading/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /upload document/i })).toBeDisabled();
   });
 });
