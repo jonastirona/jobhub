@@ -498,7 +498,9 @@ def _generate_unique_document_copy_name(
 ) -> str:
     candidate = base_name
     suffix = 2
-    while True:
+    max_attempts = 10
+
+    while suffix <= max_attempts:
         try:
             _assert_document_name_available_for_user(sb, user_id, candidate, doc_type, job_id)
             return candidate
@@ -507,6 +509,8 @@ def _generate_unique_document_copy_name(
                 raise
             candidate = f"{base_name} ({suffix})"
             suffix += 1
+
+    raise HTTPException(status_code=400, detail="Could not generate a unique document name")
 
 
 def _get_document_for_user(sb, user_id: str, document_id: Optional[str]) -> Optional[dict]:
