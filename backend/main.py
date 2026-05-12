@@ -72,20 +72,19 @@ JOB_STATUSES = {
 # (`documents_status_allowed_values`).
 DOCUMENT_STATUSES = {"draft", "final", "archived"}
 DOCUMENT_TAGS = [
-    "Resume",
-    "Cover Letter",
-    "Portfolio",
-    "Transcript",
-    "Reference List",
-    "Writing Sample",
-    "Certification",
-    "Work Authorization",
-    "Offer Letter",
-    "Contract",
-    "Job Description",
-    "Interview Prep",
-    "Thank You Note",
-    "Other",
+    "general",
+    "resume",
+    "cover letter",
+    "job description",
+    "company research",
+    "interview prep",
+    "technical prep",
+    "behavioral prep",
+    "networking",
+    "recruiter notes",
+    "offer",
+    "follow-up needed",
+    "important",
 ]
 JOB_STATUS_ALIAS = {"interview": "interviewing", "offer": "offered"}
 PDF_EXTENSION = ".pdf"

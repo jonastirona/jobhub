@@ -1886,7 +1886,7 @@ def test_create_document_persists_status_and_tags():
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             "/documents",
-            data={"name": "Draft", "status": "final", "tags": '["Resume","Cover Letter"]'},
+            data={"name": "Draft", "status": "final", "tags": '["resume","cover letter"]'},
             files={
                 "file": (
                     "draft.pdf",
@@ -1899,7 +1899,7 @@ def test_create_document_persists_status_and_tags():
     assert response.status_code == 201
     inserted_payload = mock_query.insert.call_args[0][0]
     assert inserted_payload["status"] == "final"
-    assert inserted_payload["tags"] == ["Resume", "Cover Letter"]
+    assert inserted_payload["tags"] == ["resume", "cover letter"]
 
 
 def test_create_document_rejects_non_array_json_tags():
@@ -1926,7 +1926,7 @@ def test_create_document_accepts_comma_separated_tags():
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             "/documents",
-            data={"name": "Draft", "tags": "Portfolio, Certification, Work Authorization"},
+            data={"name": "Draft", "tags": "company research, interview prep, important"},
             files={
                 "file": (
                     "draft.pdf",
@@ -1938,7 +1938,7 @@ def test_create_document_accepts_comma_separated_tags():
         )
     assert response.status_code == 201
     inserted_payload = mock_query.insert.call_args[0][0]
-    assert inserted_payload["tags"] == ["Portfolio", "Certification", "Work Authorization"]
+    assert inserted_payload["tags"] == ["company research", "interview prep", "important"]
 
 
 def test_create_document_rejects_blank_name():
@@ -5061,7 +5061,7 @@ def test_duplicate_document_inherits_source_metadata():
     source = {
         **SAMPLE_DOCUMENT,
         "status": "final",
-        "tags": ["backend", "python"],
+        "tags": ["technical prep", "important"],
         "doc_type": "Resume",
     }
     duplicate = {
@@ -5079,7 +5079,7 @@ def test_duplicate_document_inherits_source_metadata():
     assert response.status_code == 201
     insert_payload = mock_query.insert.call_args[0][0]
     assert insert_payload["status"] == "final"
-    assert insert_payload["tags"] == ["backend", "python"]
+    assert insert_payload["tags"] == ["technical prep", "important"]
     assert insert_payload["doc_type"] == "Resume"
 
 
