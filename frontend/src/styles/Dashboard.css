@@ -796,3 +796,32 @@
   padding: 14px;
   margin: 6px 0 10px;
 }
+
+.doc-upload-form {
+  margin: 12px 0 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+}
+
+.doc-upload-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.doc-upload-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 160px;
+}
+
+.doc-upload-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}

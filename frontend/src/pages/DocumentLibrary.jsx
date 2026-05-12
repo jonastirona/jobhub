@@ -145,7 +145,7 @@ async function getResponseErrorMessage(response, fallback) {
   }
 }
 
-export default function DocumentLibrary2() {
+export default function DocumentLibrary() {
   const { session } = useAuth();
   const [selectedDocType, setSelectedDocType] = useState('');
   const [selectedSortBy, setSelectedSortBy] = useState('updated_at');
@@ -712,7 +712,7 @@ export default function DocumentLibrary2() {
                 className="btn-add"
                 disabled={saving || !uploadName.trim() || !uploadFile}
               >
-                {saving ? 'Uploading...' : 'Upload'}
+                {saving ? 'Uploading…' : 'Upload'}
               </button>
               <button
                 type="button"
