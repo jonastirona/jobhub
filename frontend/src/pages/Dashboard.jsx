@@ -161,6 +161,7 @@ export default function Dashboard() {
   const [deleteError, setDeleteError] = useState('');
   const [deletingJobId, setDeletingJobId] = useState(null);
   const [jobPendingDelete, setJobPendingDelete] = useState(null);
+  const [downloadError, setDownloadError] = useState('');
   const [draftJob, setDraftJob] = useState(null);
   const [draftName, setDraftName] = useState('');
   const [draftType, setDraftType] = useState('Cover Letter');
@@ -357,26 +358,40 @@ export default function Dashboard() {
 
   const handleDownloadDocument = useCallback(
     async (documentRecord) => {
+      setDownloadError('');
       if (!documentRecord?.id) return;
-      const url = await viewDocument(documentRecord.id);
-      if (!url) return;
-
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Failed to download document: ${response.status}`);
-      }
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
       try {
-        link.href = objectUrl;
-        link.rel = 'noopener noreferrer';
-        link.download = `${documentRecord.name || 'document'}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-      } finally {
-        link.remove();
-        URL.revokeObjectURL(objectUrl);
+        const url = await viewDocument(documentRecord.id);
+        if (!url) {
+          setDownloadError('Unable to retrieve document URL');
+          return;
+        }
+
+        const response = await fetch(url);
+        if (!response.ok) {
+          setDownloadError(
+            `Failed to download document: ${
+              response.status === 401 ? 'link expired or unauthorized' : response.status
+            }`
+          );
+          return;
+        }
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        try {
+          link.href = objectUrl;
+          link.rel = 'noopener noreferrer';
+          link.download = `${documentRecord.name || 'document'}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+        } finally {
+          link.remove();
+          URL.revokeObjectURL(objectUrl);
+        }
+      } catch (err) {
+        Sentry.captureException(err);
+        setDownloadError(err instanceof Error ? err.message : 'Failed to download document');
       }
     },
     [viewDocument]
@@ -979,6 +994,8 @@ export default function Dashboard() {
           onRefreshDocuments={refetchDocuments}
           onOpenDocument={handleOpenDocument}
           onDownloadDocument={handleDownloadDocument}
+          downloadError={downloadError}
+          clearDownloadError={() => setDownloadError('')}
           onDocumentSaved={refetchDocuments}
           onJobUpdated={refetch}
           onLinkDocument={linkDocument}

@@ -59,6 +59,44 @@ describe('useDocuments', () => {
     expect(options.body.get('tags')).toBe(JSON.stringify(['backend', '2026']));
   });
 
+  test('createDocument includes source_document_id when provided', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ id: 'doc-2', name: 'Resume_2026 v2' }),
+    });
+
+    const { result } = renderHook(() => useDocuments(TOKEN, false));
+
+    await act(async () => {
+      await result.current.createDocument({
+        name: 'Resume_2026',
+        doc_type: 'Resume',
+        source_document_id: 'doc-1',
+      });
+    });
+
+    const [, options] = global.fetch.mock.calls[0];
+    expect(options.body.get('source_document_id')).toBe('doc-1');
+  });
+
+  test('duplicateDocument sends custom name when provided', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ id: 'doc-3', name: 'Tailored Resume Copy' }),
+    });
+
+    const { result } = renderHook(() => useDocuments(TOKEN, false));
+
+    await act(async () => {
+      await result.current.duplicateDocument('doc-1', 'Tailored Resume Copy');
+    });
+
+    const [, options] = global.fetch.mock.calls[0];
+    expect(options.method).toBe('POST');
+    expect(options.body).toBe(JSON.stringify({ name: 'Tailored Resume Copy' }));
+    expect(options.headers['Content-Type']).toBe('application/json');
+  });
+
   test('createDocument sets saveError when upload fails', async () => {
     global.fetch.mockResolvedValue({
       ok: false,

@@ -1746,7 +1746,7 @@ def test_get_document_scoped_to_user():
 
 
 def test_create_document_success():
-    mock_sb, _, _ = make_mock_sb(data=[SAMPLE_DOCUMENT])
+    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_JOB], [], [SAMPLE_DOCUMENT])
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             "/documents",
@@ -1768,8 +1768,76 @@ def test_create_document_success():
     assert response.json()["job_id"] == SAMPLE_JOB["id"]
 
 
+def test_create_document_rejects_duplicate_name_type_and_job():
+    existing = {**SAMPLE_DOCUMENT, "id": "doc-existing", "version_group_id": "other-group"}
+    mock_sb, _ = _make_mock_sb_with_side_effects([existing], [existing])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            data={
+                "name": SAMPLE_DOCUMENT["name"],
+                "doc_type": SAMPLE_DOCUMENT["doc_type"],
+                "job_id": SAMPLE_DOCUMENT["job_id"],
+            },
+            files={
+                "file": (
+                    "draft.pdf",
+                    b"%PDF-1.7\nDraft content",
+                    "application/pdf",
+                )
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 409
+    assert "same name, type, and linked job" in response.json()["detail"]
+
+
+def test_create_document_from_existing_document_without_file_copies_source_file():
+    created = {
+        **SAMPLE_DOCUMENT,
+        "id": "doc-v2",
+        "version_number": 2,
+        "previous_version_id": SAMPLE_DOCUMENT["id"],
+        "storage_path": f"{MOCK_USER_ID}/doc-v2.pdf",
+    }
+    mock_sb, mock_query = _make_mock_sb_with_side_effects(
+        [SAMPLE_DOCUMENT],  # _get_document_for_user
+        [SAMPLE_JOB],  # _assert_linked_job_exists_for_user (job validation)
+        [SAMPLE_DOCUMENT],  # _assert_document_name_available_for_user (uniqueness check)
+        [
+            {"version_number": SAMPLE_DOCUMENT["version_number"]}
+        ],  # _get_next_document_version_number
+        created,  # insert
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            "/documents",
+            data={
+                "name": SAMPLE_DOCUMENT["name"],
+                "doc_type": SAMPLE_DOCUMENT["doc_type"],
+                "source_document_id": SAMPLE_DOCUMENT["id"],
+            },
+            headers={"authorization": AUTH_HEADER},
+        )
+
+    assert response.status_code == 201
+    inserted_payload = mock_query.insert.call_args[0][0]
+    assert inserted_payload["version_group_id"] == SAMPLE_DOCUMENT["version_group_id"]
+    assert inserted_payload["version_number"] == 2
+    assert inserted_payload["previous_version_id"] == SAMPLE_DOCUMENT["id"]
+    mock_sb.storage.from_.return_value.copy.assert_called_once()
+    copy_args = mock_sb.storage.from_.return_value.copy.call_args[0]
+    assert copy_args[0] == SAMPLE_DOCUMENT["storage_path"]
+    assert copy_args[1].startswith(MOCK_USER_ID + "/")
+    assert copy_args[1].endswith(".pdf")
+
+
 def test_create_document_from_job_context_inserts_linked_job_id():
-    mock_sb, mock_query = _make_mock_sb_with_side_effects([SAMPLE_JOB], [SAMPLE_DOCUMENT])
+    mock_sb, mock_query = _make_mock_sb_with_side_effects(
+        [SAMPLE_JOB],
+        [],
+        [SAMPLE_DOCUMENT],
+    )
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             "/documents",
@@ -1818,7 +1886,7 @@ def test_create_document_persists_status_and_tags():
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             "/documents",
-            data={"name": "Draft", "status": "final", "tags": '["a","b"]'},
+            data={"name": "Draft", "status": "final", "tags": '["resume","cover letter"]'},
             files={
                 "file": (
                     "draft.pdf",
@@ -1831,7 +1899,7 @@ def test_create_document_persists_status_and_tags():
     assert response.status_code == 201
     inserted_payload = mock_query.insert.call_args[0][0]
     assert inserted_payload["status"] == "final"
-    assert inserted_payload["tags"] == ["a", "b"]
+    assert inserted_payload["tags"] == ["resume", "cover letter"]
 
 
 def test_create_document_rejects_non_array_json_tags():
@@ -1858,7 +1926,7 @@ def test_create_document_accepts_comma_separated_tags():
     with patch("main.get_supabase", return_value=mock_sb):
         response = client.post(
             "/documents",
-            data={"name": "Draft", "tags": "python, backend, fastapi"},
+            data={"name": "Draft", "tags": "company research, interview prep, important"},
             files={
                 "file": (
                     "draft.pdf",
@@ -1870,7 +1938,7 @@ def test_create_document_accepts_comma_separated_tags():
         )
     assert response.status_code == 201
     inserted_payload = mock_query.insert.call_args[0][0]
-    assert inserted_payload["tags"] == ["python", "backend", "fastapi"]
+    assert inserted_payload["tags"] == ["company research", "interview prep", "important"]
 
 
 def test_create_document_rejects_blank_name():
@@ -2100,6 +2168,7 @@ def test_rename_document_success():
     renamed = {**SAMPLE_DOCUMENT, "name": "New Resume Name"}
     mock_sb, mock_query = _make_mock_sb_with_side_effects(
         [SAMPLE_DOCUMENT],
+        [SAMPLE_DOCUMENT],
         [renamed],
     )
     with patch("main.get_supabase", return_value=mock_sb):
@@ -2111,6 +2180,24 @@ def test_rename_document_success():
     assert response.status_code == 200
     assert response.json()["name"] == "New Resume Name"
     mock_query.eq.assert_any_call("user_id", MOCK_USER_ID)
+
+
+def test_rename_document_rejects_duplicate_name_type_and_job():
+    existing = {
+        **SAMPLE_DOCUMENT,
+        "id": "doc-existing",
+        "name": "Renamed Resume",
+        "version_group_id": "other-group",
+    }
+    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT], [existing])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.patch(
+            f"/documents/{SAMPLE_DOCUMENT['id']}",
+            json={"name": "Renamed Resume"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 409
+    assert "same name, type, and linked job" in response.json()["detail"]
 
 
 def test_rename_document_not_found():
@@ -2135,6 +2222,54 @@ def test_rename_document_blank_name_rejected():
     assert response.status_code == 422
 
 
+def test_rename_document_requires_auth():
+    response = client.patch(f"/documents/{SAMPLE_DOCUMENT['id']}", json={"name": "X"})
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Document versions (GET /documents/{id}/versions)
+# ---------------------------------------------------------------------------
+
+
+def test_list_document_versions_success():
+    latest = {
+        **SAMPLE_DOCUMENT,
+        "id": "doc-v2",
+        "version_number": 2,
+        "previous_version_id": SAMPLE_DOCUMENT["id"],
+    }
+    mock_sb, _ = _make_mock_sb_with_side_effects(
+        [latest],
+        [latest, SAMPLE_DOCUMENT],
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            f"/documents/{latest['id']}/versions",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert body[0]["version_number"] == 2
+    assert body[1]["version_number"] == 1
+
+
+def test_list_document_versions_requires_auth():
+    response = client.get(f"/documents/{SAMPLE_DOCUMENT['id']}/versions")
+    assert response.status_code == 401
+
+
+def test_list_document_versions_not_found():
+    mock_sb, _ = _make_mock_sb_with_side_effects([])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.get(
+            "/documents/nonexistent-id/versions",
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 404
+
+
 # ---------------------------------------------------------------------------
 # Document duplicate (POST /documents/{id}/duplicate)
 # ---------------------------------------------------------------------------
@@ -2144,11 +2279,15 @@ def test_duplicate_document_success():
     duplicate = {
         **SAMPLE_DOCUMENT,
         "id": "doc-copy-uuid",
+        "version_group_id": "doc-copy-group",
+        "version_number": 1,
+        "previous_version_id": None,
         "name": f"Copy of {SAMPLE_DOCUMENT['name']}",
         "storage_path": f"{MOCK_USER_ID}/doc-copy-uuid.pdf",
     }
     mock_sb, mock_query = _make_mock_sb_with_side_effects(
         [SAMPLE_DOCUMENT],
+        [],
         [duplicate],
     )
     with patch("main.get_supabase", return_value=mock_sb):
@@ -2162,6 +2301,51 @@ def test_duplicate_document_success():
     assert body["id"] == "doc-copy-uuid"
     insert_payload = mock_query.insert.call_args[0][0]
     assert insert_payload["user_id"] == MOCK_USER_ID
+    assert insert_payload["version_group_id"] != SAMPLE_DOCUMENT["version_group_id"]
+    assert insert_payload["version_number"] == 1
+    assert insert_payload["previous_version_id"] is None
+
+
+def test_duplicate_document_accepts_custom_name():
+    duplicate = {
+        **SAMPLE_DOCUMENT,
+        "id": "doc-copy-uuid",
+        "version_group_id": "doc-copy-group",
+        "version_number": 1,
+        "previous_version_id": None,
+        "name": "Tailored Resume Copy",
+        "storage_path": f"{MOCK_USER_ID}/doc-copy-uuid.pdf",
+    }
+    mock_sb, _ = _make_mock_sb_with_side_effects(
+        [SAMPLE_DOCUMENT],
+        [],
+        [duplicate],
+    )
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            f"/documents/{SAMPLE_DOCUMENT['id']}/duplicate",
+            json={"name": "Tailored Resume Copy"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 201
+    assert response.json()["name"] == "Tailored Resume Copy"
+
+
+def test_duplicate_document_rejects_duplicate_name_type_and_job():
+    existing = {
+        **SAMPLE_DOCUMENT,
+        "id": "doc-existing",
+        "name": "Tailored Resume Copy",
+        "version_group_id": "other-group",
+    }
+    mock_sb, _ = _make_mock_sb_with_side_effects([SAMPLE_DOCUMENT], [existing])
+    with patch("main.get_supabase", return_value=mock_sb):
+        response = client.post(
+            f"/documents/{SAMPLE_DOCUMENT['id']}/duplicate",
+            json={"name": "Tailored Resume Copy"},
+            headers={"authorization": AUTH_HEADER},
+        )
+    assert response.status_code == 409
 
 
 def test_duplicate_document_not_found():
@@ -2178,11 +2362,15 @@ def test_duplicate_document_copies_storage_file():
     duplicate = {
         **SAMPLE_DOCUMENT,
         "id": "doc-copy-uuid",
+        "version_group_id": "doc-copy-group",
+        "version_number": 1,
+        "previous_version_id": None,
         "name": f"Copy of {SAMPLE_DOCUMENT['name']}",
         "storage_path": f"{MOCK_USER_ID}/doc-copy-uuid.pdf",
     }
     mock_sb, _ = _make_mock_sb_with_side_effects(
         [SAMPLE_DOCUMENT],
+        [],
         [duplicate],
     )
     with patch("main.get_supabase", return_value=mock_sb):
@@ -4873,7 +5061,7 @@ def test_duplicate_document_inherits_source_metadata():
     source = {
         **SAMPLE_DOCUMENT,
         "status": "final",
-        "tags": ["backend", "python"],
+        "tags": ["technical prep", "important"],
         "doc_type": "Resume",
     }
     duplicate = {
@@ -4891,7 +5079,7 @@ def test_duplicate_document_inherits_source_metadata():
     assert response.status_code == 201
     insert_payload = mock_query.insert.call_args[0][0]
     assert insert_payload["status"] == "final"
-    assert insert_payload["tags"] == ["backend", "python"]
+    assert insert_payload["tags"] == ["technical prep", "important"]
     assert insert_payload["doc_type"] == "Resume"
 
 

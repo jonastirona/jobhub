@@ -71,6 +71,21 @@ JOB_STATUSES = {
 # Must stay in sync with the DB CHECK constraint added in migration 016
 # (`documents_status_allowed_values`).
 DOCUMENT_STATUSES = {"draft", "final", "archived"}
+DOCUMENT_TAGS = [
+    "general",
+    "resume",
+    "cover letter",
+    "job description",
+    "company research",
+    "interview prep",
+    "technical prep",
+    "behavioral prep",
+    "networking",
+    "recruiter notes",
+    "offer",
+    "follow-up needed",
+    "important",
+]
 JOB_STATUS_ALIAS = {"interview": "interviewing", "offer": "offered"}
 PDF_EXTENSION = ".pdf"
 PDF_MIME_TYPE = "application/pdf"
@@ -272,7 +287,12 @@ class DocumentUpdate(BaseModel):
 class DocumentPatch(BaseModel):
     name: Optional[str] = None
     status: Optional[str] = None
+    tags: Optional[list[str]] = None
     job_id: Optional[str] = None
+
+
+class DocumentDuplicate(BaseModel):
+    name: Optional[str] = None
 
 
 VALID_WORK_MODES = {"remote", "hybrid", "onsite", "any"}
@@ -362,6 +382,174 @@ def _assert_document_status(status: Optional[str]) -> Optional[str]:
     if s not in DOCUMENT_STATUSES:
         raise HTTPException(status_code=422, detail="status must be one of: draft, final, archived")
     return s
+
+
+def _validate_document_tags(tags: Optional[list[str]]) -> Optional[list[str]]:
+    """Validate and normalize document tags.
+
+    Args:
+        tags: List of tag strings to validate
+
+    Returns:
+        Normalized list of tags or None if no tags provided
+
+    Raises:
+        HTTPException if any tag is invalid
+    """
+    if not tags:
+        return None
+
+    if not isinstance(tags, list):
+        raise HTTPException(status_code=422, detail="tags must be a list")
+
+    valid_tags_set = set(DOCUMENT_TAGS)
+    normalized_tags = []
+
+    for tag in tags:
+        if not isinstance(tag, str):
+            raise HTTPException(status_code=422, detail="Each tag must be a string")
+
+        tag_stripped = tag.strip()
+        if not tag_stripped:
+            raise HTTPException(status_code=422, detail="Tags cannot be empty strings")
+
+        if tag_stripped not in valid_tags_set:
+            allowed_tags = ", ".join(DOCUMENT_TAGS)
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid tag: '{tag_stripped}'. Allowed tags are: {allowed_tags}",
+            )
+
+        normalized_tags.append(tag_stripped)
+
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_tags = []
+    for tag in normalized_tags:
+        if tag not in seen:
+            seen.add(tag)
+            unique_tags.append(tag)
+
+    return unique_tags if unique_tags else None
+
+
+def _normalize_document_name(name: Optional[str]) -> str:
+    return " ".join(str(name or "").strip().split()).lower()
+
+
+def _assert_document_name_available_for_user(
+    sb,
+    user_id: str,
+    name: str,
+    doc_type: Optional[str],
+    job_id: Optional[str],
+    exclude_document_id: Optional[str] = None,
+    allow_version_group_id: Optional[str] = None,
+) -> None:
+    normalized_name = _normalize_document_name(name)
+    if not normalized_name:
+        raise HTTPException(status_code=422, detail="name must not be blank")
+
+    normalized_doc_type = (doc_type or "Draft").strip() or "Draft"
+    query = (
+        sb.table("documents")
+        .select("id, name, doc_type, job_id, version_group_id")
+        .eq("user_id", user_id)
+    )
+
+    if normalized_doc_type == "Draft":
+        query = query.or_("doc_type.eq.Draft,doc_type.is.null")
+    else:
+        query = query.eq("doc_type", normalized_doc_type)
+
+    if job_id is None:
+        query = query.or_("job_id.is.null")
+    else:
+        query = query.eq("job_id", job_id)
+
+    response = query.execute()
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to validate document name")
+
+    for row in response.data or []:
+        if exclude_document_id and row.get("id") == exclude_document_id:
+            continue
+        if allow_version_group_id and row.get("version_group_id") == allow_version_group_id:
+            continue
+        if _normalize_document_name(row.get("name")) != normalized_name:
+            continue
+        if (row.get("doc_type") or "Draft") != normalized_doc_type:
+            continue
+        if row.get("job_id") != job_id:
+            continue
+        raise HTTPException(
+            status_code=409,
+            detail="A document with the same name, type, and linked job already exists",
+        )
+
+
+def _generate_unique_document_copy_name(
+    sb,
+    user_id: str,
+    base_name: str,
+    doc_type: Optional[str],
+    job_id: Optional[str],
+) -> str:
+    candidate = base_name
+    suffix = 2
+    max_attempts = 10
+
+    while suffix <= max_attempts:
+        try:
+            _assert_document_name_available_for_user(sb, user_id, candidate, doc_type, job_id)
+            return candidate
+        except HTTPException as exc:
+            if exc.status_code != 409:
+                raise
+            candidate = f"{base_name} ({suffix})"
+            suffix += 1
+
+    raise HTTPException(status_code=400, detail="Could not generate a unique document name")
+
+
+def _get_document_for_user(sb, user_id: str, document_id: Optional[str]) -> Optional[dict]:
+    if not document_id:
+        return None
+    response = (
+        sb.table("documents").select("*").eq("id", document_id).eq("user_id", user_id).execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return response.data[0]
+
+
+def _get_next_document_version_number(sb, user_id: str, version_group_id: str) -> int:
+    response = (
+        sb.table("documents")
+        .select("version_number")
+        .eq("user_id", user_id)
+        .eq("version_group_id", version_group_id)
+        .order("version_number", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not response.data:
+        return 1
+    latest = response.data[0].get("version_number") or 0
+    return int(latest) + 1
+
+
+def _normalize_single_row_response(response) -> dict:
+    data = response.data
+    if isinstance(data, list):
+        if not data:
+            raise HTTPException(status_code=500, detail="Unexpected empty document response")
+        row = data[0]
+    else:
+        row = data
+    if not isinstance(row, dict):
+        raise HTTPException(status_code=500, detail="Unexpected document response shape")
+    return dict(row)
 
 
 async def _upload_document_to_storage(sb, user_id: str, upload: UploadFile) -> tuple[str, str, int]:
@@ -1174,6 +1362,12 @@ DOCUMENT_SORT_OPTIONS = {"updated_at", "created_at", "name"}
 DOCUMENT_TYPE_OPTIONS = {"Resume", "Cover Letter", "Draft", "Other"}
 
 
+@app.get("/documents/tags")
+def get_document_tags():
+    """Get the list of available document tags."""
+    return {"tags": DOCUMENT_TAGS}
+
+
 @app.get("/documents")
 def list_documents(
     authorization: Optional[str] = Header(default=None),
@@ -1211,10 +1405,11 @@ async def create_document(
     name: str = Form(...),
     doc_type: str = Form("Draft"),
     job_id: Optional[str] = Form(default=None),
+    source_document_id: Optional[str] = Form(default=None),
     content: Optional[str] = Form(default=None),
     status: Optional[str] = Form(default=None),
     tags: Optional[str] = Form(default=None),
-    file: UploadFile = File(...),
+    file: Optional[UploadFile] = File(default=None),
     authorization: Optional[str] = Header(default=None),
 ):
     user_id = get_user_id(authorization)
@@ -1223,9 +1418,18 @@ async def create_document(
     if not trimmed_name:
         raise HTTPException(status_code=422, detail="name must not be blank")
     trimmed_doc_type = (doc_type or "").strip() or "Draft"
-    _assert_linked_job_exists_for_user(sb, user_id, job_id)
+    source_document = _get_document_for_user(sb, user_id, source_document_id)
+    resolved_job_id = job_id or (source_document.get("job_id") if source_document else None)
+    _assert_linked_job_exists_for_user(sb, user_id, resolved_job_id)
     normalized_status = _assert_document_status(status)
-    storage_path, mime_type, file_size = await _upload_document_to_storage(sb, user_id, file)
+    _assert_document_name_available_for_user(
+        sb,
+        user_id,
+        trimmed_name,
+        trimmed_doc_type,
+        resolved_job_id,
+        allow_version_group_id=source_document.get("version_group_id") if source_document else None,
+    )
     parsed_tags = None
     if tags:
         # Accept either JSON array or comma-separated list
@@ -1242,25 +1446,75 @@ async def create_document(
                     detail="tags must be a JSON array or comma-separated list",
                 )
             parsed_tags = [str(x).strip() for x in parsed if str(x).strip()]
+
+        # Validate the tags
+        parsed_tags = _validate_document_tags(parsed_tags)
+
+    version_group_id = str(uuid.uuid4())
+    version_number = 1
+    previous_version_id = None
+    storage_path = None
+    storage_bucket = DOCUMENTS_BUCKET  # Track the actual bucket used
+    mime_type = PDF_MIME_TYPE
+    file_size = None
+    original_filename = None
+    if source_document:
+        version_group_id = source_document.get("version_group_id") or source_document.get("id")
+        version_number = _get_next_document_version_number(sb, user_id, version_group_id)
+        previous_version_id = source_document.get("id")
+
+    if file is not None:
+        storage_path, mime_type, file_size = await _upload_document_to_storage(sb, user_id, file)
+        original_filename = file.filename
+        storage_bucket = DOCUMENTS_BUCKET  # Uploaded files go to DOCUMENTS_BUCKET
+    elif source_document:
+        source_path = source_document.get("storage_path")
+        source_bucket = source_document.get("storage_bucket") or DOCUMENTS_BUCKET
+        if not source_path:
+            raise HTTPException(status_code=404, detail="Document file not found")
+        source_extension = Path(source_path).suffix.lower().strip() or PDF_EXTENSION
+        storage_path = _build_storage_document_path(user_id, source_extension)
+        try:
+            sb.storage.from_(source_bucket).copy(source_path, storage_path)
+        except Exception:
+            raise HTTPException(status_code=500, detail="Failed to copy document file")
+        mime_type = source_document.get("mime_type") or PDF_MIME_TYPE
+        file_size = source_document.get("file_size")
+        original_filename = source_document.get("original_filename")
+        storage_bucket = source_bucket  # Copied files go to source_bucket
+    else:
+        raise HTTPException(status_code=422, detail="Document file is required")
+
     payload = {
         "user_id": user_id,
-        "job_id": job_id,
+        "job_id": resolved_job_id,
         "name": trimmed_name,
         "doc_type": trimmed_doc_type,
         "status": normalized_status,
         "tags": parsed_tags,
-        "storage_bucket": DOCUMENTS_BUCKET,
+        "storage_bucket": storage_bucket,
         "storage_path": storage_path,
         "mime_type": mime_type,
         "file_size": file_size,
-        "original_filename": file.filename,
+        "original_filename": original_filename,
         "content": content.strip() if content and content.strip() else None,
+        "version_group_id": version_group_id,
+        "version_number": version_number,
+        "previous_version_id": previous_version_id,
     }
-    response = sb.table("documents").insert(payload).execute()
-    if not response.data:
-        _delete_document_from_storage(sb, DOCUMENTS_BUCKET, storage_path)
+    try:
+        response = sb.table("documents").insert(payload).execute()
+    except Exception:
+        _delete_document_from_storage(sb, storage_bucket, storage_path)
         raise HTTPException(status_code=500, detail="Failed to create document")
-    return response.data[0]
+    if not response.data:
+        _delete_document_from_storage(sb, storage_bucket, storage_path)
+        raise HTTPException(status_code=500, detail="Failed to create document")
+    created = _normalize_single_row_response(response)
+    created.setdefault("version_group_id", payload["version_group_id"])
+    created.setdefault("version_number", payload["version_number"])
+    created.setdefault("previous_version_id", payload["previous_version_id"])
+    return created
 
 
 @app.get("/documents/{document_id}")
@@ -1277,6 +1531,26 @@ def get_document(document_id: str, authorization: Optional[str] = Header(default
     if not response.data:
         raise HTTPException(status_code=404, detail="Document not found")
     return response.data[0]
+
+
+@app.get("/documents/{document_id}/versions")
+def list_document_versions(document_id: str, authorization: Optional[str] = Header(default=None)):
+    user_id = get_user_id(authorization)
+    sb = get_supabase()
+    source = _get_document_for_user(sb, user_id, document_id)
+    version_group_id = source.get("version_group_id") or source.get("id")
+
+    response = (
+        sb.table("documents")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("version_group_id", version_group_id)
+        .order("version_number", desc=True)
+        .execute()
+    )
+    if response.data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch document versions")
+    return response.data or []
 
 
 @app.get("/documents/{document_id}/view-url")
@@ -1321,15 +1595,21 @@ def patch_document(
 ):
     user_id = get_user_id(authorization)
     updates: dict = {}
+    trimmed_name: Optional[str] = None
     if body.name is not None:
-        trimmed = body.name.strip()
-        if not trimmed:
+        trimmed_name = body.name.strip()
+        if not trimmed_name:
             raise HTTPException(status_code=422, detail="name must not be blank")
-        updates["name"] = trimmed
+        updates["name"] = trimmed_name
     if body.status is not None:
         if not body.status.strip():
             raise HTTPException(status_code=422, detail="status must not be blank")
         updates["status"] = _assert_document_status(body.status)
+    if "tags" in body.model_fields_set:
+        if body.tags is None:
+            updates["tags"] = None  # explicit clear tags
+        else:
+            updates["tags"] = _validate_document_tags(body.tags)
     if "job_id" in body.model_fields_set:
         if body.job_id is None:
             updates["job_id"] = None  # explicit unlink
@@ -1342,10 +1622,21 @@ def patch_document(
         raise HTTPException(status_code=400, detail="No fields to update")
     sb = get_supabase()
     existing = (
-        sb.table("documents").select("id").eq("id", document_id).eq("user_id", user_id).execute()
+        sb.table("documents").select("*").eq("id", document_id).eq("user_id", user_id).execute()
     )
     if not existing.data:
         raise HTTPException(status_code=404, detail="Document not found")
+    current = existing.data[0]
+    if "name" in updates:
+        _assert_document_name_available_for_user(
+            sb,
+            user_id,
+            updates["name"],
+            current.get("doc_type"),
+            updates.get("job_id", current.get("job_id")),
+            exclude_document_id=document_id,
+            allow_version_group_id=current.get("version_group_id"),
+        )
     if "job_id" in updates and updates["job_id"] is not None:
         _assert_linked_job_exists_for_user(sb, user_id, updates["job_id"])
     response = (
@@ -1369,16 +1660,30 @@ def patch_document(
 @app.post("/documents/{document_id}/duplicate", status_code=201)
 def duplicate_document(
     document_id: str,
+    body: Optional[DocumentDuplicate] = None,
     authorization: Optional[str] = Header(default=None),
 ):
     user_id = get_user_id(authorization)
     sb = get_supabase()
-    existing = (
-        sb.table("documents").select("*").eq("id", document_id).eq("user_id", user_id).execute()
-    )
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Document not found")
-    source = existing.data[0]
+    source = _get_document_for_user(sb, user_id, document_id)
+    requested_name = body.name if body else None
+    if requested_name is None:
+        trimmed_name = _generate_unique_document_copy_name(
+            sb,
+            user_id,
+            f"Copy of {source.get('name', 'Document')}".strip(),
+            source.get("doc_type"),
+            source.get("job_id"),
+        )
+    else:
+        trimmed_name = requested_name.strip()
+        _assert_document_name_available_for_user(
+            sb,
+            user_id,
+            trimmed_name,
+            source.get("doc_type"),
+            source.get("job_id"),
+        )
 
     source_path = source.get("storage_path")
     bucket = source.get("storage_bucket") or DOCUMENTS_BUCKET
@@ -1390,10 +1695,16 @@ def duplicate_document(
         except Exception:
             raise HTTPException(status_code=500, detail="Failed to copy document file")
 
+    # When duplicating a document we treat the duplicate as a separate document
+    # (not a new version in the same version group). Create a fresh version_group_id
+    # and start at version 1 so both original and duplicate appear as separate items.
+    version_group_id = str(uuid.uuid4())
+    next_version_number = 1
+
     payload = {
         "user_id": user_id,
         "job_id": source.get("job_id"),
-        "name": f"Copy of {source.get('name', 'Document')}",
+        "name": trimmed_name,
         "doc_type": source.get("doc_type"),
         "status": source.get("status"),
         "tags": source.get("tags"),
@@ -1403,6 +1714,9 @@ def duplicate_document(
         "file_size": source.get("file_size"),
         "original_filename": source.get("original_filename"),
         "content": source.get("content"),
+        "version_group_id": version_group_id,
+        "version_number": next_version_number,
+        "previous_version_id": None,
     }
     try:
         response = sb.table("documents").insert(payload).execute()
@@ -1414,7 +1728,11 @@ def duplicate_document(
         if new_storage_path:
             _delete_document_from_storage(sb, bucket, new_storage_path)
         raise HTTPException(status_code=500, detail="Failed to duplicate document")
-    return response.data[0]
+    created = _normalize_single_row_response(response)
+    created.setdefault("version_group_id", payload["version_group_id"])
+    created.setdefault("version_number", payload["version_number"])
+    created.setdefault("previous_version_id", payload["previous_version_id"])
+    return created
 
 
 @app.delete("/documents/{document_id}")

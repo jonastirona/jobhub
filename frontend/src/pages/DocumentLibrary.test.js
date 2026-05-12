@@ -47,6 +47,10 @@ function renderPage(overrides = {}) {
     duplicateError: null,
     archivingIds: new Set(),
     archiveError: null,
+    linkingIds: new Set(),
+    linkError: null,
+    updatingIds: new Set(),
+    updateError: null,
     viewDocument: jest.fn().mockResolvedValue('https://signed.example/doc.pdf'),
     deleteDocument: jest.fn().mockResolvedValue(true),
     renameDocument: jest.fn().mockResolvedValue({ ...baseDoc, name: 'Renamed' }),
@@ -56,10 +60,15 @@ function renderPage(overrides = {}) {
     archiveDocument: jest.fn().mockResolvedValue({ ...baseDoc, status: 'archived' }),
     restoreDocument: jest.fn().mockResolvedValue({ ...baseDoc, status: 'draft' }),
     createDocument: jest.fn().mockResolvedValue({ ...baseDoc, id: 'doc-new' }),
+    updateDocumentStatus: jest.fn().mockResolvedValue({ ...baseDoc, status: 'final' }),
+    updateDocumentTags: jest.fn().mockResolvedValue({ ...baseDoc, tags: ['Resume', 'Portfolio'] }),
+    linkDocument: jest.fn().mockResolvedValue({ ...baseDoc, job_id: 'job-2' }),
     clearDeleteError: jest.fn(),
     clearRenameError: jest.fn(),
     clearDuplicateError: jest.fn(),
     clearArchiveError: jest.fn(),
+    clearUpdateError: jest.fn(),
+    clearLinkError: jest.fn(),
     clearSaveError: jest.fn(),
     refetch: jest.fn(),
     ...overrides,
@@ -68,9 +77,17 @@ function renderPage(overrides = {}) {
 }
 
 describe('DocumentLibrary', () => {
+  const originalFetch = global.fetch;
+
   beforeEach(() => {
     jest.clearAllMocks();
     window.open = jest.fn();
+    process.env.REACT_APP_BACKEND_URL = 'http://localhost:8000';
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    delete process.env.REACT_APP_BACKEND_URL;
   });
 
   test('clicking the document name opens the signed url in a new tab', async () => {
@@ -115,6 +132,70 @@ describe('DocumentLibrary', () => {
       expect(screen.getByText(/tags:/i)).toBeInTheDocument();
       expect(screen.getByText(/alpha/)).toBeInTheDocument();
       expect(screen.getByText(/beta/)).toBeInTheDocument();
+    });
+  });
+
+  test('uploads a new version from the selected document', async () => {
+    const created = { ...baseDoc, id: 'doc-2', version_number: 2, previous_version_id: 'doc-1' };
+    const createDocument = jest.fn().mockResolvedValue(created);
+    const refetch = jest.fn().mockResolvedValue(undefined);
+    renderPage({ createDocument, refetch, clearDeleteError: jest.fn() });
+
+    fireEvent.click(screen.getByRole('button', { name: /view details/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /upload new version/i })).toBeInTheDocument();
+    });
+
+    const file = new File(['%PDF-1.7 new version'], 'resume-v2.pdf', { type: 'application/pdf' });
+    fireEvent.click(screen.getByRole('button', { name: /upload new version/i }));
+    const input = screen.getByLabelText(/upload new version file/i);
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(createDocument).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Resume_2026',
+          doc_type: 'Resume',
+          job_id: 'job-1',
+          source_document_id: 'doc-1',
+          file,
+        })
+      );
+      expect(refetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  test('loads and shows version history in the modal', async () => {
+    const versions = [
+      { ...baseDoc, id: 'doc-2', version_number: 2, name: 'Resume_2026' },
+      { ...baseDoc, id: 'doc-1', version_number: 1, name: 'Resume_2026' },
+    ];
+    let resolveFetch;
+    global.fetch = jest.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        })
+    );
+    renderPage({ clearDeleteError: jest.fn() });
+
+    fireEvent.click(screen.getByRole('button', { name: /view details/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /view version history/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /view version history/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/loading version history/i);
+    });
+
+    resolveFetch({ ok: true, json: () => Promise.resolve(versions) });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /hide version history/i })).toBeInTheDocument();
+      expect(screen.getByText(/Resume_2026 - v2/)).toBeInTheDocument();
+      expect(screen.getByText(/Resume_2026 - v1/)).toBeInTheDocument();
     });
   });
 
@@ -180,6 +261,41 @@ describe('DocumentLibrary', () => {
     expect(screen.getByText(/no saved documents yet/i)).toBeInTheDocument();
   });
 
+  test('keeps the latest version per group and sorts grouped rows by the selected sort', () => {
+    const documents = [
+      {
+        ...baseDoc,
+        id: 'doc-b1',
+        version_group_id: 'group-b',
+        version_number: 1,
+        name: 'Beta Draft',
+      },
+      {
+        ...baseDoc,
+        id: 'doc-a1',
+        version_group_id: 'group-a',
+        version_number: 1,
+        name: 'Zulu Draft',
+      },
+      {
+        ...baseDoc,
+        id: 'doc-a2',
+        version_group_id: 'group-a',
+        version_number: '2',
+        name: 'Alpha Draft',
+      },
+    ];
+
+    renderPage({ documents });
+
+    fireEvent.change(screen.getByLabelText(/sort by/i), { target: { value: 'name' } });
+
+    const titleButtons = screen.getAllByRole('button', { name: /draft/i });
+    expect(titleButtons).toHaveLength(2);
+    expect(titleButtons[0]).toHaveTextContent('Alpha Draft');
+    expect(titleButtons[1]).toHaveTextContent('Beta Draft');
+  });
+
   test('downloads document when Download is clicked', async () => {
     const viewDocument = jest.fn().mockResolvedValue('https://signed.example/doc.pdf');
     const originalCreateObjectURL = URL.createObjectURL;
@@ -216,20 +332,18 @@ describe('DocumentLibrary', () => {
     global.fetch = originalFetch;
   });
 
-  test('expand all and collapse all control inline details rows', () => {
-    const docs = [
-      { ...baseDoc, id: 'doc-1' },
-      { ...baseDoc, id: 'doc-2', name: 'CoverLetter_2026' },
-    ];
-    renderPage({ documents: docs });
+  test('opens and closes the details modal from row actions', async () => {
+    renderPage();
 
-    expect(screen.queryAllByRole('button', { name: /open file/i })).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: /view details/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /open file/i })).toBeInTheDocument();
+    });
 
-    fireEvent.click(screen.getByRole('button', { name: /expand all/i }));
-    expect(screen.getAllByRole('button', { name: /open file/i })).toHaveLength(2);
-
-    fireEvent.click(screen.getByRole('button', { name: /collapse all/i }));
-    expect(screen.queryAllByRole('button', { name: /open file/i })).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: /^close$/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /open file/i })).not.toBeInTheDocument();
+    });
   });
 
   test('shows inline rename input when rename button is clicked', () => {
@@ -266,18 +380,28 @@ describe('DocumentLibrary', () => {
     });
   });
 
-  test('calls duplicateDocument when duplicate button is clicked', async () => {
+  test('opens duplicate form and saves a renamed duplicate', async () => {
     const duplicateDocument = jest.fn().mockResolvedValue({
       ...baseDoc,
       id: 'doc-2',
-      name: 'Copy of Resume_2026',
+      name: 'Tailored Resume Copy',
     });
-    renderPage({ duplicateDocument });
+    const refetch = jest.fn().mockResolvedValue(undefined);
+    renderPage({ duplicateDocument, refetch });
 
     fireEvent.click(screen.getByRole('button', { name: /duplicate document/i }));
 
     await waitFor(() => {
-      expect(duplicateDocument).toHaveBeenCalledWith('doc-1');
+      expect(screen.getByRole('button', { name: /save duplicate/i })).toBeInTheDocument();
+    });
+
+    const input = screen.getByLabelText(/duplicate document name/i);
+    fireEvent.change(input, { target: { value: 'Tailored Resume Copy' } });
+    fireEvent.click(screen.getByRole('button', { name: /save duplicate/i }));
+
+    await waitFor(() => {
+      expect(duplicateDocument).toHaveBeenCalledWith('doc-1', 'Tailored Resume Copy');
+      expect(refetch).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -334,7 +458,6 @@ describe('DocumentLibrary', () => {
     renderPage({ renameError: 'Failed to rename document (500)' });
     expect(screen.getByRole('alert')).toHaveTextContent(/failed to rename document/i);
   });
-
   test('renders duplicate error alert when duplicateError exists', () => {
     renderPage({ duplicateError: 'Failed to duplicate document (500)', deleteError: null });
     const alerts = screen.getAllByRole('alert');
